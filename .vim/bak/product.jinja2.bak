@@ -1,0 +1,209 @@
+{% extends "index.jinja2" %}
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field, collection_name, next_product, fix_pluralization %}
+
+{% block javascript %}
+{{ super() }}
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/combobox.min.js')|cache_update }}"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/product.min.js')|cache_update }}"></script>
+{% endblock %}
+
+{% block content_main %}
+
+{# see where user came from #}
+{% if session.referrer %}
+  {% if session.referrer.name == 'collection' %}
+    <a href="{{url_for('collection_view.collection_id', collection_id=session.referrer.id)}}" class="back-btn"><span class="icon-leftarrow"></span> Collection List</a>
+  {% elif session.referrer.name == 'manufacturer' %}
+    <a href="{{url_for('manufacturer_view.manufacturer_get', mfr_id=session.referrer.id)}}" class="back-btn"><span class="icon-leftarrow"></span> Manufacturer</a>
+  {% endif %}
+{% else %}
+  <a href="{{url_for('product_view.product_list')}}" class="back-btn"><span class="icon-leftarrow"></span> Products</a>
+{% endif %}
+
+{% if session.product_ids %}
+{% set product_id = next_product(product.id, session.product_ids) %}
+    {% if product_id|int != 0 %}
+    <a href="{{ url_for('product_view.prod_get', prod_id=product_id) }}" class="next-btn">Next Product <span class="icon-rightarrow"></span></a>
+    {% endif %}
+{% endif %}
+
+<div class="col-md-12 product-header">
+    <div class="pull-left product-default-image">
+    {% set product_image = [] %}
+        {% if product.images.image_list %}
+            {% for image in product.images.image_list %}
+              {% if image.default %}
+                    {% do product_image.append(image.full_size) %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+        {% if product_image[0] %}
+            <img src="{{ product_image[0] }}">
+        {% endif %}
+    </div>
+    <a href="{{ url_for('product_view.product_delete_modal', prod_id=product.id)}}" class="btn btn-danger pull-right js-product-delete">Delete Product</a>
+    <h1>{{ product.identity.name }}</h1>
+    <div class="product-actions clearfix">
+        <div class="pull-left audit-text">
+            <span class="last-update">Last edited on {{ product.audit.date_updated|string_date_format('%B %d at %I:%M %p', localize=True) }}</span>
+            <div class="print-tearsheet"><a href="{{ url_for('product_view.product_get_tearsheet', prod_id=product.id) }}" target="_blank"><span class="glyphicon glyphicon-arrow-down small" aria-hidden="true"></span> Download Tearsheet</a></div>
+        </div>
+    </div>
+
+    <form action="{{ url_for('product_view.prod_save', prod_id=product.id) }}" method="POST" id="product-form">
+        <div class="panel-group" id="components">
+            <div class="panel panel-top">
+                <div class="panel-heading text-center">
+                    <h3>Product Visibility
+                        {% if product.visibility.active %}
+                        <span class="visibility on js-product-toggle">ON</span>
+                        {% else %}
+                        <span class="visibility off js-product-toggle">OFF</span>
+                        {% endif %}
+                    </h3>
+                    {{ form.visibility.active }}
+                </div>
+            </div>
+            {% for component in priority_components %}
+            <div class="panel panel-top">
+                <div class="panel-heading">
+                  <h3>
+                    <a data-toggle="collapse" href="#{{component}}">
+                      <span class="plus-minus{% if component in session.panels.product %} icon-minus{% else %} icon-plus{% endif %}"></span>{{ component|replace('_',' ') }}
+                    </a>
+                  </h3>
+                </div>
+                <div id="{{ component }}" class="panel-collapse {% if component in session.panels.product %} in{% else %} collapse{% endif %}">
+                    <div class="panel-body">
+                        {% set template = 'product/components/' + component + '.jinja2' %}
+                        {% include template ignore missing %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            <div class="panel panel-top">
+                <div class="panel-heading">
+                    <h3>
+                        <a data-toggle="collapse" href="#specification"><span class="plus-minus{% if 'specification' in session.panels.product %} icon-minus{% else %} icon-plus{% endif %}"></span>Specifications</a>
+                    </h3>
+                </div>
+                <div id="specification" class="panel-collapse {% if 'specification' in session.panels.product %} in{% else %} collapse{% endif %}">
+                    <div class="panel-body">
+                        {% if product.category.primary and product.category.primary != 'none' %}
+                        <div class="row">
+                            <div class="col-md-12 hidden category-warning">
+                                <p><span class="icon-warning"></span> <i>These specifications do not reflect your current selected category. Click "Save" to get more accurate Specification fields for this product.</i></p>
+                            </div>
+                            <div class="col-md-3">{{ append_field(form.overall_dimension.height, 'in') }}</div>
+                            <div class="col-md-3">{{ append_field(form.overall_dimension.width, 'in') }}</div>
+                            <div class="col-md-3">{{ append_field(form.overall_dimension.depth, 'in') }}</div>
+                            <div class="col-md-3">{{ append_field(form.overall_dimension.diameter, 'in') }}</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">{{ append_field(form.weight.weight, 'lb') }}</div>
+                            <div class="col-md-6">{{ basic_field(form.construction_information.material) }}</div>
+                            <div class="col-md-6">{{ basic_field(form.construction_information.finish) }}</div>
+                        </div>
+                        {% else %}
+                        <p><span class="icon-warning"></span> <i>Please <a href="#product_details" class="js-show-panel">choose a category</a> to edit specifications.</i></p>
+                        {% endif %}
+                    </div>
+                    {% if product.category.primary and product.category.primary != 'none' %}
+                    <div class="panel-inner">
+                        <div class="panel-group" id="specs">
+                          {% for component in general_components %}
+                            <div class="panel panel-nest">
+                                <div class="panel-heading">
+                                    <h3>
+                                        <a data-toggle="collapse" href="#{{ component }}">
+                                          <span class="plus-minus-nest{% if component in session.panels.product %} open-nest icon-minus{% else %} icon-plus{% endif %}"></span>
+                                            {%- if component == 'instruction' -%}
+                                                Instructions
+                                            {%- else -%}
+                                                {{ component|replace('_',' ') }}
+                                            {%- endif -%}
+                                        </a>
+                                    </h3>
+                                </div>
+                                <div id="{{component}}" class="panel-collapse {% if component in session.panels.product %} in{% else %} collapse{% endif %}">
+                                    <div class="panel-body">
+                                        {% set template = 'product/components/' + component + '.jinja2' %}
+                                        {% include template ignore missing %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% for component in product_components|sort() %}
+                                {% if component not in skip_components %}
+                                <div class="panel panel-nest">
+                                    <div class="panel-heading">
+                                        <h3>
+                                            <a data-toggle="collapse" href="#{{component}}"><span class="plus-minus-nest{% if component in session.panels.product %} open-nest icon-minus{% else %} icon-plus{% endif %}"></span>
+                                                {% if component == "com_col" %}
+                                                    COM / COL
+                                                {% else %}
+                                                    {{ fix_pluralization(component)|replace('_', ' ') }}
+                                                {% endif %}
+                                            </a>
+                                        </h3>
+                                    </div>
+                                    <div id="{{component}}" class="panel-collapse {% if component in session.panels.product %} in{% else %} collapse{% endif %}">
+                                        <div class="panel-body">
+                                            {% set template = 'product/components/' + component + '.jinja2' %}
+                                            {% include template ignore missing %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% for component in common_components %}
+            <div class="panel panel-top">
+                <div class="panel-heading">
+                    <h3>
+                        <a data-toggle="collapse" href="#{{component}}">
+                            <span class="plus-minus{% if component in session.panels.product %} icon-minus{% else %} icon-plus{% endif %}"></span>{{ fix_pluralization(component)|replace('_', ' ') }}</a>
+                    </h3>
+                </div>
+                <div id="{{component}}" class="panel-collapse {% if component in session.panels.product %} in{% else %} collapse{% endif %}">
+                    <div class="panel-body">
+                        {% set template = 'product/components/' + component + '.jinja2' %}
+                        {% include template ignore missing %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="form-footer">
+            <div class="footer-wrapper clearfix text-center">
+                {% if session.multiedit %}
+                {% set index = session.multiedit|index(product.id) %}
+                    {% if index > 0 %}
+                    {% set prev = session.multiedit[index - 1] %}
+                    <a href="{{ url_for('product_view.prod_get', prod_id=prev) }}" class="btn btn-default pull-left"><span class="icon-leftarrow"></span> Previous</a>
+                    {% endif %}
+                <span class="multi-count">Editing {{ index + 1 }} of {{ session.multiedit|length }}</span>
+                {% if index + 1 < session.multiedit|length %}
+                    {% set next = session.multiedit[index + 1] %}
+                    <a href="{{ url_for('product_view.prod_get', prod_id=next) }}" class="btn btn-default pull-right">Next <span class="icon-rightarrow"></span></a>
+                {% endif %}
+                <button class="btn btn-primary pull-right">Save</button>
+                {% else %}
+                <button class="btn btn-primary pull-right">Save</button>
+                {% endif %}
+                <a class="btn btn-preview pull-right js-product-preview" href="{{ url_for('product_view.preview_discover', prod_id=product.id) }}">Preview on Discover</a>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock content_main %}
+
+{% block footer %}
+<div class="hidden-md hidden-lg">
+  {{super()}}
+</div>
+{% endblock %}

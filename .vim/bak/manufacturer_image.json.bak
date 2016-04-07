@@ -1,0 +1,156 @@
+{
+    "instance": {
+        "id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "manufacturer_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "caption": {
+            "type": "string",
+            "nullable": true
+        },
+        "default": {
+            "type": "bool"
+        },
+        "url": {
+            "type": "string",
+            "regex": ".+"
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        }
+    },
+    "collection": {
+        "total": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "count": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "_embedded": {
+            "type": "object",
+            "object": {
+                "manufacturer_images": {
+                    "type": "list",
+                    "element": {
+                        "type": "object",
+                        "template": "manufacturer_image.json:instance"
+                    }
+                }
+            },
+            "required": false
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        }
+    },
+    "update-manufacturer-image": [
+        {
+            "id": 8,
+            "payload": {
+                "data": {
+                    "id": 8,
+                    "manufacturer_id": 637,
+                    "default": true,
+                    "caption": "",
+                    "url": "http://amber-cm.s3.amazonaws.com/images/288100937655391e.jpeg"
+                },
+                "public_key": "6ea099d988c30cc28a8d50ea7b6ad0b24dc45d93d27781f872c7a06441da28c0"
+            },
+            "response": {
+                "type": "object",
+                "template": "manufacturer_image.json:instance"
+            }
+        }
+    ],
+    "list-manufacturer-images": [
+        {
+            "payload": {
+                "data": {
+                    "public_key": "6ea099d988c30cc28a8d50ea7b6ad0b24dc45d93d27781f872c7a06441da28c0"
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "manufacturer_image.json:collection"
+            }
+        },
+        {
+            "payload": {
+                "data": {
+                    "public_key": "mfr has no mfr images"
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:500"
+            }
+        }
+    ],
+    "retrieve-manufacturer-image": [
+        {
+            "id": 6,
+            "payload": {
+                "public_key": "6ea099d988c30cc28a8d50ea7b6ad0b24dc45d93d27781f872c7a06441da28c0"
+            },
+            "response": {
+                "type": "object",
+                "template": "manufacturer_image.json:instance"
+            }
+        },
+        {
+            "id": 14,
+            "payload": {
+                "public_key": "24303eafb8b352b73e053a438c51c56b9dbce042cdc6e4c30955979e95dcfe1f"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:401"
+            }
+        },
+        {
+            "id": -41,
+            "payload": {
+                "public_key": "24303eafb8b352b73e053a438c51c56b9dbce042cdc6e4c30955979e95dcfe1f"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "delete-manufacturer-image": [
+        {
+            "id": 17,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {}
+        },
+        {
+            "id": -1,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:400"
+            }
+        }
+    ]
+}

@@ -1,0 +1,487 @@
+from copy import deepcopy
+import json
+from math import ceil
+import os
+import sys
+
+import openpyxl
+
+sys.path.insert(
+    0, os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from amber_portal.lib import export_handlers
+
+
+class TailRecurseException(Exception):
+    def __init__(self, args, kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+
+def tail_call_optimized(g):
+    """
+    This function decorates a function with tail call
+    optimization. It does this by throwing an exception
+    if it is it's own grandparent, and catching such
+    exceptions to fake the tail call optimization.
+
+    This function fails if the decorated
+    function recurses in a non-tail context.
+    """
+    def func(*args, **kwargs):
+        f = sys._getframe()
+        if f.f_back and f.f_back.f_back \
+                and f.f_back.f_back.f_code == f.f_code:
+            raise TailRecurseException(args, kwargs)
+        else:
+            while 1:
+                try:
+                    return g(*args, **kwargs)
+                except TailRecurseException as e:
+                    args = e.args
+                    kwargs = e.kwargs
+        func.__doc__ = g.__doc__
+    return func
+
+
+# Defining this here so it can be used as a default in later getattr calls.
+default_format = export_handlers.default_format
+
+
+class SpreadsheetGenerator(object):
+    def __init__(self, export_type, products, template=None):
+        """
+        Initializes a SpreadsheetGenerator object.
+        :param export_type: A string which specifies which JSON files will be
+            used.
+        :param products: A list of product dictionaries for the product
+            information used to populate the spreadsheet.
+        """
+        self.export_type = export_type
+        self.products = products
+        self.template = template
+
+        working_dir = os.path.dirname(os.path.abspath(__file__))
+
+        self.template = template
+        if self.template:
+            self.workbook = openpyxl.load_workbook(
+                '%s/export_templates/%s/%s.xlsx' %
+                (working_dir, export_type, template))
+        else:
+            self.workbook = openpyxl.Workbook()
+            self.workbook.remove_sheet(
+                self.workbook.get_sheet_by_name('Sheet')
+            )
+
+        template_file = open(
+            '%s/export_templates/%s/template.json' % (working_dir, export_type)
+        )
+
+        # template_data is the parsed python dictionary representation of the
+        # data in the template.json file. That file specified what data goes in
+        # which columns in what format.
+        self.template_data = json.load(template_file)
+
+        template_file.close()
+
+    def get_default_start_row(self):
+        return self.template_data['options']['start_row']
+
+    def get_default_start_column(self):
+        return self.template_data['options']['start_col']
+
+    def _get_column_width(self, sheet, column):
+        """
+        Retrieves the width of the provided column or the default if unset.
+        :param sheet: The sheet the column is on.
+        :param column: The index of the column as an integer.
+        :return: The width of the specified column or the default column width
+            if it hasn't been set yet.
+        """
+        col_char_index = openpyxl.utils.get_column_letter(column)
+        try:
+            col_width = sheet.column_dimensions[col_char_index].width
+        except KeyError:
+            return 8.73
+        if not col_width:
+            return 8.73
+        else:
+            return float(col_width)
+
+    @staticmethod
+    def _map_value(value_map, key_list):
+        map_index = value_map
+        if not key_list:
+            return None
+        if not isinstance(key_list, list):
+            key = str(key_list)
+            if key in value_map:
+                return value_map.get(key)
+            else:
+                return value_map.get('_else')
+        for key in key_list:
+            key = str(key)
+            if isinstance(map_index, dict):
+                if key in map_index:
+                    map_index = map_index[key]
+                elif '_else' in map_index:
+                    map_index = map_index['_else']
+                else:
+                    return None
+            else:
+                return map_index
+        return map_index
+
+    @staticmethod
+    def _cast_value_type(value, type):
+        if type == 'int':
+            return int(value)
+        if type == 'float':
+            return float(value)
+        if type == 'bool':
+            if isinstance(value, str) and len(value) > 0:
+                if value.upper()[0] == 'F' or 'FALSE' in value.upper():
+                    value = False
+            return bool(value)
+        else:
+            if isinstance(value, unicode):
+                value = value.encode('ascii', 'ignore')
+            return str(value)
+
+    def _product_filtered(self, filter_list):
+        # If 'filters' is in the column mapping it applies the filters,
+        # otherwise it just passes through and returns True.
+        def filter_method(product_dict, filters=filter_list):
+            for filter in filters:
+                handler = getattr(
+                    export_handlers,
+                    filter.get('handler') or '',
+                    default_format
+                )
+                value = handler(product_dict, keys=filter.get('keys', []))
+                # If this is a blacklist filter then we remove products that
+                # meet the value criteria, otherwise we remove products that
+                # don't.
+                if filter.get('black_list'):
+                    if value in filter.get('values', []):
+                        return False
+                else:
+                    if value not in filter.get('values', []):
+                        return False
+            return True
+        return filter_method
+
+    @staticmethod
+    def _values_in_list(value, acceptable_values):
+        if isinstance(value, list):
+            for val in value:
+                if val in acceptable_values:
+                    return True
+            return False
+        else:
+            return value in acceptable_values
+
+    @staticmethod
+    def _update_column_data(current_data, new_data):
+        temp_data = deepcopy(current_data) or dict()
+        temp_data.update(new_data)
+        return temp_data
+
+    def stringify_list(self, value_list):
+        if isinstance(value_list, list):
+            for i in range(len(value_list)):
+                if isinstance(value_list[i], list):
+                    if len(value_list) > 1:
+                        value_list[i] = (
+                            '%s\n' % self.stringify_list(value_list[i])
+                        )
+                    else:
+                        value_list[i] = self.stringify_list(value_list[i])
+                elif isinstance(value_list[i], bytes):
+                    value_list[i] = value_list[i].decode('ascii', 'ignore')
+                if isinstance(value_list[i], str) and len(value_list[i]) < 1:
+                    value_list[i] = None
+            value = str(value_list)[1:-1]
+            value = value.replace('\\n', '\n')
+            return value
+
+    @tail_call_optimized
+    def write_cell(
+            self, sheet, row, column, column_width, value, mapping_data):
+        """
+        Writes the given value into the specified cell location.
+        :param sheet: The sheet being worked on.
+        :param row: The index of the row the cell is in.
+        :param column: The index of the column the cell is in
+        :param column_width: The width of the column.
+        :param value: The value to be written to the cell.
+        """
+        # openpyxl doesn't handle writing unicode to the cells
+        # very gracefully, so we need to get rid of problematic
+        # characters before writing.
+        # TODO: find a way of converting instead of erasing problem characters.
+        if mapping_data.get('values_in_list'):
+            value = self._values_in_list(
+                value, mapping_data.get('values_in_list')
+            )
+
+        if mapping_data.get('map'):
+            value = self._map_value(mapping_data.get('map'), value)
+
+        if isinstance(value, str) and len(value) < 1:
+            value = None
+
+        if mapping_data.get('type'):
+            if isinstance(value, list):
+                for index in range(len(value)):
+                    value[index] = self._cast_value_type(
+                        value[index], mapping_data.get('type')
+                    )
+            else:
+                value = self._cast_value_type(value, mapping_data.get('type'))
+
+        # openpyxl can't write lists to cells so we need to stringify them
+        # first.
+        if isinstance(value, list):
+            value = self.stringify_list(value)
+
+        cell = sheet.cell(row=row, column=column)
+
+        # This increases the height of the row if the amount of text does not
+        # fit into the cell at its current size.
+        text_width = float(len(str(value)))
+        current_height = (
+            sheet.row_dimensions[row].height)
+        if text_width > column_width:
+            min_height = ceil(text_width/column_width)*14.75
+            if not current_height or min_height > current_height:
+                sheet.row_dimensions[row].height = min_height
+        # Cell style attributes are individually immutable, you need to
+        # overwrite the entire style property to make changes.
+        alignment = openpyxl.styles.Alignment(
+            wrap_text=True, wrapText=True
+        )
+        style = openpyxl.styles.Style(
+            font=cell.style.font,
+            fill=cell.style.fill,
+            border=cell.style.border,
+            alignment=alignment,
+            number_format=cell.style.number_format,
+            protection=cell.style.protection
+        )
+        cell.style = style
+        cell.value = value
+
+    def write_columns(self, columns, sheet, start_row, start_col, data):
+        """
+        Iterates through each column and writes the column headers and
+            recursively calls itself to write the sub-headers. If there are no
+            further sub-headers it writes the relevant product data into the
+            column.
+        :param column_list: A list of the header information to be written to
+            each column.
+        :param sheet: An xlwt sheet object in the spreadsheet which is being
+            written to.
+        :param start_row: An int with the row which will be written to.
+        :param start_col: An int with the column which will be started on
+            writing left to right.
+        :return: An int of the index of the column this call finished writing
+            on. This will be bubbled up through the recursive calls to ensure
+            they pick up at the correct column.
+        """
+        col_index = start_col
+        # If the key 'data' is in the column/sheet data then we update data
+        # with the new information.
+        if 'data' in columns:
+            columns_data = self._update_column_data(data, columns.get('data'))
+        else:
+            columns_data = data
+        for column in columns.get('columns'):
+            row_index = start_row
+            header_name = column['name']
+
+            if 'columns' in column:
+                # If this key points to a list in json then this header has
+                # sub-headers and we'll recursively call write_columns to
+                # write those out. By setting col_index from the return
+                # value here we ensure that the current level headers will
+                # pick up at the right spot.
+                new_col_index = self.write_columns(
+                    column, sheet, row_index+1, col_index, columns_data
+                )
+
+                # If we're using a template then these cells should already be
+                # merged and calling merge on them again will cause Excel not
+                # to open it properly (other spreadsheet clients seem to handle
+                # it just fine).
+                if not self.template:
+                    sheet.merge_cells(start_row=row_index,
+                                      start_column=col_index,
+                                      end_row=row_index,
+                                      end_column=new_col_index-1)
+                    cell = sheet.cell(row=row_index, column=col_index)
+                    cell.value = header_name
+                    # TODO: Make the column width a field in the format json.
+                col_index = new_col_index
+
+            else:
+                if 'data' in column:
+                    column_data = self._update_column_data(
+                        columns_data, column.get('data')
+                    )
+                else:
+                    column_data = columns_data
+                # If we used a template then the headers will already be
+                # populated and overwriting them may cause issues for the file.
+                if not self.template:
+                    cell = sheet.cell(row=row_index, column=col_index)
+                    cell.value = header_name
+                # column_data holds a list of the arguments necessary for
+                # the handler to retrieve and format the data in this
+                # column or if no appropriate mapping exists for this column
+                # then an empty dictionary.
+                if column_data:
+                    # We grab the current column width (or if the column hasn't
+                    # been instantiated yet set it to the default) so we can
+                    # later  determine if the height of the row needs to be
+                    # increased to fit all the text in a cell.
+                    col_width = self._get_column_width(sheet, col_index)
+
+                    # We retrieve the handler from export_handlers based on the
+                    # value of column_format, otherwise we use the default
+                    # handler.
+                    handler = getattr(
+                        export_handlers,
+                        column_data.get('handler', ''),
+                        default_format
+                    )
+
+                    row_index += 1
+
+                    # If run_once is set and true then we don't want to write
+                    # these values per every product.
+                    if column_data.get('run_once'):
+                        value = handler(
+                            self.products[0],
+                            **column_data
+                        )
+                        if isinstance(value, list) and \
+                                column_data.get('single_cell'):
+                            value = [value]
+                        if not isinstance(value, list):
+                            values = [value]
+                        else:
+                            values = value
+
+                        # If there are multiple items in values now it will
+                        # write each of them to a new row.
+                        for value in values:
+                            self.write_cell(
+                                sheet, row_index, col_index, col_width, value,
+                                column_data
+                            )
+                            row_index += 1
+                        col_index += 1
+                        continue
+
+                    # This filters out the products that shouldn't be written
+                    # if any filters are set for the column mapping.
+                    for product in filter(
+                            self._product_filtered(
+                                column_data.get('filters', [])),
+                            self.products):
+                        value = handler(
+                            product,
+                            **column_data
+                        )
+
+                        # If the field is set to be compressed to a single cell
+                        # but the value returned is a list then we set that
+                        # list to be the only item of a wrapper list. That way
+                        # when it goes to be written the inner list will be
+                        # flattened and written to a single cell.
+                        if isinstance(value, list) and \
+                                column_data.get('single_cell'):
+                            value = [value]
+                        if not isinstance(value, list):
+                            values = [value]
+                        else:
+                            values = value
+                        # If there are multiple items in values now it will
+                        # write each of them to a new row.
+                        for value in values:
+                            if value:
+                                self.write_cell(
+                                    sheet, row_index, col_index, col_width,
+                                    value, column_data
+                                )
+                            row_index += 1
+
+                col_index += 1
+        return col_index
+
+    def write_images(self, sheet, index):
+        images = self.template_data['tabs'][index].get('images')
+        if images:
+            for image in images:
+                working_dir = os.path.dirname(os.path.abspath(__file__))
+                image_obj = openpyxl.drawing.Image(
+                    '%s/export_templates/%s/images/%s' %
+                    (working_dir, self.export_type, image['filename'])
+                )
+                # openpyxl uses a weird unit for image sizing/positioning which
+                # isn't quite pixels but something else. The conversion
+                # constant between this unit and inches is ~96.0061443932.
+                image_obj.drawing.top = image['top'] * 96.0061443932
+                # For whatever reason the left value provided to openpyxl will
+                # have an additional 0.03 inches added to it, so we need to
+                # subtract that out before writing.
+                image_obj.drawing.left = (
+                    (image['left'] * 96.0061443932) - 2.8818443804)
+                if image.get('height') is not None:
+                    image_obj.drawing.height = image['height'] * 96.0061443932
+                if image.get('width') is not None:
+                    image_obj.drawing.width = image['width'] * 96.0061443932
+                sheet.add_image(image_obj)
+
+    def generate_spreadsheet(self):
+        """
+        Generates a spreadsheet based on the formatting and data mapping
+            outlined in two JSON files.
+        :return: An xlwt Workbook object formatted as described in the JSON
+            files and populated with the product information.
+        """
+
+        # The list object pointed to by the 'format' key contains dictionary
+        # objects with one member, the key of which is the name of the sheet
+        # which points to the header and formatting information for that sheet.
+        index = 0
+        # Reset the cache to ensure no stale data is introduced into the
+        # export.
+        export_handlers.ContentCache.reset_cache()
+        for sheet_data in self.template_data['tabs']:
+            if sheet_data['name'] in self.workbook.get_sheet_names():
+                sheet = self.workbook.get_sheet_by_name(sheet_data['name'])
+            else:
+                sheet = self.workbook.create_sheet(index, sheet_data['name'])
+            self.write_images(sheet, index)
+            start_row = self.get_default_start_row()
+            start_col = self.get_default_start_column()
+            if 'options' in sheet_data:
+                if 'start_row' in sheet_data['options']:
+                    start_row = sheet_data['options']['start_row']
+                if 'start_col' in sheet_data['options']:
+                    start_col = sheet_data['options']['start_col']
+            self.write_columns(
+                sheet_data,
+                sheet,
+                start_row,
+                start_col,
+                {}
+            )
+            index += 1
+        self.workbook.active = (
+            self.template_data['options'].get('active_sheet') or 0)
+        return self.workbook

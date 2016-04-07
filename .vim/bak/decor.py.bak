@@ -1,0 +1,154 @@
+from flask import request, render_template, current_app, url_for, Response
+from amber_api.models import DecimalEncoder
+from colander import Invalid
+from functools import wraps
+import json
+import traceback
+from amber_api.lib.api_log import log_api_call
+
+from amber_api.views.error import (
+    InvalidRequestPayload,
+    InvalidRequestParameters,
+    UnexpectedError,
+)
+from amber_api.autodoc.scan import split_rule, document_resources
+
+
+def target_endpoint(method):
+    url_adapter = current_app.create_url_adapter(request)
+    rule, url_params = url_adapter.match(
+        request.path,
+        method=method,
+        return_rule=True
+    )
+    target_view = current_app.view_functions[rule.endpoint]
+    return rule, target_view, url_params
+
+
+def resource(**params):
+    def document(f):
+        f.__documented__ = True
+        f.__resource__ = params.get('resource', {})
+        f.__description__ = params.get('description', '')
+        f.__uri_parameters__ = params.get('uri_parameters', {})
+        f.__body_parameters__ = params.get('body_parameters', {})
+
+        @wraps(f)
+        def parse(*args, **kwargs):
+            rule = request.url_rule
+            if 'method' in request.values:
+                method = request.values['method'].upper()
+                if method != request.method:
+                    rule, target_view, _ = target_endpoint(method)
+
+            if 'format' not in params:
+                params['format'] = 'JSON'
+            method_path, _, resource_name = split_rule(rule.rule)
+            version = kwargs.get('version', '')
+            uri_args = {}
+            for p_name, p_info in f.__uri_parameters__.iteritems():
+                uri_args[p_name] = p_info['example']
+
+            try:
+                example_url = url_for(
+                    request.url_rule.endpoint, _external=True, **uri_args
+                )
+            except:
+                example_url = ''
+
+            func = f
+            if f.func_name != current_app.view_functions[
+                rule.endpoint
+            ].func_name:
+                func = current_app.view_functions[rule.endpoint]
+            out_schema = func.__resource__.get('schema')
+            documentation = {
+                'out_schema': out_schema,
+                'example_url': example_url,
+                'auth_required': getattr(func, '__auth_required__', False),
+                'version': version,
+                'path': method_path,
+                'format': params['format'],
+                'body_parameters': func.__body_parameters__,
+                'uri_parameters': func.__uri_parameters__,
+                'description': func.__description__,
+                'resource': func.__resource__,
+            }
+            if request.data:
+                if params.get('log_message'):
+                    print("*" * 100)
+                    log_api_call(request, params.get('log_message'))
+                response = f(*args, **kwargs)
+                response['_documentation'] = documentation
+                return Response(
+                    json.dumps(response, cls=DecimalEncoder),
+                    mimetype='application/amber+json',
+                )
+            else:
+                resources = document_resources()
+                endpoint = rule.endpoint.split('.')[-1:][0]
+                resource_name = None
+                for k, v in resources.iteritems():
+                    for m in v.get('methods', []):
+                        if m['endpoint'].func_name == endpoint:
+                            resource_name = k
+                            break
+                    if resource_name:
+                        break
+                documentation['nav_resources'] = resources
+                documentation['resource_name'] = resource_name
+                return render_template(
+                    'resource.jinja2',
+                    **documentation
+                )
+        return parse
+    return document
+
+
+def input(schema):
+    """ Verifies if a request payload matches schema.
+    """
+    def wrap(f):
+        f.__in_schema__ = schema()
+        f.__in_schema__.__comments__ = getattr(schema, '__comments__', None)
+
+        @wraps(f)
+        def check(*args, **kwargs):
+            try:
+                data = json.loads(request.data["data"])
+
+                if isinstance(data, dict):
+                    clauses = data.get('clauses')
+                else:
+                    clauses = None
+                data = f.__in_schema__.deserialize(data)
+                if clauses:
+                    data['clauses'] = clauses
+                request.data["data"] = data
+            except ValueError:
+                raise InvalidRequestPayload(request.data["data"])
+            except Invalid as error:
+                raise InvalidRequestParameters(error.asdict())
+            return f(*args, **kwargs)
+        return check
+    return wrap
+
+
+def errors(*errors):
+    """ In debug mode verifies if error was declared.
+    """
+    def wrap(f):
+        f.__errors__ = errors
+
+        @wraps(f)
+        def exception_handler(*args, **kwargs):
+            try:
+                return f(*args, **kwargs)
+            except errors as e:
+                raise e
+            except Exception as e:
+                if current_app.debug:
+                    traceback.print_exc()
+                raise UnexpectedError()
+        return exception_handler
+    return wrap

@@ -1,0 +1,32 @@
+{% from 'macros.jinja2' import with_errors %}
+
+{% extends "index.jinja2" %}
+{%block tagline %}{% endblock %}
+{% block header %}{% endblock %}
+
+{% block sidebar_first %}
+    {% include 'product_nav.jinja2' %}
+{% endblock %}
+
+{% block content_main %}
+
+    <div class="page-content tags">
+        <h1>Tags</h1>
+        <div class="list">
+            {% for i in tags %}
+                {% set dest = url_for('product_view.product_tag_delete', prod_id=prod_id, tag_id=i.id) %}
+                <form class="tag label label-primary" action="{{dest}}" method="POST">
+                    <label>{{ i.name }}</label>
+                    <button type="submit"><span class="glyphicon glyphicon-remove"></span></button>
+                </form>
+            {% endfor %}
+        </div>
+        <div class="add">
+            <form method="POST" action="">
+                {{ with_errors(form.tags, size=40, class="form-control") }}
+                <input type="submit" value="Add" class="btn btn-primary">
+                <div>* Comma separated list of tags.</div>
+            </form>
+        </div>
+    </div>
+{% endblock content_main %}

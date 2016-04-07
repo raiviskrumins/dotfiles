@@ -1,0 +1,444 @@
+from amber_api.models.api_key import APIKey
+import re
+from amber_api.models import db, DecimalEncoder
+from amber_api.models.ngram import (
+    NGram,
+    NGrams
+)
+from amber_api.models import component_types
+from amber_api.models.component_types import OptionSetSubComponent
+from sqlalchemy import text
+from redis import Redis
+import json
+import xlrd
+import urllib2
+
+
+from amber_api.lib.redis_util import flush_product_search_cache
+
+
+def is_manufacturer(api_key):
+    if api_key:
+        api_key_obj = APIKey.query.filter_by(public=api_key).first()
+        if api_key_obj:
+            api_key_roles = api_key_obj.roles
+            for role in api_key_roles:
+                if (
+                    role.name == 'channel_manager_admin' or
+                    role.name == 'mfr_admin' or
+                    role.name == 'mfr_employee'
+                ):
+                    return True
+    return False
+
+
+def pack_associated_list(object_type, fields, component_class, component_data):
+    if object_type == 'associated_list':
+        association_field = None
+        association_class = None
+        for field in fields:
+            f = getattr(component_class, field)
+            if hasattr(f, '__field_metadata__'):
+                association_class_name = f.__field_metadata__.get(
+                    'association'
+                )
+                if association_class_name:
+                    association_class = getattr(
+                        component_types,
+                        association_class_name
+                    )
+                    association_field = field
+                    break
+        for cd in component_data:
+            cd.update(get_data_for_component(
+                association_class,
+                'id',
+                cd[association_field]
+            ))
+    return component_data
+
+
+def get_data_for_component(
+        component_class,
+        id_field,
+        identifier=None,
+        object_type=None
+):
+        fields = [
+            c.name for c in component_class.__table__.columns
+        ]
+        select_fields = []
+        for field in fields:
+            if field == 'default':
+                select_fields.append('"default"')
+            else:
+                select_fields.append(field)
+        component_query = ' '.join([
+            'select',
+            ', '.join(select_fields),
+            'from',
+            component_class.__tablename__
+        ])
+        if identifier:
+            component_query = ' '.join([
+                component_query,
+                'where',
+                id_field,
+                '=',
+                ''.join([':', id_field])
+            ])
+
+        if object_type in ['list', 'associated_list']:
+            if identifier:
+                component_data = db.session.connection().execute(
+                    text(component_query),
+                    **{id_field: identifier}
+                ).fetchall()
+                if component_data is not None:
+                    component_data = [
+                        dict(zip(fields, cd)) for cd in component_data
+                    ]
+                    component_data = pack_associated_list(
+                        object_type,
+                        fields,
+                        component_class,
+                        component_data
+                    )
+                    return component_data
+            else:
+                component_data = db.session.connection().execute(
+                    text(component_query)
+                ).fetchall()
+                if component_data is not None:
+                    result = []
+                    component_data = [
+                        dict(zip(fields, cd)) for cd in component_data
+                    ]
+                    for cd in component_data:
+                        result.append(pack_associated_list(
+                            object_type,
+                            fields,
+                            component_class,
+                            cd
+                        ))
+                    return result
+        else:
+            if identifier:
+                component_data = db.session.connection().execute(
+                    text(component_query),
+                    **{id_field: identifier}
+                ).first()
+                if component_data:
+                    return dict(zip(fields, component_data))
+            else:
+                component_data = db.session.connection().execute(
+                    text(component_query)
+                ).fetchall()
+                if component_data:
+                    return [dict(zip(fields, cd)) for cd in component_data]
+        return {}
+
+
+def get_categories(category_names):
+    categories = []
+    cats = []
+    primary_sub_cats = []
+    pri_cats = []
+    secondary_sub_cats = []
+    sec_cats = []
+
+    for cat_name in category_names:
+        if '_' not in cat_name:
+            cats.append(cat_name)
+            categories.append((cat_name, cat_name.title()))
+
+    for cat_name in category_names:
+        if '_' in cat_name:
+            remain, frag = cat_name.rsplit('_', 1)
+            while remain not in category_names:
+                if '_' not in remain:
+                    break
+                remain, new_frag = remain.rsplit('_', 1)
+                frag = '_'.join([new_frag, frag])
+            for pri_cat in cats:
+                if pri_cat == remain:
+                    if cat_name not in pri_cats:
+                        pri_cats.append(cat_name)
+                        primary_sub_cats.append(
+                            (cat_name, frag.title().replace('_', ' '))
+                        )
+                else:
+                    if remain.startswith(pri_cat):
+                        sec_cats.append(cat_name)
+                        secondary_sub_cats.append(
+                            (cat_name, frag.title().replace('_', ' '))
+                        )
+
+    return {
+        'categories': sorted(categories, key=lambda tup: tup[1]),
+        'primary_sub_categories': sorted(
+            primary_sub_cats, key=lambda tup: tup[1]
+        ),
+        'secondary_sub_categories': sorted(
+            secondary_sub_cats, key=lambda tup: tup[1]
+        )
+    }
+
+
+def get_sales_channel_preferences(product, api_key):
+    """ Get display preferences for product manufacturer and sales channel
+    """
+    query = 'select identity_name, description_description, ' \
+            'pricing_wholesale, pricing_trade_price, ' \
+            'pricing_minimum_internet_price, pricing_msrp, ' \
+            'pricing_dealer_price from ' \
+            'sales_channel_preference left join sales_channel on ' \
+            'sales_channel.id = sales_channel_preference.sales_channel_id ' \
+            'left join api_key on api_key.id = sales_channel.api_key_id ' \
+            'where api_key.public = :api_key and ' \
+            'sales_channel_preference.manufacturer_id = :mfr_id'
+    result = db.session.execute(
+        text(query),
+        {
+            'api_key': api_key,
+            'mfr_id': product['manufacturer']['manufacturer_id']
+        }
+    ).first()
+    channel_prefs = {}
+    if result:
+        channel_prefs = dict(
+            zip([
+                'identity_name',
+                'description_description',
+                'pricing_wholesale',
+                'pricing_trade_price',
+                'pricing_minimum_internet_price',
+                'pricing_msrp',
+                'pricing_dealer_price'
+            ], result)
+        )
+    return channel_prefs
+
+
+def filter_fields(product, channel_prefs):
+    """ Remove fields from product based on preference settings for sales
+        channel
+    """
+    product['identity']['name'] = product['identity'][
+        channel_prefs.get('identity_name', 'name') or 'name'
+    ]
+    product['identity'].pop('alternate_name', None)
+    product['description']['description'] = product['description'][
+        channel_prefs.get(
+            'description_description', 'description'
+        ) or 'description'
+    ]
+    product['description'].pop('alternate_description', None)
+    if not channel_prefs.get('pricing_wholesale', False):
+        product['pricing'].pop('wholesale', None)
+
+    if not channel_prefs.get('pricing_trade_price', False):
+        product['pricing'].pop('trade_price', None)
+
+    if not channel_prefs.get('pricing_minimum_internet_price', False):
+        product['pricing'].pop('minimum_internet_price', None)
+
+    if not channel_prefs.get('pricing_msrp', False):
+        product['pricing'].pop('msrp', None)
+
+    if not channel_prefs.get('pricing_dealer_price', False):
+        product['pricing'].pop('dealer_price', None)
+    return product
+
+
+def unflatten(dictionary):
+    result_dict = dict()
+    for key, value in dictionary.iteritems():
+        parts = key.split("__")
+        d = result_dict
+        for part in parts[:-1]:
+            if part not in d:
+                d[part] = dict()
+            d = d[part]
+        d[parts[-1]] = value
+    return result_dict
+
+
+def has_numbers(input_string):
+    return any(char.isdigit() for char in input_string)
+
+
+def update_product_ngrams(
+    field,
+    product_id,
+    component,
+    existing_ngram,
+    existing_ngrams
+):
+    __, field_name = field.split('.')
+    blob = getattr(component, field_name, '')
+    if blob:
+        tokens = make_tokens(blob)
+        ngrams = make_ngrams([t for t in tokens if not has_numbers(t)])
+        for n, np in ngrams.iteritems():
+            if existing_ngram.get(n):
+                gram = existing_ngram.get(n)
+                if gram.product_count:
+                    gram.product_count += 1
+                else:
+                    gram.product_count = 1
+                db.session.add(gram)
+            else:
+                gram = NGram(gram=n)
+                gram.product_count = 1
+                db.session.add(gram)
+                db.session.flush()
+                existing_ngram[n] = gram
+            for pos in np:
+                key = (
+                    gram.id,
+                    product_id,
+                    pos,
+                    field
+                )
+                if key not in existing_ngrams:
+                    existing_ngrams.append(key)
+                    prod_gram = NGrams()
+                    prod_gram.ngram_id = gram.id
+                    prod_gram.position = pos
+                    prod_gram.field_name = field
+                    prod_gram.product_id = product_id
+                    db.session.add(prod_gram)
+    db.session.flush()
+
+
+def make_tokens(blob, query=False):
+    """
+    Given a string (``blob``) of text, this will return a list of tokens.
+
+    This generally/loosely follows English sentence construction, replacing
+    most punctuation with spaces, splitting on whitespace & omitting any
+    tokens in ``self.STOP_WORDS``.
+
+    You can customize behavior by overriding ``STOP_WORDS`` or
+    ``PUNCTUATION`` in a subclass.
+    """
+
+    # A fairly standard list of "stopwords", which are words that contribute
+    # little to relevance (since they are so common in English) & are to be
+    # ignored.
+    stop_words = {
+        'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by',
+        'for', 'if', 'in', 'into', 'is', 'it',
+        'no', 'not', 'of', 'on', 'or', 's', 'such',
+        't', 'that', 'the', 'their', 'then', 'there', 'these',
+        'they', 'this', 'to', 'was', 'will', 'with', '&'
+    }
+    punctuation = re.compile('[~`!@#$%^&*()+={\[}\]|\\:;"\',<.>/?]')
+    # Kill the punctuation.
+    tokens = []
+    if isinstance(blob, str) or isinstance(blob, unicode):
+        blob = punctuation.sub(' ', blob)
+        strip_tags = re.compile(r'<.*?>')
+        blob = strip_tags.sub('', blob)
+
+        # Split on spaces.
+        words = blob.split()
+        for token in words:
+            # Make sure everything is in lowercase & whitespace removed.
+            token = token.lower().strip()
+
+            if (token not in stop_words or len(words) == 1) or query:
+                tokens.append(token)
+
+    return tokens
+
+
+def make_ngrams(tokens, min_gram=3, max_gram=15):
+    """
+    Converts a iterable of ``tokens`` into n-grams.
+
+    This assumes front grams (all grams made starting from the left side
+    of the token).
+
+    Optionally accepts a ``min_gram`` parameter, which takes an integer &
+    controls the minimum gram length. Default is ``3``.
+
+    Optionally accepts a ``max_gram`` parameter, which takes an integer &
+    controls the maximum gram length. Default is ``6``.
+    """
+    terms = {}
+    for position, token in enumerate(tokens):
+        current_min_gram = min_gram
+        if min_gram > len(token):
+            current_min_gram = len(token)
+        for window_length in range(
+                current_min_gram, min(max_gram + 1, len(token) + 1)):
+            # Assuming "front" grams.
+            gram = token[:window_length]
+            terms.setdefault(gram, [])
+
+            if position not in terms[gram]:
+                terms[gram].append(position)
+
+    return terms
+
+
+def partial_cache_update(product_ids, object, object_type):
+    """ Helper function for updating a specific portion of a product's
+    json cache
+    """
+    product_redis = Redis(db=0)
+
+    product_cache = db.session.execute(
+        "select json_cache from product_entity where id in (%s)"
+        % ','.join(str(p) for p in product_ids)
+    )
+
+    for product in product_cache:
+        cache = json.loads(product[0])
+        pid = cache['id']
+
+        if object_type == 'manufacturer':
+            cache['manufacturer']['manufacturer'] = object.to_dict()
+        elif object_type == 'collection':
+            cache['collection']['collection'] = object.to_dict()
+        elif object_type == 'option_set':
+            option_set_component = []
+            components = OptionSetSubComponent.query.filter_by(
+                option_set_id=object.id, product_id=pid
+            ).all()
+            for comp in components:
+                comp = comp.to_dict()
+                option_set_component.append(comp)
+            cache['option']['option_sets'] = option_set_component
+
+        json_cache = json.dumps(cache, cls=DecimalEncoder)
+
+        product_redis.getset(pid, json_cache)
+
+        db.session.execute(text(
+            "update product_entity set json_cache=:cache where id = :pid"
+        ), {'cache': json_cache, 'pid': pid})
+
+    flush_product_search_cache()
+
+
+def excel_to_dict(spreadsheet, sheet_index):
+    print("Opening socket!")
+    socket = urllib2.urlopen(spreadsheet)
+    print("Reading workbook")
+    book = xlrd.open_workbook(file_contents=socket.read())
+    sheet = book.sheet_by_index(sheet_index)
+    keys = [
+        xlrd.colname(col_index) for col_index in xrange(sheet.ncols)
+    ]
+
+    print("Importting data from %s" % spreadhseet)
+    import_data = []
+    for row_index in xrange(0, sheet.nrows):
+        d = {keys[col_index]: sheet.cell(row_index, col_index).value
+             for col_index in xrange(sheet.ncols)}
+        import_data.append(d)
+
+    return import_data

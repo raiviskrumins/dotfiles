@@ -1,0 +1,29 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+)
+
+// Up is executed when this migration is applied
+func Up_20160212111729(txn *sql.Tx) {
+	sql := `ALTER TABLE ONLY %s_component ADD CONSTRAINT fk_%s_component_parent FOREIGN KEY (parent_id) REFERENCES %s_component(component_data_id) ON DELETE CASCADE;`
+
+	children := []string{"cushion", "door", "drawer", "image", "option_set", "pillow", "shelf", "box", "table_leaf", "feature"}
+	parents := []string{"cushions", "doors", "drawers", "images", "option_sets", "pillows", "shelves", "shipping_information", "table_leaves", "description"}
+
+	for i, _ := range children {
+		txn.Exec(fmt.Sprintf(sql, children[i], children[i], parents[i]))
+	}
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160212111729(txn *sql.Tx) {
+	sql := `ALTER TABLE ONLY %s_component DROP CONSTRAINT fk_%s_component_parent;`
+
+	children := []string{"cushion", "door", "drawer", "image", "option_set", "pillow", "shelf", "box", "table_leaf", "feature"}
+
+	for i, _ := range children {
+		txn.Exec(fmt.Sprintf(sql, children[i], children[i]))
+	}
+}

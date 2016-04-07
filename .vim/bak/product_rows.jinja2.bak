@@ -1,0 +1,26 @@
+{% from 'macros.jinja2' import collection_name %}
+
+{% for product in products %}
+<tr class="product-row visible{% if loop.index0 is divisibleby 2 %} even{% endif %}" data-select="1">
+    {% set product_image = [] %}
+        {% for image in product.images.image_list %}
+          {% if image.default %}
+                {% do product_image.append(image.full_size) %}
+            {% endif %}
+        {% endfor %}
+        {% if product_image[0] %}
+        <td><img src="{{ product_image[0] }}" width="75"></td>
+        {% else %}
+        <td><img src="" width="75"></td>
+     {% endif %}
+       <td>{{ product.identity.manufacturer_sku or '' }}</td>
+    <td width="45%">
+      {{ product.identity.name }}
+      {% if product.collection.collection_id %}
+        <span class="pull-right badge badge-default">{{ product.collection.collection_id }}</span>
+      {% endif %}
+    </td>
+    <td></td>
+    <td><a href="#" class="js-select-toggle select-button" data-id="{{ product.id }}"></a></td>
+</tr>
+{% endfor %}

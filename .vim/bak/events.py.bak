@@ -1,0 +1,85 @@
+class Events(object):
+    def __init__(self, *args):
+        self.events = {}
+
+        if args:
+            self.register(*args)
+        
+    def register(self, *args):
+        for arg in args:
+            self.events[arg] = Event(arg)
+    
+    def unregister(self, *args):
+        for arg in args:
+            if arg not in self.events:
+                raise Exception("Event is not registered!")
+            del self.events[arg]
+        
+    def fire(self, eventName, *arg, **kwargs):
+        if eventName not in self.events:
+            raise Exception("Event is not registered!")
+        self.events[eventName].fire(arg, kwargs)
+    
+    def clear(self, eventName):
+        if eventName not in self.events:
+            raise Exception("Event is not registered!")
+        self.events[eventName].clear()
+        
+    def bind(self, eventName, callback):
+        if eventName not in self.events:
+            raise Exception("Event is not registered!")
+        self.events[eventName].bind(callback)
+        
+    def unbind(self, eventName, callback):
+        if eventName not in self.events:
+            raise Exception("Event is not registered!")
+        self.events[eventName].unbind(callback)
+    
+    def clear_all(self):
+        for e in self.events:
+            self.events[e].clear()
+        
+    def unregister_all(self):
+        self.events.clear()
+        
+    def get(self, eventName):
+        if eventName not in self.events:
+            raise Exception("Event is not registered!")
+        return self.events[eventName]
+    
+class Event(object):
+    def __init__(self, name):
+        self.callbacks = []
+        self.name = name
+
+    def bind(self, callback):
+        if callback not in self.callbacks:
+            if hasattr(callback, "__call__"):
+                self.callbacks.append(callback)
+                return True
+            else:
+                raise Exception('Callback is not a callable object')
+        else:
+            raise Exception('Callback already bound to event')
+    
+    def unbind(self, callback):
+        if not hasattr(callback, "__call__"):
+            raise Exception("Callback is not a callable object")
+        
+        try:
+            self.callbacks.remove(callback)
+            return True
+        except ValueError:
+            raise Exception('Callback does not exist')
+        except AttributeError:
+            raise Exception('ngin.core.events.Event.unbind() \
+                            self.callbacks in not a list')
+            
+    def fire(self, *arg, **kwargs):
+        for callback in self.callbacks:
+            if callback(*arg, **kwargs) is False:
+                return False
+        return True
+    
+    def clear(self):
+        self.callbacks = []

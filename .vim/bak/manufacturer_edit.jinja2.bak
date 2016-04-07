@@ -1,0 +1,79 @@
+{% from 'macros.jinja2' import basic_field %}
+{% extends 'index.jinja2' %}
+
+{% block title %}ADMIN{% endblock title %}
+
+{%block tagline %}{% endblock tagline %}
+{% block header %}{% endblock header %}
+
+{% block content_main %}
+<div class="col-md-12">
+    <span class="back-btn"><a href="{{url_for('manufacturer_view.manufacturer_get', mfr_id=manufacturer['id'])}}">{{manufacturer.name}}</a></span>
+    <h1>Edit Manufacturer</h1>
+    <hr>
+</div>
+<div class="clearfix"></div>
+
+<form class="edit-manufacturer-form" method="POST" action="">
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="col-md-6 col-md-offset-2">
+        <ul class="errors">
+            {% for message in messages %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+        </div>
+        {% endif %}
+    {% endwith %}
+    {{ form.hidden_tag() }}
+    <div class="col-md-6">
+        <h3>Basic Info</h3>
+        {{ basic_field(form.name) }}
+        {{ basic_field(form.url) }}
+        {{ basic_field(form.logo_url) }}
+        {{ basic_field(form.bio) }}
+    </div>
+    <div class="col-md-6">
+        <h3>Contact Info</h3>
+        {{basic_field(contact_form.email)}}
+        <div class="row">
+          <div class="col-md-6">
+        {{basic_field(contact_form.phone)}}
+        {{ basic_field(contact_form.extension) }}
+          </div>
+        </div>
+        {{basic_field(contact_form.street_address_1)}}
+        {{basic_field(contact_form.city)}}
+        <div class="row">
+            <div class="col-md-6">{{basic_field(contact_form.state)}}</div>
+            <div class="col-md-6">{{basic_field(contact_form.zipcode)}}</div>
+        </div>
+        <h3>Social</h3>
+        <div class="row">
+            <div class="col-md-6">
+                {{basic_field(contact_form.facebook_url)}}
+                {{basic_field(contact_form.twitter_url)}}
+                {{basic_field(contact_form.linkedin_url)}}
+            </div>
+            <div class="col-md-6">
+                {{basic_field(contact_form.pinterest_url)}}
+                {{basic_field(contact_form.google_plus_url)}}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-12">
+        <p>
+            <input type="submit" class="btn btn-primary pull-right" value="Save">
+            {% if manufacturer.active %}
+            <a class="btn btn-warning" href="{{ url_for('manufacturer_view.manufacturer_delete', mfr_id=manufacturer['id']) }}">Deactivate</a>
+            {% else %}
+            <a class="btn btn-warning" href="{{ url_for('manufacturer_view.manufacturer_delete', mfr_id=manufacturer['id']) }}">Activate</a>
+            {% endif %}
+            <a class="btn btn-default pull-right" href="{{ url_for('manufacturer_view.manufacturer_get', mfr_id=manufacturer['id']) }}">Cancel</a>
+        </p>
+    </div>
+</form>
+
+{% endblock %}

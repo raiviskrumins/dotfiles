@@ -1,0 +1,203 @@
+{
+    "instance": {
+        "active": {
+            "type": "bool"
+        },
+        "bio": {
+            "type": "string",
+            "nullable": true
+        },
+        "city": {
+            "type": "string",
+            "nullable": true
+        },
+        "country": {
+            "type": "string",
+            "nullable": true
+        },
+        "date_added": {
+            "type": "string"
+        },
+        "date_profile_complete": {
+            "type": "string",
+            "nullable": true
+        },
+        "date_updated": {
+            "type": "string",
+            "nullable": true
+        },
+        "email": {
+            "type": "string",
+            "regex": "^$|@{1}"
+        },
+        "id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "legal": {
+            "type": "string",
+            "nullable": true
+        },
+        "facebook_url": {
+            "type": "string",
+            "regex": "^$|^http",
+            "nullable": true
+        },
+        "google_plus_url": {
+            "type": "string",
+            "regex": "^$|^http",
+            "nullable": true
+        },
+        "featured": {
+            "type": "bool",
+            "nullable": true
+        },
+        "linkedin_url": {
+            "type": "string",
+            "regex": "^$|^http",
+            "nullable": true
+        },
+        "logo_url": {
+            "type": "string",
+            "regex": "^$|^http",
+            "nullable": true
+        },
+        "name": {
+            "type": "string"
+        },
+        "phone": {
+            "type": "string",
+            "nullable": true
+        },
+        "phone_extension": {
+            "type": "string",
+            "nullable": true
+        },
+        "pinterest_url": {
+            "type": "string",
+            "nullable": true
+        },
+        "province": {
+            "type": "string",
+            "nullable": true
+        },
+        "restock_fee": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "return_period": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "returnable": {
+            "type": "bool",
+            "nullable": true
+        },
+        "internal": {
+            "type": "bool",
+            "nullable": true
+        },
+        "state": {
+            "type": "string",
+            "nullable": true
+        },
+        "street_address_1": {
+            "type": "string",
+            "nullable": true
+        },
+        "street_address_2": {
+            "type": "string",
+            "nullable": true
+        },
+        "twitter_url": {
+            "type": "string",
+            "nullable": true
+        },
+        "updated_by_api_key": {
+            "type": "string",
+            "regex": "[a-z0-9]{64}",
+            "nullable": true
+        },
+        "url": {
+            "type": "string",
+            "regex": "^$|^http",
+            "nullable": true
+        },
+        "zipcode": {
+            "type": "string",
+            "regex": "^$|[0-9]+"
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        }
+    },
+    "collection": {
+        "total": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "count": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "_embedded": {
+            "type": "object",
+            "object": {
+                "manufacturers": {
+                    "type": "list",
+                    "element": {
+                        "type": "object",
+                        "template": "manufacturer.json:instance"
+                    }
+                }
+            },
+            "required": false
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        }
+    },
+    "list-manufacturers": [
+        {
+            "payload": {
+                "public_key": "1b12_18_test_public_test_public_test_public_test_public_test_pub",
+                "private_key": "e38a_18_test_private_test_private_test_private_test_private_test",
+                "data": {
+                    "limit": 10
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "manufacturer.json:collection"
+            }
+        },
+        {
+            "payload": {
+                "public_key": "1b12_18_test_public_test_public_test_public_test_public_test_pub",
+                "private_key": "e38a_18_test_private_test_private_test_private_test_private_test",
+                "data": {
+                    "limit": 5,
+                    "offset": 50
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "manufacturer.json:collection"
+            }
+        }
+    ]
+}

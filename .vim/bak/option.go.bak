@@ -1,0 +1,888 @@
+package models
+
+import (
+	"bytes"
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
+	"io"
+	"reflect"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+)
+
+// Option contains the necessary properties required for representing an
+// Option within the database.
+type Option struct {
+	ID           lib.IntField    `json:"id" primary:"true"`
+	OptionSetID  lib.IntField    `json:"option_set_id"`
+	Name         lib.StringField `json:"name" db:"option_name"`
+	Number       lib.StringField `json:"number" db:"option_number"`
+	Description  lib.StringField `json:"description"`
+	Default      lib.BoolField   `json:"default" db:"option_default"`
+	Image        lib.StringField `json:"image"`
+	Surcharge    lib.IntField    `json:"surcharge"`
+	Kind         lib.StringField `json:"kind"`
+	ExtendedData OptionType      `json:"extended_data" relation:"interface" rel_field:"Kind"`
+}
+
+func (op Option) FormSchema() *form.Schema {
+	fields := []*form.FieldSchema{
+		form.NewField("id", form.ClassInt, form.Render("ID", form.ElementText)),
+		form.NewField("number", form.ClassStr, form.Render("Option Number", form.ElementText)),
+		form.NewField("name", form.ClassStr, form.Render("Option Name", form.ElementText)),
+		form.NewField("description", form.ClassStr, form.Render("Notes", form.ElementText)),
+		form.NewField("default", form.ClassBool, form.Render("Make this option default", form.ElementCheckbox)),
+		form.NewField("image", form.ClassURL, form.Render("Image", form.ElementText)),
+		form.NewField("surchage", form.ClassCurr, form.Render("Surchage", form.ElementText)),
+		form.NewField("kind", form.ClassStr, form.Render("Option Kind", form.ElementHidden)),
+	}
+
+	if op.ExtendedData != nil {
+		fields = append(fields, form.NewField("extended_data", form.ClassForm, form.Render("Extendede Data", form.ElementForm), form.Embed(op.ExtendedData.FormSchema())))
+	}
+
+	return form.NewSchema(fields...)
+}
+
+type OptionType interface {
+	TableName() string
+	FormSchema() *form.Schema
+	ParentID() int64
+	SetID(int64)
+}
+
+func (opt *Option) UnmarshalJSON(input []byte) error {
+	var aux struct {
+		ID           lib.IntField    `json:"id" primary:"true"`
+		OptionSetID  lib.IntField    `json:"option_set_id"`
+		Name         lib.StringField `json:"name" db:"option_name"`
+		Number       lib.StringField `json:"number" db:"option_number"`
+		Description  lib.StringField `json:"description"`
+		Default      lib.BoolField   `json:"default" db:"option_default"`
+		Image        lib.StringField `json:"image"`
+		Surcharge    lib.IntField    `json:"surcharge"`
+		Kind         lib.StringField `json:"kind"`
+		ExtendedData json.RawMessage `json:"extended_data"`
+	}
+	aux.ID = opt.ID
+	aux.OptionSetID = opt.OptionSetID
+	aux.Name = opt.Name
+	aux.Number = opt.Number
+	aux.Description = opt.Description
+	aux.Default = opt.Default
+	aux.Image = opt.Image
+	aux.Surcharge = opt.Surcharge
+	aux.Kind = opt.Kind
+
+	e := lib.DecodeJSON(bytes.NewReader(input), &aux)
+	if e != nil {
+		return e
+	}
+
+	if aux.Kind.Valid == false || len(aux.Kind.String) == 0 {
+		return errors.New("Bad Option Kind in JSON")
+	}
+
+	opt.ID = aux.ID
+	opt.OptionSetID = aux.OptionSetID
+	opt.Name = aux.Name
+	opt.Number = aux.Number
+	opt.Description = aux.Description
+	opt.Default = aux.Default
+	opt.Image = aux.Image
+	opt.Surcharge = aux.Surcharge
+	opt.Kind = aux.Kind
+
+	// Now we can deal with Type Data...
+	extData, e := CreateOptionType(opt.Kind.String, opt.ID.Int64)
+	if e != nil {
+		return e
+	}
+
+	if extData != nil {
+		e = lib.DecodeJSON(bytes.NewReader(aux.ExtendedData), &extData)
+		if e != nil {
+			return e
+		}
+	}
+
+	opt.ExtendedData = extData
+
+	return nil
+}
+
+func CreateOptionType(kindName string, optID int64) (OptionType, oops.Error) {
+	switch kindName {
+	case "nailhead":
+		i := new(nailheadOptionType)
+		if optID > 0 {
+			i.OptionID.Set(optID)
+		}
+		return i, nil
+	case "leather":
+		i := new(leatherOptionType)
+		if optID > 0 {
+			i.OptionID.Set(optID)
+		}
+		return i, nil
+	case "hardware":
+		i := new(hardwareOptionType)
+		if optID > 0 {
+			i.OptionID.Set(optID)
+		}
+		return i, nil
+	case "textile":
+		i := new(textileOptionType)
+		if optID > 0 {
+			i.OptionID.Set(optID)
+		}
+		return i, nil
+	case "trim":
+		i := new(trimOptionType)
+		if optID > 0 {
+			i.OptionID.Set(optID)
+		}
+		return i, nil
+	case "finish":
+		return nil, nil
+	}
+	return nil, oops.ServerError("", "Invalid option kind", kindName)
+}
+
+type nailheadOptionType struct {
+	ID       lib.IntField    `json:"id" primary:"true"`
+	OptionID lib.IntField    `json:"option_id"`
+	Finish   lib.StringField `json:"finish"`
+	Height   lib.FloatField  `json:"height"`
+	Width    lib.FloatField  `json:"width"`
+	Depth    lib.FloatField  `json:"depth" db:"option_nailhead_depth"`
+	Diameter lib.FloatField  `json:"diameter"`
+}
+
+func (op nailheadOptionType) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("finish", form.ClassFloat, form.Render("Finish", form.ElementText)),
+		form.NewField("height", form.ClassFloat, form.Render("Height", form.ElementText)),
+		form.NewField("width", form.ClassFloat, form.Render("Width", form.ElementText)),
+		form.NewField("depth", form.ClassFloat, form.Render("Depth", form.ElementText)),
+		form.NewField("diameter", form.ClassFloat, form.Render("Diameter", form.ElementText)),
+	)
+}
+
+func (opt nailheadOptionType) ParentID() int64 {
+	return opt.OptionID.Int64
+}
+
+func (opt *nailheadOptionType) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(opt).Elem(), DataType: reflect.TypeOf(*opt), Current: -1}
+}
+
+func (opt *nailheadOptionType) ColumnNames() []string {
+	return lib.ColumnNames(opt.NewIterator())
+}
+
+func (opt *nailheadOptionType) Map() map[string]lib.IteratorItem {
+	return lib.Map(opt.NewIterator())
+}
+
+func (opt *nailheadOptionType) SetValue(newComp interface{}) {
+	lib.SetFields(opt, newComp)
+}
+
+func (opt nailheadOptionType) TableName() string {
+	return "option_nailhead"
+}
+
+func (opt *nailheadOptionType) SetID(id int64) {
+	opt.ID.Set(id)
+}
+
+type leatherOptionType struct {
+	ID                  lib.IntField    `json:"id" primary:"true"`
+	OptionID            lib.IntField    `json:"option_id"`
+	LeatherType         lib.StringField `json:"leather_type"`
+	HideSize            lib.FloatField  `json:"hide_size"`
+	AvgThickness        lib.FloatField  `json:"average_thickness"`
+	Finish              lib.StringField `json:"finish"`
+	Performance         lib.StringField `json:"performance"`
+	Flammability        lib.StringField `json:"flammability"`
+	CleaningInstuctions lib.StringField `json:"cleaning_instructions"`
+	PatternNumber       lib.StringField `json:"pattern_number"`
+}
+
+func (op leatherOptionType) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("leather_type", form.ClassStr, form.Render("Type", form.ElementText)),
+		form.NewField("hide_size", form.ClassFloat, form.Render("Hide Size", form.ElementText)),
+		form.NewField("avg_thickness", form.ClassFloat, form.Render("Average Thickness", form.ElementText)),
+		form.NewField("finish", form.ClassStr, form.Render("Finish", form.ElementText)),
+		form.NewField("performance", form.ClassStr, form.Render("Performance", form.ElementText)),
+		form.NewField("flammability", form.ClassStr, form.Render("Flammability", form.ElementText)),
+		form.NewField("cleaning_instructions", form.ClassStr, form.Render("Cleaning Instructions", form.ElementText)),
+		form.NewField("pattern_number", form.ClassStr, form.Render("Pattern Number", form.ElementText)),
+	)
+}
+
+func (opt leatherOptionType) ParentID() int64 {
+	return opt.OptionID.Int64
+}
+
+func (opt *leatherOptionType) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(opt).Elem(), DataType: reflect.TypeOf(*opt), Current: -1}
+}
+
+func (opt *leatherOptionType) ColumnNames() []string {
+	return lib.ColumnNames(opt.NewIterator())
+}
+
+func (opt *leatherOptionType) Map() map[string]lib.IteratorItem {
+	return lib.Map(opt.NewIterator())
+}
+
+func (opt *leatherOptionType) SetValue(newComp interface{}) {
+	lib.SetFields(opt, newComp)
+}
+
+func (opt leatherOptionType) TableName() string {
+	return "option_leather"
+}
+
+func (opt *leatherOptionType) SetID(id int64) {
+	opt.ID.Set(id)
+}
+
+type hardwareOptionType struct {
+	ID       lib.IntField    `json:"id" primary:"true"`
+	OptionID lib.IntField    `json:"option_id"`
+	Finish   lib.StringField `json:"finish"`
+	Height   lib.FloatField  `json:"height"`
+	Width    lib.FloatField  `json:"width"`
+	Depth    lib.FloatField  `json:"depth" db:"option_hardware_depth"`
+	Diameter lib.FloatField  `json:"diameter"`
+}
+
+func (op hardwareOptionType) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("finish", form.ClassStr, form.Render("Finish", form.ElementText)),
+		form.NewField("height", form.ClassFloat, form.Render("Height", form.ElementText)),
+		form.NewField("width", form.ClassFloat, form.Render("Width", form.ElementText)),
+		form.NewField("depth", form.ClassFloat, form.Render("Depth", form.ElementText)),
+		form.NewField("diameter", form.ClassFloat, form.Render("Diameter", form.ElementText)),
+	)
+}
+
+func (opt hardwareOptionType) ParentID() int64 {
+	return opt.OptionID.Int64
+}
+
+func (opt *hardwareOptionType) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(opt).Elem(), DataType: reflect.TypeOf(*opt), Current: -1}
+}
+
+func (opt *hardwareOptionType) ColumnNames() []string {
+	return lib.ColumnNames(opt.NewIterator())
+}
+
+func (opt *hardwareOptionType) Map() map[string]lib.IteratorItem {
+	return lib.Map(opt.NewIterator())
+}
+
+func (opt *hardwareOptionType) SetValue(newComp interface{}) {
+	lib.SetFields(opt, newComp)
+}
+
+func (opt hardwareOptionType) TableName() string {
+	return "option_hardware"
+}
+
+func (opt *hardwareOptionType) SetID(id int64) {
+	opt.ID.Set(id)
+}
+
+type textileOptionType struct {
+	ID                   lib.IntField    `json:"id" primary:"true"`
+	OptionID             lib.IntField    `json:"option_id"`
+	Content              lib.StringField `json:"content" db:"option_content"`
+	CleaningInstructions lib.StringField `json:"cleaning_instructions"`
+	Direction            lib.StringField `json:"direction"`
+	Color                lib.StringField `json:"color"`
+	DesignType           lib.StringField `json:"design_type"`
+	Flammability         lib.StringField `json:"flammability"`
+	Grade                lib.StringField `json:"grade"`
+	HorizontalRepeat     lib.FloatField  `json:"horizontal_repeat"`
+	Martindale           lib.StringField `json:"martindale"`
+	Scale                lib.StringField `json:"scale" db:"option_scale"`
+	PatternNumber        lib.StringField `json:"pattern_number"`
+	Treatment            lib.StringField `json:"treatment"`
+	Usage                lib.StringField `json:"usage" db:"option_usage"`
+	VerticalRepeat       lib.FloatField  `json:"vertical_repeat"`
+	WeaveType            lib.StringField `json:"weave_type"`
+	Width                lib.FloatField  `json:"width"`
+	Wyzenbeek            lib.StringField `json:"wyzenbeek"`
+}
+
+func (op textileOptionType) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("content", form.ClassStr, form.Render("Content", form.ElementText)),
+		form.NewField("cleaning_instructions", form.ClassStr, form.Render("Cleaning Instructions", form.ElementText)),
+		form.NewField("direction", form.ClassStr, form.Render("Direction", form.ElementText)),
+		form.NewField("color", form.ClassStr, form.Render("Color", form.ElementText)),
+		form.NewField("design_type", form.ClassStr, form.Render("Design Type", form.ElementText)),
+		form.NewField("flammability", form.ClassStr, form.Render("Flammability", form.ElementText)),
+		form.NewField("grade", form.ClassStr, form.Render("Grade", form.ElementText)),
+		form.NewField("horizontal_repeat", form.ClassFloat, form.Render("Horizontal Repeat", form.ElementText)),
+		form.NewField("martindale", form.ClassStr, form.Render("Martindale", form.ElementText)),
+		form.NewField("pattern_number", form.ClassStr, form.Render("Pattern Number", form.ElementText)),
+		form.NewField("scale", form.ClassStr, form.Render("Scale", form.ElementText)),
+		form.NewField("treatment", form.ClassStr, form.Render("Treatment", form.ElementText)),
+		form.NewField("usage", form.ClassStr, form.Render("Usage", form.ElementText)),
+		form.NewField("vertical_repeat", form.ClassFloat, form.Render("Vertical Repeat", form.ElementText)),
+		form.NewField("weave_type", form.ClassStr, form.Render("Weave Type", form.ElementText)),
+		form.NewField("width", form.ClassFloat, form.Render("Width", form.ElementText)),
+		form.NewField("wyzenbeek", form.ClassStr, form.Render("Wyzenbeek", form.ElementText)),
+	)
+}
+
+func (opt textileOptionType) ParentID() int64 {
+	return opt.OptionID.Int64
+}
+
+func (opt *textileOptionType) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(opt).Elem(), DataType: reflect.TypeOf(*opt), Current: -1}
+}
+
+func (opt *textileOptionType) ColumnNames() []string {
+	return lib.ColumnNames(opt.NewIterator())
+}
+
+func (opt *textileOptionType) Map() map[string]lib.IteratorItem {
+	return lib.Map(opt.NewIterator())
+}
+
+func (opt *textileOptionType) SetValue(newComp interface{}) {
+	lib.SetFields(opt, newComp)
+}
+
+func (opt textileOptionType) TableName() string {
+	return "option_textile"
+}
+
+func (opt *textileOptionType) SetID(id int64) {
+	opt.ID.Set(id)
+}
+
+type trimOptionType struct {
+	ID       lib.IntField    `json:"id" primary:"true"`
+	OptionID lib.IntField    `json:"option_id"`
+	Color    lib.StringField `json:"color"`
+	Content  lib.StringField `json:"content"`
+	Height   lib.FloatField  `json:"height"`
+	Width    lib.FloatField  `json:"width"`
+	Depth    lib.FloatField  `json:"depth" db:"option_trim_depth"`
+	Diameter lib.FloatField  `json:"diameter"`
+	TrimType lib.StringField `json:"trim_type"`
+}
+
+func (op trimOptionType) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("color", form.ClassStr, form.Render("Color", form.ElementText)),
+		form.NewField("content", form.ClassStr, form.Render("Content", form.ElementText)),
+		form.NewField("height", form.ClassFloat, form.Render("Height", form.ElementText)),
+		form.NewField("width", form.ClassFloat, form.Render("Width", form.ElementText)),
+		form.NewField("depth", form.ClassFloat, form.Render("Depth", form.ElementText)),
+		form.NewField("diameter", form.ClassFloat, form.Render("Diameter", form.ElementText)),
+		form.NewField("trim_type", form.ClassStr, form.Render("Trim Type", form.ElementText)),
+	)
+}
+
+func (opt trimOptionType) ParentID() int64 {
+	return opt.OptionID.Int64
+}
+
+func (opt *trimOptionType) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(opt).Elem(), DataType: reflect.TypeOf(*opt), Current: -1}
+}
+
+func (opt *trimOptionType) ColumnNames() []string {
+	return lib.ColumnNames(opt.NewIterator())
+}
+
+func (opt *trimOptionType) Map() map[string]lib.IteratorItem {
+	return lib.Map(opt.NewIterator())
+}
+
+func (opt *trimOptionType) SetValue(newComp interface{}) {
+	lib.SetFields(opt, newComp)
+}
+
+func (opt trimOptionType) TableName() string {
+	return "option_trim"
+}
+
+func (opt *trimOptionType) SetID(id int64) {
+	opt.ID.Set(id)
+}
+
+func (comp *Option) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(comp).Elem(), DataType: reflect.TypeOf(*comp), Current: -1}
+}
+
+func (comp *Option) ColumnNames() []string {
+	return lib.ColumnNames(comp.NewIterator())
+}
+
+func (comp *Option) Map() map[string]lib.IteratorItem {
+	return lib.Map(comp.NewIterator())
+}
+
+func (comp *Option) SetValue(newComp interface{}) {
+	lib.SetFields(comp, newComp)
+}
+
+func (opt Option) TableName() string {
+	return "option"
+}
+
+func (set Option) FetchRelation(ctx *app.Context, primaryID driver.Value) (interface{}, oops.Error) {
+	return RetrieveOptionSet(ctx, int(primaryID.(int64)))
+}
+
+// CreateOption inserts a new Option entry into the database, and returns
+// an instance the created Option.
+func CreateOption(ctx *app.Context, body io.ReadCloser) (*Option, oops.Error) {
+	ptr, e := Factory("option")
+	if e != nil {
+		return nil, e
+	}
+	opt := ptr.(*Option)
+
+	e = lib.DecodeJSON(body, opt)
+	if e != nil {
+		return nil, e
+	}
+
+	if ctx.Role != nil && ctx.Role["Option"]&permissions.OptionCreateAll == 0 {
+		q, e := pqdb.NewSelectQuery(ctx)
+		if e != nil {
+			return nil, e
+		}
+		t := pqdb.NewTable("option_set")
+		q.AddTable(t)
+		q.AddColumn(t.Column("id"))
+		w := pqdb.MakeWhereItem("", pqdb.Predicate{t.Column("manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64})
+		w.Items = append(w.Items, pqdb.MakeWhereItem("AND", pqdb.Predicate{t.Column("id"), "=", opt.OptionSetID.Int64}))
+		q.SetWhere(w)
+		num, e := q.Count()
+		if e != nil {
+			return nil, e
+		}
+		if num < 1 {
+			return nil, oops.Forbidden("User may only create options for their own option sets.")
+		}
+
+	}
+
+	if opt.Default.Bool == true {
+		e = ResetOptionDefaults(ctx, opt.OptionSetID.Int64)
+		if e != nil {
+			return nil, e
+		}
+	}
+
+	pkID, e := pqdb.InsertQuery(ctx.DBConn, opt, opt.TableName())
+	if e != nil {
+		return nil, e
+	}
+
+	opt.ID.Set(pkID.(int64))
+
+	// Now lets create the Option's type-specific entry in the db!
+
+	opt.ExtendedData, e = CreateOptionType(opt.Kind.String, pkID.(int64))
+	if e != nil {
+		return nil, e
+	}
+
+	if opt.ExtendedData != nil {
+		query, e := pqdb.NewInsertQuery(ctx)
+		if e != nil {
+			return nil, e
+		}
+		table := pqdb.NewTable(opt.ExtendedData.TableName())
+		query.Table = table
+		query.Returning = table.Column("id")
+
+		cols, vals, e := lib.ColumnsValues(opt.ExtendedData.(lib.Iterable), false)
+		if e != nil {
+			return nil, e
+		}
+
+		for i, col := range cols {
+			query.Columns = append(query.Columns, *pqdb.NewColumn(col))
+			if col == "option_id" {
+				vals[i] = opt.ID.Int64
+			}
+		}
+
+		query.Values = vals
+
+		_, e = query.Run()
+		if e != nil {
+			return nil, e
+		}
+
+		opt.ExtendedData.SetID(query.Returned.(int64))
+	}
+
+	return opt, e
+}
+
+// RetrieveOptions doesnt do shit.
+func RetrieveOptionsByOptionSet(ctx *app.Context, clauses ...pqdb.Predicate) ([]Option, oops.Error) {
+	ptr, e := Factory("option")
+	if e != nil {
+		return nil, e
+	}
+	opt := ptr.(*Option)
+
+	tableName := opt.TableName()
+	table := pqdb.NewTable(tableName)
+	query, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, e
+	}
+
+	for _, col := range opt.ColumnNames() {
+		query.AddColumn(table.Column(col))
+	}
+
+	query.AddTable(table)
+	optionWhere := pqdb.WhereItem{}
+	for i, c := range clauses {
+		var op string
+		if i > 0 {
+			op = "AND"
+		}
+		optionWhere.Items = append(optionWhere.Items, pqdb.WhereItem{op, c, nil})
+	}
+	query.SetWhere(optionWhere)
+	query.OrderBy.Add(*table.Column("id"), true, false)
+
+	rows, e := query.Run()
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+
+	count := 0
+	opts := make(map[int64]Option)
+	var optIDs []int64
+	var optKind string
+	for rows.Next() {
+		count++
+		o := Option{}
+		e = pqdb.Scan(&o, rows)
+		if e != nil {
+			return nil, e
+		}
+		opts[o.ID.Int64] = o
+		optIDs = append(optIDs, o.ID.Int64)
+		optKind = o.Kind.String
+	}
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows contained an internal error.", err)
+	}
+	if count == 0 {
+		return []Option{}, nil
+	}
+
+	// If no errors, retrieve the type-specific data for the option (if available)...
+	optKindStruct, e := CreateOptionType(optKind, 0)
+	if e != nil {
+		return nil, e
+	}
+	if optKindStruct != nil {
+		table = pqdb.NewTable(optKindStruct.TableName())
+		query, e = pqdb.NewSelectQuery(ctx)
+		if e != nil {
+			return nil, e
+		}
+
+		for _, col := range optKindStruct.(lib.Iterable).ColumnNames() {
+			query.Columns = append(query.Columns, *table.Column(col))
+		}
+
+		query.AddTable(table)
+		query.SetWhere(pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("option_id"), "IN", optIDs}))
+
+		rows, e = query.Run()
+		if e != nil {
+			return nil, e
+		}
+		defer rows.Close()
+
+		count = 0
+		for rows.Next() {
+			otd, e := CreateOptionType(optKind, 0)
+			if e != nil {
+				return nil, e
+			}
+			count++
+			e = pqdb.Scan(otd, rows)
+			if e != nil {
+				return nil, e
+			}
+			x := opts[otd.ParentID()]
+			x.ExtendedData = otd
+			opts[otd.ParentID()] = x
+		}
+		if err := rows.Err(); err != nil {
+			return nil, oops.ServerError("", "Rows contained an internal error.", err)
+		}
+		if count == 0 {
+			return nil, oops.NotFound("Could not find Option kind-specific data", "No SQL results existed for specified option Kind ID")
+		}
+	}
+
+	var optList []Option
+	for _, o := range opts {
+		optList = append(optList, o)
+	}
+
+	return optList, nil
+}
+
+// RetrieveOption retrieves an Option as specified by ID, or else errors.
+func RetrieveOption(ctx *app.Context, id int) (*Option, oops.Error) {
+	ptr, e := Factory("option")
+	if e != nil {
+		return nil, e
+	}
+	opt := ptr.(*Option)
+
+	tableName := opt.TableName()
+	table := pqdb.NewTable(tableName)
+	query, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, e
+	}
+
+	for _, col := range opt.ColumnNames() {
+		query.AddColumn(table.Column(col))
+	}
+
+	query.AddTable(table)
+	where := pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("id"), "=", id})
+
+	if ctx.Role != nil && ctx.Role["Option"]&permissions.OptionRetrieveAll == 0 {
+		t := pqdb.NewTable("option_set")
+		query.LeftJoin(t, pqdb.Predicate{table.Column("option_set_id"), "=", t.Column("id")})
+		where.Items = append(where.Items, pqdb.MakeWhereItem("AND", pqdb.Predicate{t.Column("manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}))
+	}
+	query.SetWhere(where)
+
+	rows, e := query.Run()
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		count++
+		e = pqdb.Scan(opt, rows)
+		if e != nil {
+			return nil, e
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows contained an internal error.", err)
+	}
+	if count == 0 {
+		return nil, oops.NotFound("Could not find Option", "No SQL results existed for specified Option ID", id)
+	}
+
+	// If no errors, retrieve the type-specific data for the option (if available)...
+	optKindStruct, e := CreateOptionType(opt.Kind.String, 0)
+	if e != nil {
+		return nil, e
+	}
+	if optKindStruct == nil {
+		return opt, nil
+	}
+	table = pqdb.NewTable(optKindStruct.TableName())
+	query, e = pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, e
+	}
+
+	for _, col := range optKindStruct.(lib.Iterable).ColumnNames() {
+		query.Columns = append(query.Columns, *table.Column(col))
+	}
+
+	query.AddTable(table)
+	query.SetWhere(pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("option_id"), "=", id}))
+
+	rows, e = query.Run()
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+
+	count = 0
+	for rows.Next() {
+		count++
+
+		e = pqdb.Scan(optKindStruct, rows)
+		if e != nil {
+			return nil, e
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows contained an internal error.", err)
+	}
+	if count == 0 {
+		return nil, oops.NotFound("Could not find Option kind-specific data", "No SQL results existed for specified option Kind ID", id)
+	}
+
+	opt.ExtendedData = optKindStruct
+	return opt, nil
+}
+
+// Update the specified Option and type-specific data, or otherwise error out.
+func UpdateOption(ctx *app.Context, id int, body io.ReadCloser) (*Option, oops.Error) {
+	opt, e := RetrieveOption(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+
+	if e = lib.DecodeJSON(body, opt); e != nil {
+		return nil, e
+	}
+
+	if opt.Default.Bool == true {
+		e = ResetOptionDefaults(ctx, opt.OptionSetID.Int64)
+		if e != nil {
+			return nil, e
+		}
+	}
+
+	wheres := []pqdb.WhereItem{pqdb.MakeWhereItem("", pqdb.Predicate{"id", "=", id})}
+	e = pqdb.UpdateModel(ctx, opt, wheres)
+	if e != nil {
+		return nil, e
+	}
+
+	// Now lets create the Option's type-specific entry in the db!
+	query, e := pqdb.NewUpdateQuery(ctx)
+	if e != nil {
+		return nil, e
+	}
+
+	if opt.ExtendedData != nil {
+		table := pqdb.NewTable(opt.ExtendedData.TableName())
+		query.Table = table
+
+		cols, vals, e := lib.ColumnsValues(opt.ExtendedData.(lib.Iterable), true)
+		if e != nil {
+			return nil, e
+		}
+
+		var kindDataID int64
+		for i, col := range cols {
+			if col == "option_id" {
+				vals[i] = opt.ID.Int64
+			} else if col == "id" {
+				kindDataID = vals[i].(int64)
+			}
+			exp := pqdb.SetExpression{pqdb.NewColumn(col), vals[i]}
+			query.Set.Expressions = append(query.Set.Expressions, exp)
+		}
+
+		where := pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("id"), "=", kindDataID})
+		if ctx.Role != nil && ctx.Role["Option"]&permissions.OptionUpdateAll == 0 {
+			q, e := pqdb.NewSelectQuery(ctx)
+			if e != nil {
+				return nil, e
+			}
+			t := pqdb.NewTable("option_set")
+			q.AddTable(t)
+			q.AddColumn(t.Column("id"))
+			w := pqdb.MakeWhereItem("", pqdb.Predicate{t.Column("manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64})
+			w.Items = append(w.Items, pqdb.MakeWhereItem("AND", pqdb.Predicate{t.Column("id"), "=", opt.OptionSetID.Int64}))
+			q.SetWhere(w)
+			num, e := q.Count()
+			if e != nil {
+				return nil, e
+			}
+			if num < 1 {
+				return nil, oops.Forbidden("User may only update options for their own option sets.")
+			}
+
+		}
+		query.SetWhere(where)
+
+		_, e = query.Run()
+		e = pqdb.UpdateModel(ctx, opt.ExtendedData.(pqdb.Model), nil)
+	}
+
+	return opt, e
+}
+
+func DeleteOption(ctx *app.Context, id int) oops.Error {
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"id", "=", id})
+	if e != nil {
+		return e
+	}
+
+	if ctx.Role != nil && ctx.Role["Option"]&permissions.OptionDeleteAll == 0 {
+		q, e := pqdb.NewSelectQuery(ctx)
+		if e != nil {
+			return e
+		}
+		t := pqdb.NewTable("option")
+		q.AddTable(t)
+		q.AddColumn(t.Column("id"))
+		ost := pqdb.NewTable("option_set")
+		q.LeftJoin(ost, pqdb.Predicate{ost.Column("id"), "=", t.Column("option_set_id")})
+		w := pqdb.MakeWhereItem("", pqdb.Predicate{ost.Column("manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64})
+		w.Items = append(w.Items, pqdb.MakeWhereItem("AND", pqdb.Predicate{t.Column("id"), "=", id}))
+		q.SetWhere(w)
+		num, e := q.Count()
+		if e != nil {
+			return e
+		}
+		if num < 1 {
+			return oops.Forbidden("User may only delete options for their own option sets.")
+		}
+
+	}
+	return pqdb.DeleteQuery(ctx.DBConn, "option", queryParams)
+}
+
+func ResetOptionDefaults(c *app.Context, opsetID int64) oops.Error {
+	query, e := pqdb.NewUpdateQuery(c)
+	if e != nil {
+		panic(e)
+	}
+
+	table := pqdb.NewTable("option")
+	query.Table = table
+
+	exp := pqdb.SetExpression{pqdb.NewColumn("option_default"), false}
+	query.Set.Expressions = append(query.Set.Expressions, exp)
+
+	query.SetWhere(pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("option_set_id"), "=", opsetID}))
+	_, e = query.Run()
+	if e != nil {
+		return e
+	}
+
+	return nil
+}

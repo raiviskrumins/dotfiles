@@ -1,0 +1,194 @@
+# utility functions that are intended for site-wide usage
+
+# global object to hold shared functions
+window.cm = {}
+
+$(document).ready ->
+
+  # update cursor if collection list is long
+  if $('.collection-list').height() == parseInt($('.collection-list').css('max-height'), 10)
+    $('.collection-list').addClass 'scrollable'
+
+  # submit a modal form when the enter key is pressed
+  modalFormEnter = (e) ->
+    if e.which is 13
+      if typeof e.handled == undefined or e.handled == false
+        e.preventDefault()
+        e.handled = true
+        $(@).trigger 'submit'
+
+  collectionsToggle = (e) ->
+    e.preventDefault()
+    $(e.currentTarget).find('.caret').toggleClass 'closed'
+    $('.collection-list').slideToggle()
+
+    # toggle the plus/minus icon on panel sections
+  toggleIcon = (e) ->
+    $('span.plus-minus', e.currentTarget).toggleClass('icon-plus icon-minus')
+
+  toggleNestIcon = (e) ->
+    e.stopPropagation()
+    $('span.plus-minus-nest', e.currentTarget).toggleClass('icon-plus icon-minus')
+
+  #prevent the page from scrolling
+  stopBodyScroll = (e) ->
+    scrollPosition = [
+      self.pageXOffset || document.documentElement.scrollLeft || document.body.scrollLeft,
+      self.pageYOffset || document.documentElement.scrollTop  || document.body.scrollTop
+    ]
+    body = $('body')
+    body.data('scroll-position', scrollPosition)
+    body.data('previous-overflow', body.css('overflow'))
+    body.css('overflow', 'hidden')
+    window.scrollTo(scrollPosition[0], scrollPosition[1])
+
+  #restore the scrolling functionality
+  restoreBodyScroll = (e) ->
+    scrollPosition = $('body').data 'scroll-position'
+    $('body').css('overflow', $('body').data('previous-overflow'))
+    window.scrollTo scrollPosition[0], scrollPosition[1]
+
+  # prevents modals from being shown if one is already present
+  preventModals = (e) ->
+    if $('.modal').length > 1
+      e.preventDefault()
+
+  #image utilities
+  rotateClockwise = (e) ->
+    image = $('img', '.modal-image-holder')
+    # if the image is not a loading gif
+    if image.attr('src').indexOf('loading.gif') <= 0
+      # if this is a wide image, extend the height of the container
+      # to fit the rotated image
+
+      rotationAngle = parseInt($('#rotation_angle').val())+90
+      if image.width()/image.height() > 1
+        $('.modal-image-holder').height image.width()
+        $('.modal-image-holder').css 'lineHeight', "#{image.width()-4}px"
+        if rotationAngle % 180 == 0
+          $('.modal-image-holder').height ''
+          $('.modal-image-holder').css 'height', ''
+          $('.modal-image-holder').css 'lineHeight', ''
+      else
+        $('.modal-image-holder img').height $('.modal-image-holder img').width()
+
+      $('#rotation_angle').val rotationAngle
+      translateAmount = (image.width()-image.height())/2
+      image.css 'transform', "rotate(#{rotationAngle}deg)"
+
+  # removes modals and backdrops from the DOM once the modal finishes hiding
+  cleanupModals = (e) ->
+    $('.modal').remove()
+    $('.modal-backdrop').remove()
+
+  stateProvince = (e) ->
+    country = $(@).val()
+    $('#US, #CA').removeClass('hide').hide()
+    $("##{country}").show()
+
+  cm.loadModal = (result) ->
+    if $('.modal').length > 0
+      $('.modal').html $(result).find '.modal-dialog'
+    else
+      modal = $(result).appendTo 'body'
+      modal.modal 'show'
+
+  cm.getModal = (e) ->
+    e.preventDefault()
+    url = $(e.currentTarget).attr 'href'
+
+    $.ajax url,
+      type: 'GET',
+      success: (result) ->
+        cm.loadModal result
+
+  cm.setConfirmUnload = (message) ->
+    unloadMessage = ->
+      return message
+
+    window.onbeforeunload = if message then unloadMessage else null
+
+  cm.clickOnce = (e) ->
+    $(e.currentTarget).addClass 'disabled'
+
+  alertPosition = () ->
+    window_center = $(window).width() / 2
+    alerts = $('.alert')
+    for alert in alerts
+      left = window_center - ( $(alert).outerWidth() / 2 ) + 140 #half of left nav
+      $(alert).css 'left', "#{left}px"
+      $(alert).show()
+
+  checkCookie = () ->
+    if window.location.pathname.indexOf('products') < 0
+      Cookies.remove 'prodlist-category'
+      Cookies.remove 'prodlist-search'
+      Cookies.remove 'prodlist-selected'
+      Cookies.remove 'prodlist-key'
+      Cookies.remove 'prodlist-direction'
+
+  watchCardNumber = (e) ->
+    card_number = this.value.replace(/-/g, '')
+    $('.credit-cards img').removeClass('match')
+
+    if card_number.length < 15
+      return
+
+    highlightCreditCard card_number
+
+  highlightCreditCard = (card_number) ->
+    match = switch
+      when /^4[0-9]{12}(?:[0-9]{3})?$/.test card_number then '.visa'
+      when /^5[1-5][0-9]{14}$/.test card_number then '.mastercard'
+      when /^6(?:011|5[0-9]{2})[0-9]{12}$/.test card_number then '.discover'
+      when /^3[47][0-9]{13}$/.test card_number then '.amex'
+
+    $(match).addClass 'match'
+
+  # dismiss any open popovers
+  dismissPopover = (e) ->
+    $.each $('[data-toggle="popover"]'), (popover) ->
+      if !$(this).is(e.target) && $(this).has(e.target).length == 0 && $('.popover').has(e.target).length == 0
+        $(this).popover('hide')
+
+  doNotLink = (e) ->
+    e.preventDefault()
+
+  $('.panel-top').on 'show.bs.collapse hide.bs.collapse', toggleIcon
+  $('.panel-nest').on 'show.bs.collapse hide.bs.collapse', toggleNestIcon
+  $('body').on 'keydown', '.modal form', modalFormEnter
+  $('.js-collection-toggle').on 'click', collectionsToggle
+  $('.collection-list').on 'mouseover', stopBodyScroll
+  $('.collection-list').on 'mouseout', restoreBodyScroll
+  $('body').on 'click', '.option-clickable', toggleIcon
+  $('body').on 'click', '.js-rotate', rotateClockwise
+  $(document).on 'show.bs.modal', preventModals
+  $(document).on 'hidden.bs.modal', cleanupModals
+  $('#address_country').on 'change', stateProvince
+  $('#number').on 'keyup', watchCardNumber
+  $('body').on 'click', dismissPopover
+  $('[data-toggle="popover"]').on 'click', doNotLink
+  $('body').on 'click', '.js-get-modal', cm.getModal
+  $('.js-click-once').on 'click', cm.clickOnce
+
+  # enable CSC number popover
+  $('[data-toggle="popover"]').popover
+    trigger: 'click',
+
+  # check for errors on page load, and open those sections
+  errorCheck = ->
+    errors = $('.has-error')
+    for error in errors
+      if $(error).parents().hasClass('collapse')
+        $(error).parents('.panel-collapse').collapse('show')
+
+    if errors.length > 0
+      $(errors[0]).find('input').focus()
+
+  alertPosition()
+  checkCookie()
+  errorCheck()
+
+  if $('#number').length > 0 and $('#number').val().length > 0
+    number = $('#number').val()
+    highlightCreditCard number

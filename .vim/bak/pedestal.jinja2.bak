@@ -1,0 +1,10 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+
+<div class="row">
+  <div class="col-md-5">{{ append_field(form.pedestal.pedestal_height, 'in') }}</div>
+  <div class="col-md-5">{{ append_field(form.pedestal.pedestal_diameter, 'in') }}</div>
+</div>
+<div class="row">
+  <div class="col-md-5">{{ append_field(form.pedestal.pedestal_depth, 'in') }}</div>
+  <div class="col-md-5">{{ append_field(form.pedestal.pedestal_width, 'in') }}</div>
+</div>

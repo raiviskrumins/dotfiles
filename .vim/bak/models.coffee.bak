@@ -1,0 +1,20 @@
+ModelsPlugin = (app) ->
+  @.helpers
+    getModal: (e) ->
+      e.preventDefault()
+      url = $(@).attr 'href'
+
+      $.ajax url,
+        type: 'GET'
+        success: (result) ->
+          @.trigger 'displayModal', result: result
+          $('body').on 'keydown', escKey
+
+  @.bind 'displayModal', (e, data) ->
+    result = data.result
+    if $('.modal').length <= 0
+      modal = $(result).appendTo 'body'
+      modal.modal 'show'
+    else
+      html = $(result).find('.modal-dialog').html()
+      $('.modal-dialog').html html

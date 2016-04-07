@@ -1,0 +1,35 @@
+import os
+
+import pygame
+
+import game.components as components
+import game.containers as containers
+import game.events as events
+import game.jsonify as jsonify
+import game.settings as settings
+import game.tiles as tiles
+
+
+class Floor(jsonify.Storage.Basic):
+    tile = tiles.Floor
+    def __init__(self):
+        self.position = containers.GridPos((0, 0))
+        self.view = self.tile()
+        self.view.position = self.position
+
+class Wall(jsonify.Storage.Basic):
+    tile = tiles.Wall
+    def __init__(self):
+        self.components = components.Container()
+        self.position = containers.GridPos((0, 0))
+        self.view = self.tile()
+        self.view.position = self.position
+
+        self.components.add(components.Blockable())
+
+class Player(jsonify.Storage.Basic):
+    tile = tiles.Player
+    def __init__(self):
+        self.position = containers.GridPos((0, 0))
+        self.view = self.tile()
+        self.view.position = self.position

@@ -1,0 +1,74 @@
+{% from 'macros.jinja2' import collection_name %}
+
+<table class="table" id="header_reference">
+    <tr>
+        <th width="105"><a href="#" class="js-back-to-top" title="Back to Top"><span class="icon-uparrow"></span></a></th>
+        <th data-sort="manufacturer_sku" width="15%">SKU</th>
+        <th data-sort="name" width="45%">Item Name</th>
+        <th data-sort="date_updated" width="130">Updated</th>
+        <th data-sort="active" class="hidden-xs hidden-sm hidden-md" width="150">Visibility</th>
+        <th data-sort="select" width="90"><a href="#" class="master-select-button js-master-select"></a></th>
+    </tr>
+</table>
+
+<div class="toolbar row">
+    <div class="col-md-4 col-sm-4">
+        <input type="text" class="form-control js-product-search" placeholder="Enter SKU or Product Name">
+        <a href="#" class="js-clear-search clear-search">&times;</a>
+    </div>
+    <div class="col-md-3 col-sm-3">
+        <select class="form-control js-category-select">
+            <option value="">By category...</option>
+            <option value="none">Uncategorized</option>
+            {% for category in categories %}
+              {% if category %}
+                <option value="{{category|lower}}">{{category|title}}</option>
+              {% endif %}
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-3 col-sm-3">
+        <div class="visible-lg">
+            <span class="products-visible">
+                Showing <span class="js-visible-count">{{prods|count}}</span> of <span class="count">{{ count }}</span>
+                <a href="#" class="table-link js-show-all">Clear</a>
+            </span>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-2 js-product-actions">
+        <a href="{{ url_for('product_view.add_product') }}" class="btn btn-primary pull-right js-new-product-modal"{% if collection %} data-collection="{{collection.id}}"{% endif %}>Add New Product</a>
+    </div>
+</div>
+<table class="table" id="product_list">
+    <tr>
+        <th width="105"></th>
+        <th class="sortable" data-sort="manufacturer_sku" data-direction="desc" width="15%">SKU <span class="caret"></span></th>
+        <th class="sortable" data-sort="name" data-direction="desc" width="45%">Item Name <span class="caret"></span></th>
+        <th class="sortable" data-sort="date_updated" data-direction="desc" width="130">Updated <span class="caret"></span></th>
+        <th class="sortable hidden-xs hidden-sm hidden-md" data-sort="active" data-direction="asc" width="150">Visibility <span class="caret"></span></th>
+        <th class="sortable" data-sort="select" data-direction="desc" width="90"><a href="#" class="master-select-button js-master-select"></a> <span class="caret"></span></th>
+    </tr>
+    <tr class="js-loading-row">
+        <td class="text-center loading" colspan="6">
+            <img src="{{ url_for('static', filename='img/AmberCirclesAnimated.gif') }}">
+        </td>
+    </tr>
+</table>
+<div class="form-footer">
+    <div class="footer-wrapper">
+      <form action="{{url_for('export_view.prepare')}}" method="POST" id="form_start_export">
+          <input type="hidden" id="product_ids" name="product_ids">
+          <div class="js-multi-actions multi-actions pull-right">
+              <a href="{{ url_for('product_view.product_multiedit') }}" class="btn btn-info js-multi-edit">Edit Selected</a>
+              <a href="{{ url_for('collection_view.collection_add_get') }}" class="btn btn-info js-add-to-collection">Add to...</a>
+              <a href="{{ url_for('product_view.products_add_options') }}" class="btn btn-info js-add-options">+ Option Set</a>
+              {% if request.path|contains('collection') %}
+                <a href="{{ url_for('collection_view.collection_remove_confirm') }}" class="btn btn-danger js-remove-confirm">Remove</a>
+              {% else %}
+                <a href="{{ url_for('product_view.product_delete_multiple_modal') }}" class="btn btn-danger js-delete-select-modal"><span class="icon-trash light"></span></a>
+              {% endif %}
+          </div>
+          <p><i><span class="js-selected-count">0</span> Selected</i></p>
+      </form>
+    </div>
+</div>

@@ -1,0 +1,29 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	_ "github.com/lib/pq"
+	"os"
+)
+
+func main() {
+	db, err := sql.Open("postgres", "host=localhost user=doodle dbname=api sslmode=disable")
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	txn, err := db.Begin()
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	txn.Exec("ALTER TABLE orasdawcdacwdering_information_component SET component_data_id = component_data_id;")
+
+	txn.Commit()
+
+}

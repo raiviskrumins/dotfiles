@@ -1,0 +1,57 @@
+{% extends 'index.jinja2' %}
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+
+{% block title %}Account Settings{% endblock title %}
+
+{% block javascript %}
+{{super()}}
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/account.min.js')|cache_update }}"></script>
+{% endblock %}
+
+{% block content_main %}
+
+<div class="col-md-12">
+    <h1>Account Settings</h1>
+    <form action="{{ url_for('account_view.account_save') }}" method="POST" id="accountForm">
+        <div class="panel-group">
+            <div class="panel panel-top">
+                <div class="panel-heading">
+                    <a href="#collapseGeneral" data-toggle="collapse">
+                        <h3><span class="plus-minus{% if 'collapseGeneral' in session.panels.account %} icon-minus{% else %} icon-plus{% endif %}"></span>General Settings</h3>
+                    </a>
+                </div>
+                <div id="collapseGeneral" class="panel-collapse {% if 'collapseGeneral' in session.panels.account %} in{% else %} collapse{% endif %}">
+                    <div class="panel-body" id="js_general_settings">
+                        {% include 'settings/forms/general_settings_form.jinja2' %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel panel-top">
+                <div class="panel-heading">
+                    <a href="#collapseReturn" data-toggle="collapse">
+                        <h3><span class="plus-minus{% if 'collapseReturn' in session.panels.account %} icon-minus{% else %} icon-plus{% endif %}"></span>Return Policy</h3>
+                    </a>
+                </div>
+                <div id="collapseReturn" class="panel-collapse{% if 'collapseReturn' in session.panels.account %} in{% else %} collapse{% endif %}">
+                    <div class="panel-body" id="js_return">
+                        {% include 'settings/forms/return_form.jinja2' %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="form-footer">
+            <div class="footer-wrapper clearfix">
+                <input type="submit" class="btn btn-primary pull-right" value="Save">
+            </div>
+        </div>
+    </form>
+</div>
+
+{% endblock %}
+
+{% block footer %}
+<div class="hidden-md hidden-lg">
+  {{super()}}
+</div>
+{% endblock %}

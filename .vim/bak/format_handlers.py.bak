@@ -1,0 +1,572 @@
+from math import ceil
+import os
+import sys
+sys.path.insert(
+    0, os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import amber_lib
+from amber_portal import app
+from amber_lib import errors, client, connection
+
+
+def _amber_api_connection():
+    ctx = _amber_api_ctx()
+    return connection.Connection(ctx)
+
+
+def _amber_api_ctx():
+    return client.Context(
+        public=app.config['AMBER_API_PUBLIC'],
+        private=app.config['AMBER_API_PRIVATE'],
+        host='http://127.0.0.1',
+        port='8080'
+    )
+
+
+class ContentCache(object):
+    # A very simple caching class/singleton. The largest bottleneck for exports
+    # at the moment is API calls by an overwhelming margin, which this can
+    # drastically cut down on.
+    option_set_cache = {}
+    collections_cache = {}
+    ordered_collections_list = []
+    api_conn = _amber_api_connection()
+    retrieved_all_collections = False
+
+    @classmethod
+    def get_option_set(cls, option_set_id):
+        if option_set_id in cls.option_set_cache:
+            return cls.option_set_cache[option_set_id]
+        else:
+            option_set = cls.api_conn.OptionSet.retrieve(option_set_id)
+            cls.option_set_cache[option_set_id] = option_set
+            return option_set
+
+    @classmethod
+    def get_collection(cls, collection_id):
+        if collection_id in cls.collections_cache:
+            return cls.collections_cache[collection_id]
+        else:
+            collection = cls.api_conn.Collection.retrieve(collection_id)
+            cls.collections_cache[collection_id] = collection
+            return collection
+
+    @classmethod
+    def get_all_collections(cls, mfr_id):
+        try:
+            collections = cls.api_conn.Collection.query()
+        except errors.NotFound:
+            collections = []
+        mfr_collections = []
+        for collection in collections:
+            if collection.manufacturer_id == mfr_id:
+                cls.collections_cache[collection.pk()] = collection
+                mfr_collections.append(collection)
+        return mfr_collections
+
+    @classmethod
+    def reset_cache(cls):
+        cls.option_set_cache = {}
+        cls.collections_cache = {}
+        cls.ordered_collections_list = []
+
+
+def default_format(product_dict, **kwargs):
+    """
+    Retrieves specific data from the product dictionary by drilling down into
+        it one key at a time.
+    :param arg_list: A list of dictionary keys for the product dictionary.
+    :param product_dict: A dictionary representing the product entity.
+    :return: Specific data from the product dictionary.
+    """
+    # If keys is not in kwargs it means that nothing was intended to be
+    # returned.
+    if 'keys' not in kwargs or len(kwargs.get('keys')) < 1:
+        return None
+    keys = kwargs.get('keys', [])
+    list_keys = kwargs.get('list_keys', [])
+    if list_keys:
+        return default_repeat_format(product_dict, **kwargs)
+
+    cell_data = product_dict
+    # product is a dictionary with information about the product entity. We're
+    # going to drill down into the dictionary one key at a time from the
+    # argument list until we reach the data we need.
+    for key in keys:
+        # If we've reach a list make sure it's long enough for the index arg.
+        if isinstance(cell_data, list) and len(cell_data) <= key:
+            return None
+        if cell_data:
+            try:
+                if isinstance(key, int):
+                    temp = cell_data[key]
+                else:
+                    temp = getattr(cell_data, key)
+                cell_data = temp
+            except KeyError:
+                return None
+            except IndexError:
+                return None
+            except Exception as error:
+                raise error
+        else:
+            return None
+    return cell_data
+
+
+def get_collection_attr(product_dict, **kwargs):
+    """
+    Uses the arguments supplied to retrieve a specified collection from the API
+        and return the specified attribute from that collection.
+    :param product_dict: A dictionary representing the product entity.
+    :param kwargs: A dictionary with key word arguments. For this function it's
+        expected that 'keys' will be present.
+    :return: The specified collection's specified attribute or None if no
+        corresponding collection or attribute exists.
+    """
+    keys = kwargs.get('keys', [])
+    # The keys in the argument list up until the second to last one can be used
+    # to retrieve the id of the collection from the product dictionary.
+    collection_attr = default_format(product_dict, keys=keys)
+    if collection_attr:
+        return collection_attr
+    return None
+
+
+def concatenate_values(product_dict, **kwargs):
+    """
+    This drills down into the product_dict for multiple different values and
+    concatenates them with the delimiter supplied.
+    :param product_dict: A dictionary representing the product entity.
+    :param kwargs: Key word arguments that should include 'delimiter': a string
+        for the delimiter that will be used to separate the values retrieved
+        from the product_dict, and 'keys' which should contain a list of lists
+        of keys used to find the values to be concatenated in the product_dict.
+    :return: A string of the values retrieved from the product_dict using the
+        list of lists of keys from arg_list and separated by the delimiter.
+    """
+    keys = kwargs.get('keys', [])
+    delimiter = kwargs.get('delimiter', ' x ')
+    val_list = []
+    for key_list in keys:
+        val = default_format(product_dict, keys=key_list)
+        if val:
+            val_list.append(str(val))
+    return delimiter.join(val_list)
+
+
+def get_option_attr(product_dict, **kwargs):
+    """
+    Uses the arguments supplied to retrieve a specified option set from the API
+        and return the specified attribute from that option set.
+    :param product_dict: A dictionary representing the product entity.
+    :param kwargs: Key word arguments that should include 'keys': a list of
+        keys used to find the option id in the product_dict and then the
+        specified value in that option.
+    :return: The specified option set's specified attribute or None if no
+        corresponding option set or attribute exists.
+    """
+    # The keys in the argument list up until the second to last one can be used
+    # to retrieve the id of the option set from the product dictionary.
+    keys = kwargs.get('keys', [])
+    option_id = default_format(product_dict, keys=keys[:-1])
+    if option_id:
+        # The very last key in the argument list corresponds to the attribute
+        # of the option set that we've just retrieved using its id.
+        option_set = ContentCache.get_option_set(option_id)
+        return option_set[keys[-1]]
+    return None
+
+
+def price_format(product_dict, **kwargs):
+    """
+    Finds the price specified by a list of keys in the provided dictionary and
+        converts it to the format of $#.##.
+    :param product_dict: A dictionary representing the product entity.
+    :param kwargs: Key word arguments which should include keys: a list of keys
+        used to find a specific value in the nested product dictionary.
+    :return: A string of an integer formatted as $#.##.
+    """
+    unformatted_price = default_format(product_dict, **kwargs)
+    if unformatted_price:
+        unformatted_price = str(unformatted_price)
+        # The price is stored as an integer which is 100* the actual price (the
+        # cents are the two least significant digits) so we need to reformat it
+        # before returning the price.
+        return '$%s.%s' % (unformatted_price[:-2], unformatted_price[-2:])
+    return None
+
+
+def image_order_format(product_dict, **kwargs):
+    """
+    Retrieves an image but ensures that if the image being retrieved is the
+        first one and a default image exists it will return the default image,
+        or if a default image exists and this is not an attempt to retrieve the
+        first image that the default image isn't returned twice.
+    :param product_dict: A dictionary representing the product entity.
+    :param kwargs: Key word arguments which should include keys: a list of keys
+        used to find a specific value in the nested product dictionary.
+    :return: The default image if this is a query for the first image,
+        otherwise a different image.
+    """
+    keys = kwargs.get('keys', [])
+    image_list = default_format(product_dict, keys=keys[:-2])
+
+    # This function is our custom comparator for re-sorting the list of images
+    # to ensure that the first image is the default one.
+    def image_comparer(image1, image2):
+        if image2.default:
+            return 1
+        elif image1.default:
+            return -1
+        else:
+            # Python sorting is guaranteed to be stable even with custom
+            # comparators, so the original order between two items will be
+            # preserved if the custom comparator marks them as equal.
+            return 0
+    image_list = sorted(image_list, cmp=image_comparer)
+    return default_format(image_list, keys=keys[-2:])
+
+
+def get_list_length(product_dict, **kwargs):
+    """
+    Retrieves the length of the list specified by the arguments.
+    :param product_dict: A dictionary for the product entity.
+    :param kwargs: Key word arguments which should include list_keys: a list of
+        keys used to find a specific list in the nested product dictionary.
+    :return: The length of the list in the product entity specified by the
+        provided keys.
+    """
+    list_keys = kwargs.get('list_keys', [])
+
+    inner_list = default_format(product_dict, keys=list_keys)
+    if not inner_list:
+        return 0
+    return len(inner_list)
+
+
+def default_repeat_format(product_dict, **kwargs):
+    """
+    Retrieves an ordered list of a repeated property of a product.
+    :param product_dict: The dictionary representation of the product.
+    :param kwargs: Key word arguments which should include list_keys: a list of
+        keys used to find a specific list in the nested product dictionary, and
+        keys: a list of keys used to find a specific value in each of the items
+        in the list specified by list_keys.
+    :return: A list of product attributes.
+    """
+    keys = kwargs.get('keys', [])
+    list_keys = kwargs.get('list_keys', [])
+    # Attribute list is the list contained within the product_dict
+    return_list = []
+    # If repeat is a list of lists that means that what we're after is within a
+    # list within a list (within a list...) and we need to recursively break
+    # the retrieval down to find the actual attributes being retrieved.
+    if len(list_keys) and isinstance(list_keys[0], list):
+        internal_list = product_dict
+        # Each repeat_list is a list of arguments necessary to get to the list
+        # one level "deeper". Here we're popping the first off the queue and
+        # recursively calling default_repeat_format with the remaining for each
+        # of the items in the list retrieved by using the first list of keys.
+        internal_list = default_format(internal_list, keys=list_keys[0])
+        if isinstance(internal_list, list):
+            for item in internal_list:
+                return_list.append(
+                    default_repeat_format(
+                        internal_list, keys=keys, list_keys=list_keys[1:]
+                    )
+                )
+    else:
+        attribute_list = default_format(product_dict, keys=list_keys)
+        if isinstance(attribute_list, list):
+            for item in attribute_list:
+                # For each of the dicts within the list we grab the specified
+                # field and append it to the return list.
+                return_list.append(default_format(item, keys=keys))
+    return return_list
+
+
+def get_option_attrs(product_dict, **kwargs):
+    """
+    Uses the arguments supplied to retrieve a specified option set from the API
+        and return the specified attribute from that option set.
+    :param product_dict: A dictionary representing the product entity.
+    :param kwargs: Key word arguments which may include list_keys: a list of
+        keys used to find a specific list in the nested product dictionary, and
+        should include keys: a list of keys used to find a specific value in
+        the product_dict, or if list_keys is included, in each of the items in
+        the list specified by list_keys.
+    :return: The specified option set's specified attribute or None if no
+        corresponding option set or attribute exists.
+    """
+    options_args = ['option_sets', 'option_set_list']
+    option_sets = default_format(product_dict, keys=options_args)
+    if not option_sets:
+        option_sets = []
+    return_vals = []
+    for option_set in option_sets:
+        option_set_iid = option_set.pk()
+        if option_set_id:
+            option_set_dict = ContentCache.get_option_set(option_set_id)
+            if kwargs.get('list_keys'):
+                return_vals.append(
+                    default_repeat_format(option_set_dict, **kwargs)
+                )
+            else:
+                return_vals.append(default_format(option_set_dict, **kwargs))
+    return return_vals
+
+
+def list_length_repeat(product_dict, **kwargs):
+    """
+    Returns a single value repeated the number of times that matches the length
+        of the list identified by the keys in repeat.
+    :param product_dict: A dictionary representation of a product.
+    :param kwargs: Key word arguments which should include list_keys: a list of
+        keys used to find a specific list in the nested product dictionary, and
+        keys: a list of keys used to find a specific value in the product_dict.
+    :return: The value specified by the arg_list, repeated the same number of
+        times as the length of the list specified by repeat.
+    """
+    keys = kwargs.get('keys', [])
+    return [default_format(product_dict, keys=keys)]*get_list_length(
+        product_dict, **kwargs)
+
+
+def all_collections(product_dict, **kwargs):
+    """
+    Retrieves the specified attribute for all collections for the manufacturer.
+    :param product_dict: The dictionary representation of a product.
+    :param kwargs: Key word arguments which may include list_keys: a list of
+        keys used to find a specific list in the nested product dictionary, and
+        should include keys: a list of keys used to find a specific value in
+        the product_dict, or if list_keys is included, in each of the items in
+        the list specified by list_keys.
+    :return: A list of a given attribute for all the collections for the
+        manufacturer.
+    """
+    attr_list = []
+    for collection in ContentCache.get_all_collections(
+            product_dict.manufacturer.manufacturer_id):
+        attr_list.append(default_format(collection, **kwargs))
+    return attr_list
+
+
+def multi_value_list(product_dict, **kwargs):
+    """
+    Returns a list of values for a multi-value field, e.g. weave_type.
+    :param product_dict: The dictionary representation of the product.
+    :param kwargs: Key word arguments which should include  keys: a list of
+        keys used to find a specific value in the product_dict.
+    :return: A list of the values, as strings, which correspond to the value
+        IDs retrieved using the second list in the args_list list.
+    """
+    keys = kwargs.get('keys', [])
+    multi_value_list = default_format(product_dict, keys=keys[0])
+    if not multi_value_list:
+        return []
+
+    # TODO: use labels not ints
+    multi_values = multi_value_list.multi_values
+
+    values = []
+    for val in multi_values:
+        values.append(val.value)
+    return values
+
+
+def field_sum(product_dict, **kwargs):
+    """
+    Returns the sum of the specified fields.
+    :param product_dict: A dictionary representation of the product
+    :param kwargs: Key word arguments which should include list_keys: a list of
+        keys used to find a specific list in the nested product dictionary, and
+        keys: a list of keys used to find a specific value in each of the items
+        in the list specified by list_keys.
+    :return:
+    """
+    nums = default_repeat_format(product_dict, **kwargs)
+    total = 0
+    for num in nums:
+        if num is not None:
+            total += num
+        else:
+            total += 1
+    return total
+
+
+def static_value(product_dict, **kwargs):
+    """
+    Returns whatever value is passed to it in the args_list, repeated if repeat
+        is specified.
+    :param product_dict: A dictionary representation of the product.
+    :param kwargs: Key word arguments which should include value: the value to
+        be returned. It may also include list_keys, a list of keys used to
+        retrieve a specific list from the product_dict, the length of which
+        will be used to repeat value.
+    :return: The value from the kwargs, repeated if necessary.
+    """
+    value = kwargs.get('value')
+    list_keys = kwargs.get('list_keys', [])
+    if list_keys:
+        return [value] * get_list_length(product_dict, keys=list_keys)
+    return value
+
+
+def multi_value(product_dict, **kwargs):
+    """
+    Returns a value for a multi-value field, e.g. weave_type.
+    :param args_list: A list of the keys used to get the choices and a list of
+        the keys used to get the value ID.
+    :param product_dict: The dictionary representation of the product.
+    :param kwargs: Key word arguments which should include keys: a list of
+        lists of keys used to find a specific value in the product_dict.
+    :return: A value as a string which corresponds to the value ID
+        retrieved using the second list in the keys list or None if either
+        the specified value ID doesn't exist or it doesn't correspond to any
+        choice.
+    """
+    keys = kwargs.get('keys', [])
+    id_ = keys[0][-1]
+    multi_value_list = default_format(product_dict, keys=keys[0][:-1])
+    if not multi_value_list or len(multi_value_list) <= int(id_):
+        return None
+    else:
+        return multi_value_list[int(id_)].value
+
+
+def attribute_not_none(product_dict, **kwargs):
+    """
+    Determines if a given field in the product_dict is set or not.
+    :param product_dict: A dictionary representing the product entity.
+    :param kwargs: Key word arguments which should include keys: a list of keys
+        used to find a specific value in the product_dict.
+    :return: True if the given field exists and is not None, False otherwise.
+    """
+    attr = default_format(product_dict, **kwargs)
+    return attr is not None
+
+
+def dering_hall_rug(product_dict, **kwargs):
+    """
+    Determines whether the dimensions of a rug product fall within the range
+        specified in args_list.
+    :param product_dict: A dictionary representation of the product.
+    :param kwargs: Key word arguments which should include ranges: a list of
+        two ranges.
+    :return: True if the dimensions of the product fall within the provided
+        ranges, False if it doesn't, and None if either height or width isn't
+        set for the product.
+    """
+    ranges = kwargs.get('ranges', [])
+    height_args = ['overall_dimensions', 'height']
+    width_args = ['overall_dimensions', 'width']
+    height = default_format(product_dict, keys=height_args)
+    width = default_format(product_dict, keys=width_args)
+    if not width or not height:
+        return None
+    range1 = ranges[0]
+    range2 = ranges[1]
+    height_by_width = (
+        (range1[0]*12 <= height <= range1[1]*12) and
+        (range2[0]*12 <= width <= range2[1]*12)
+    )
+    width_by_height = (
+        (range1[0]*12 <= width <= range1[1]*12) and
+        (range2[0]*12 <= height <= range2[1]*12)
+    )
+    return height_by_width or width_by_height
+
+
+def multi_default_handler(product_dict, **kwargs):
+    """
+    Retrieves some number of specified values from the product_dict and appends
+        them to a list.
+    :param product_dict: A dictionary representation of the product.
+    :param kwargs: Key word arguments that should include keys: a list of lists
+        of keys used to find a specific value in the product_dict.
+    :return: A list of all the values retrieved from the product_dict using all
+        the lists of keys inside the 'keys' kwarg.
+    """
+    keys = kwargs.get('keys', [])
+    values_list = []
+    for key_list in keys:
+        value = default_format(product_dict, keys=key_list)
+        values_list.append(value)
+    return values_list
+
+
+def lead_time(product_dict, **kwargs):
+    """
+    Determines the lead time for a given product.
+    :param product_dict:
+    :param kwargs: Key word arguments that should include unit: a string which
+        specifies what unit of time the lead time for the product should be
+        returned in.
+    :return:
+    """
+    unit = kwargs.get('unit', '')
+    lead_time_keys = [
+        'ordering_information',
+        'lead_time'
+    ]
+    lead_time_unit_keys = [
+        'ordering_information',
+        'lead_time_unit'
+    ]
+    lead_time_value = default_format(product_dict, keys=lead_time_keys)
+    lead_time_unit = default_format(product_dict, keys=lead_time_unit_keys)
+    if unit == lead_time_unit or not lead_time_value:
+        return lead_time_value
+    if lead_time_unit == 'week':
+        lead_time_value *= 7
+    elif lead_time_unit == 'month':
+        lead_time_value *= 30
+    if unit == 'week':
+        lead_time_value = int(ceil(float(lead_time_value)/7.0))
+    elif unit == 'month':
+        lead_time_value = int(ceil(float(lead_time_value)/30.0))
+    elif unit == 'business_day_hours':
+        if lead_time_unit == 'week':
+            lead_time_value /= 7
+            lead_time_value *= 5
+        elif lead_time_unit == 'month':
+            lead_time_value /= 30
+            lead_time_value *= 22
+        lead_time_value *= 24
+    return lead_time_value
+
+
+def multi_value_order_available(product_dict, **kwargs):
+    """
+    Returns a value for a multi-value field, e.g. weave_type.
+    :param product_dict: The dictionary representation of the product.
+    :param kwargs: Key word arguments which should include keys: a list of keys
+        used to find a specific value in the product_dict, and available: a
+        list of available values used for sorting the retrieved values.
+    :return: A value as a string which corresponds to the value ID
+        retrieved using the second list in the keys list or None if either
+        the specified value ID doesn't exist or it doesn't correspond to any
+        choice.
+    """
+    keys = kwargs.get('keys', [])
+    available = kwargs.get('available', [])
+    choices = default_format(product_dict, keys=keys[0])
+    value_ids = default_format(product_dict, keys=keys[1][:-1])
+    values = []
+    if value_ids:
+        for value_id in value_ids:
+            for choice in choices:
+                if choice[0] == value_id:
+                    values.append(choice[1])
+
+    def style_comparer(value1, value2):
+        if value1 in available and value2 not in available:
+            return -1
+        if value2 in available and value1 not in available:
+            return 1
+        return 0
+    values = sorted(values, cmp=style_comparer)
+    if len(values) <= keys[1][-1]:
+        return None
+    return values[keys[1][-1]]

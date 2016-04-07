@@ -1,0 +1,383 @@
+from flask.ext.login import login_user
+
+from flask import (
+    abort,
+    Blueprint,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+    jsonify
+)
+
+import flask
+import stripe
+
+import amber_portal.signals
+
+from amber_portal.lib import get_current_user
+from amber_portal.lib.s3 import upload_image
+from amber_portal.lib.utils import amber_api_connection
+from amber_portal.models import db
+from .auth import authenticated
+
+from hubspot.connection import APIKey, PortalConnection, HubspotServerError
+
+from amber_portal.models.user import CMUser
+
+from amber_portal.forms.signup import (
+    SignUpForm,
+    BillingForm,
+    ProfileForm
+)
+
+app = flask.current_app
+
+current_user = get_current_user()
+
+registration_view = Blueprint(
+    'registration_view',
+    __name__,
+    template_folder='templates'
+)
+
+PLAN_ID = 'intro_price'
+
+
+@registration_view.route('/signup', methods=['GET', 'POST'])
+def signup():
+
+    if getattr(current_user, 'email', None):
+        return redirect('/dashboard')
+
+    form = SignUpForm()
+
+    if form.validate_on_submit():
+        user = CMUser.query.filter_by(
+            email=form.data['email'].lower()
+        ).first()
+        if user:
+            form.email.errors.append(
+                'There is an existing account \
+                associated with this email address.'
+            )
+        else:
+            # clear out any existing session data. If there's too much data, it
+            # can prevent the session vars from saving.
+            session.clear()
+            session['signup'] = form.data
+            session.regenerate()
+
+            return redirect(url_for('.payment'))
+
+    return render_template('signup/signup.jinja2', form=form)
+
+
+@registration_view.route('/signup/payment', methods=['GET', 'POST'])
+def payment():
+    """
+    Handles form submission for payment details.
+    """
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+    plan = stripe.Plan.retrieve(PLAN_ID)
+
+    if 'address' in session:
+        data = session['address']
+        form = BillingForm(**data)
+    else:
+        form = BillingForm()
+        if request.method == 'GET' and 'signup' in session:
+            if 'name' in session['signup']:
+                form.name.data = session['signup']['name']
+
+    if form.validate_on_submit():
+        card_data = form.data
+        extras = {
+            'object': 'card',
+            'address_line1': form.street_address_1.data,
+            'address_line2': form.street_address_2.data,
+            'address_city': form.city.data,
+            'address_state': form.state.data or form.province.data,
+            'address_zip': form.zipcode.data
+        }
+        card_data.update(extras)
+
+        # clear out an existing customer if there is one and start over
+        if 'stripe_customer' in session:
+            customer = stripe.Customer.retrieve(session.get('stripe_customer'))
+            customer.delete()
+            session.pop('stripe_customer')
+
+        customer = stripe.Customer.create(email=session['signup']['email'])
+        try:
+            customer.sources.create(source=card_data)
+            customer.metadata = {'phone': form.phone.data}
+            customer.save()
+
+            session['stripe_customer'] = customer.id
+
+            # if a plan was picked through coupon code, keep it. Otherwise:
+            if not session.get('plan'):
+                session['plan'] = PLAN_ID
+
+            # save address for later, but not card info
+            address = form.data
+            address.pop('number')
+            address.pop('name')
+            address.pop('exp_month')
+            address.pop('exp_year')
+            address.pop('cvc')
+            session['address'] = address
+            session.regenerate()
+
+            return redirect(url_for('.confirm_payment'))
+        except stripe.error.CardError as error:
+            e = Exception(error._message)
+            if error.code in ['invalid_cvc', 'incorrect_cvc']:
+                form.cvc.errors.append(e)
+            elif error.code in [
+                'invalid_expiry_month',
+                'invalid_expiry_year',
+                'expired_card'
+            ]:
+                form.exp_month.errors.append(e)
+            elif error.code is 'incorrect_zip':
+                form.zipcode.errors.append(e)
+            else:
+                form.number.errors.append(
+                    Exception(
+                        "The card number is not a valid credit card number."
+                    )
+                )
+
+    return render_template('signup/payment.jinja2', form=form, plan=plan)
+
+
+@registration_view.route('/signup/coupon/', methods=['GET'])
+@registration_view.route('/signup/coupon/<string:coupon_id>', methods=['GET'])
+def validate_coupon(coupon_id=None):
+    if not request.is_xhr:
+        abort(404)
+
+    if 'plan' in session:
+        session.pop('plan')
+
+    if not coupon_id:
+        coupon = 'empty'
+    elif coupon_id != 'AMBERVEGAS':
+        coupon = 'invalid'
+    else:
+        session['coupon'] = 'AMBERVEGAS'
+        session['plan'] = 'intro_price_vegas'
+        coupon = 'ambervegas'
+    return render_template('signup/coupon_text.jinja2', coupon=coupon)
+
+
+@registration_view.route('/signup/confirm', methods=['GET', 'POST'])
+def confirm_payment():
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+    plan_id = session.get('plan')
+    customer_id = session.get('stripe_customer')
+
+    plan = stripe.Plan.retrieve(plan_id)
+    customer = stripe.Customer.retrieve(customer_id)
+
+    if request.method == 'POST':
+        api_conn = amber_api_connection()
+        user_data = {
+            'name': session['signup']['name'],
+            'email': session['signup']['email'],
+            'password': session['signup']['password']
+        }
+
+        # create user
+        user = CMUser(**user_data)
+
+        # create manufacturer
+        data = dict(session['signup'])
+        data.update(session['address'])
+
+        del data['confirm_password']
+        del data['coupon']
+        del data['tos']
+        del data['password']
+        data['name'] = data.pop('company')
+        data['country'] = data.pop('address_country')
+        mfr = api_conn.Manufacturer.from_dict(data).save()
+        user.manufacturer_id = mfr.pk()
+        user.stripe_customer = customer_id
+        mfr_name = mfr.name if mfr.name else ''
+
+        api_key_payload = {
+            'name': user.email,
+            'role_name': 'ManufacturerUser',
+            'manufacturer_id': user.manufacturer_id,
+            'kind': 'user_key'
+        }
+
+        api_key = api_conn.APIKey.from_dict(api_key_payload).save()
+
+        user.public = api_key.public
+        user.private = api_key.private
+
+        db.session.add(user)
+        db.session.commit()
+        user.set_role('manufacturer_employer')
+
+        # subscribe user to plan
+        customer.subscriptions.create(plan=plan_id)
+
+        # Collect data for registration emails
+        first, last = user.name.split(' ', 1)
+        data = {
+            'name': user.name,
+            'first_name': first,
+            'last_name': last,
+            'email': user.email,
+            'manufacturer': mfr_name,
+            'phone': mfr.phone,
+            'url': mfr.url
+        }
+
+        # adding a new user on hubspot
+        authentication_key = APIKey(app.config['HUBSPOT_API_KEY'])
+
+        if (
+            authentication_key.get_field_values().get('key_value') !=
+            'HUBSPOT_TEST_API_KEY'
+        ):
+            hubspot_payload = {
+                'properties': [
+                    {
+                        'property': 'email',
+                        'value': user.email
+                    },
+                    {
+                        'property': 'firstname',
+                        'value': first
+                    },
+                    {
+                        'property': 'lastname',
+                        'value': last
+                    },
+                    {
+                        'property': 'company',
+                        'value': mfr_name
+                    }
+                ]
+            }
+
+            try:
+                with PortalConnection(
+                    authentication_key,
+                    "Channel Manager"
+                ) as connection:
+                    connection.send_post_request(
+                        '/contacts/v1/contact',
+                        hubspot_payload
+                    )
+            except HubspotServerError:
+                amber_portal.signals.user_signals.hubspot_error.send(data)
+
+        amber_portal.signals.user_signals.registered.send(data)
+
+        # still need address for the next page
+        address = session['address']
+        session.clear()
+        session['address'] = address
+
+        login_user(user, remember=True)
+        return redirect(url_for('.create_profile'))
+
+    return render_template(
+        'signup/confirm.jinja2',
+        customer=customer,
+        plan=plan
+    )
+
+
+@registration_view.route('/signup/create-profile', methods=['GET', 'POST'])
+@authenticated
+def create_profile():
+    api_conn = amber_api_connection()
+    user = current_user
+
+    mfr = api_conn.Manufacturer.retrieve(user.manufacturer_id)
+    data = mfr.to_dict()
+    data.update(session['address'])
+
+    form = ProfileForm(**data)
+
+    if form.validate_on_submit():
+        data = form.data
+        data['country'] = data.pop('address_country')
+        images = data.pop('new_images', '').split(',')
+        mfr.from_dict(data).save()
+
+        import pudb; pu.db
+        if images:
+            for index, image in enumerate(images):
+                image_data = {
+                    'manufacturer_id': current_user.manufacturer_id,
+                    'url': image,
+                    'default': True if index == 0 else False,
+                    'caption': '',
+                    'manufacturer_id': current_user.manufacturer_id
+                }
+                api_conn.ManufacturerImage.from_dict(image_data).save()
+
+        return redirect(url_for('.upload_products'))
+
+    images = form.new_images.data.split(",") if form.new_images.data else []
+    return render_template(
+        'signup/profile.jinja2',
+        form=form,
+        images=images
+    )
+
+
+@registration_view.route(
+    '/signup/upload-products',
+    methods=['GET', 'POST']
+)
+@authenticated
+def upload_products():
+    return render_template('signup/products.jinja2')
+
+
+@registration_view.route('/signup/contact-me', methods=['GET', 'POST'])
+@authenticated
+def contact_me():
+    data = {
+        'user_name': current_user.name,
+        'user_email': current_user.email,
+    }
+
+    amber_portal.signals.user_signals.contact_me.send(data)
+
+    return render_template('signup/contact-me.jinja2')
+
+
+@registration_view.route('/signup/upload', methods=['POST'])
+@authenticated
+def file_upload():
+    access = app.config['S3_ACCESS']
+    secret = app.config['S3_SECRET']
+    s3_bucket = app.config['S3_BUCKET']
+
+    image = request.files['img']
+    image_url = upload_image(image, access, secret, s3_bucket=s3_bucket)
+    return jsonify({'success': True, 'image_url': image_url})
+
+
+@registration_view.route('/signup/loading', methods=['GET'])
+@authenticated
+def loading():
+    redirect = request.args.get('redirect')
+    response = make_response(
+        render_template('/signup/loading.jinja2', redirect=redirect)
+    )
+    response.set_cookie('new_user', value='true')
+    return response

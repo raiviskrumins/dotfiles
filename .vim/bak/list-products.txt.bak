@@ -1,0 +1,1 @@
+--public b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284 --private e6881db3b05c96926215a00f6ce10d30807aef1df6f8326b4b3d11b9326c443f --url http://localhost:8080/products\?limit=1\&offset=10 --golang --curl GET

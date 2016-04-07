@@ -1,0 +1,580 @@
+package routes
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/models"
+	"github.com/AmberEngine/api/oops"
+	perm "github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+	"github.com/justinas/alice"
+)
+
+// DefineProductRelations maps the various possible HTTP methods + route paths to the
+// available Product Relation resource functions defined.
+func DefineProductRelationRoutes(router *lib.Router, appC *RouteContext, commonHandlers alice.Chain) {
+	router.Post("/relations", appC.UpdateRelation(commonHandlers))
+	router.Get("/relations", appC.RetrieveRelation(commonHandlers))
+	router.Put("/relations", appC.CreateRelation(commonHandlers))
+	router.Delete("/relations", appC.DeleteRelation(commonHandlers))
+}
+func (c *RouteContext) RetrieveRelation(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("Relation", perm.ProductRelateOptionSetRetrieveAll|perm.ProductRelateOptionSetRetrieveGroup|perm.ProductRelateOptionSetRetrieveOwn|perm.ProductRelateCollectionRetrieveAll|perm.ProductRelateCollectionRetrieveGroup|perm.ProductRelateCollectionRetrieveOwn|perm.ProductRelateSalesChannelRetrieveAll|perm.ProductRelateSalesChannelRetrieveGroup|perm.ProductRelateSalesChannelRetrieveOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		var scID int
+		if uriParam := r.URL.Query().Get("sales_channel_id"); len(uriParam) != 0 {
+			var err error
+			scID, err = strconv.Atoi(uriParam)
+			if err != nil {
+				panic(oops.ServerError("", err))
+			}
+		}
+		if scID <= 0 {
+			panic(oops.BadRequest("Invalid Sales Channel ID", ""))
+		}
+
+		q, e := pqdb.NewSelectQuery(c.Context)
+		if e != nil {
+			panic(e)
+		}
+
+		t := pqdb.NewTable("sales_channel_product")
+		q.AddColumn(t.Column("product_id"))
+		q.AddTable(t)
+
+		q.SetWhere(pqdb.MakeWhereItem("", pqdb.Predicate{t.Column("sales_channel_id"), "=", scID}))
+
+		rows, e := q.Run()
+		if e != nil {
+			panic(e)
+		}
+		defer rows.Close()
+
+		var ids []int
+		for rows.Next() {
+			var currID int
+			err := rows.Scan(&currID)
+			if err != nil {
+				panic(oops.ServerError("", err))
+			}
+
+			ids = append(ids, currID)
+		}
+		if err := rows.Err(); err != nil {
+			panic(oops.ServerError("", "Rows has an internal error.", err))
+		}
+
+		resultMap := make(map[string]interface{})
+		resultMap["product_ids"] = ids
+		resultMap["count"] = len(ids)
+		responseResource, e := lib.NewResource(resultMap)
+		if e != nil {
+			panic(e)
+		}
+
+		selfLink := new(lib.HALHref)
+		selfLink.FromURI(r.RequestURI)
+		responseResource.AddLink("self", *selfLink)
+
+		resJSON, err := json.Marshal(responseResource)
+		if err != nil {
+			panic(oops.ServerError("", "Failed to marshal prodsRes to JSON.", err))
+		}
+
+		w.Header().Set("Content-Type", "application/hal+json")
+		fmt.Fprint(w, string(resJSON))
+
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func (c *RouteContext) UpdateRelation(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("Relation", perm.ProductRelateOptionSetUpdateAll|perm.ProductRelateOptionSetUpdateGroup|perm.ProductRelateOptionSetUpdateOwn|perm.ProductRelateCollectionUpdateAll|perm.ProductRelateCollectionUpdateGroup|perm.ProductRelateCollectionUpdateOwn|perm.ProductRelateSalesChannelUpdateAll|perm.ProductRelateSalesChannelUpdateGroup|perm.ProductRelateSalesChannelUpdateOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		params := r.URL.Query()
+
+		if len(params) != 2 {
+			panic(oops.ServerError("", ""))
+		}
+
+		var keys []string
+		var ids [][]int
+		for k, v := range r.URL.Query() {
+			keys = append(keys, k)
+
+			split := strings.Split(v[0], ",")
+			var idSlice []int
+			for _, strID := range split {
+				id, err := strconv.Atoi(strID)
+				if err != nil {
+					panic(oops.ServerError("", err))
+				}
+				idSlice = append(idSlice, id)
+			}
+
+			ids = append(ids, idSlice)
+		}
+
+		pairings := make(map[string]func(*app.Context, []int, []int) oops.Error)
+		pairings["products-option_sets"] = ProductOptionSet
+		pairings["products-collections"] = ProductCollection
+		pairings["products-sales_channels"] = ProductSalesChannel
+		pairings["manufacturers-sales_channels"] = ManufacturerSalesChannel
+
+		forward := lib.Join("-", keys[0], keys[1])
+		reverse := lib.Join("-", keys[1], keys[0])
+
+		if f, ok := pairings[forward]; ok {
+			e := f(c.Context, ids[0], ids[1])
+			if e != nil {
+				panic(e)
+			}
+		} else if f, ok := pairings[reverse]; ok {
+			e := f(c.Context, ids[1], ids[0])
+			if e != nil {
+				panic(e)
+			}
+		} else {
+			panic(oops.ServerError("Oh shit", ""))
+		}
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func ManufacturerSalesChannel(ctx *app.Context, manufacturerIDs, salesChannelIDs []int) oops.Error {
+	// Retrieve the Manufacturer by ID.
+	for _, mfrID := range manufacturerIDs {
+		mfr, e := models.RetrieveManufacturer(ctx, mfrID)
+		if e != nil {
+			return e
+		}
+
+		for _, scID := range salesChannelIDs {
+			// Retrieve the Sales Channel by ID.
+			sc, e := models.RetrieveSalesChannel(ctx, scID)
+			if e != nil {
+				return e
+			}
+
+			// Construct a query to grab all the Product ID numbers for products
+			// under the given manufacturer.
+			prodQuery, e := pqdb.NewSelectQuery(ctx)
+			if e != nil {
+				return e
+			}
+
+			manCompTable := pqdb.NewTable("manufacturer_component")
+			prodQuery.AddColumn(manCompTable.Column("product_id"))
+			prodQuery.AddTable(manCompTable)
+			where := pqdb.WhereItem{
+				"",
+				pqdb.Predicate{manCompTable.Column("manufacturer_id"), "=", mfr.ID.Int64},
+				nil}
+
+			prodQuery.SetWhere(pqdb.WhereItem{Operand: "", Items: []pqdb.WhereItem{where}})
+
+			rows, e := prodQuery.Run()
+			if e != nil {
+				return e
+			}
+			defer rows.Close()
+
+			// Collect the Product IDs into a slice.
+			var prodIDs []int
+
+			for rows.Next() {
+				var id int
+				err := rows.Scan(&id)
+				if err != nil {
+					return oops.ServerError("", err)
+				}
+
+				prodIDs = append(prodIDs, id)
+			}
+			if err := rows.Err(); err != nil {
+				panic(oops.ServerError("", "Rows has an internal error.", err))
+			}
+
+			// Generate SQL to create a new Product-Sales Channel relation (if it does not already exist).
+			insertSQL := "INSERT INTO sales_channel_product (sales_channel_id, product_id) SELECT $1, $2 WHERE NOT EXISTS"
+			notExistsSQL := "(SELECT sales_channel_id, product_id FROM sales_channel_product WHERE sales_channel_id = $1 AND product_id = $2)"
+			execSQL := lib.Join(" ", insertSQL, notExistsSQL, ";")
+
+			// For each Product ID, create the actual relation.
+			for _, id := range prodIDs {
+				_, err := ctx.DBConn.Exec(execSQL, sc.ID.Int64, id)
+				if err != nil {
+					return oops.ServerError("", err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func ProductSalesChannel(ctx *app.Context, productIDs, salesChannelIDs []int) oops.Error {
+	for _, prodID := range productIDs {
+		// Retrieve the Product by ID.
+		prod, e := models.RetrieveProduct(ctx, prodID)
+		if e != nil {
+			return e
+		}
+
+		for _, scID := range salesChannelIDs {
+			// Retrieve the Sales Channel by ID.
+			sc, e := models.RetrieveSalesChannel(ctx, scID)
+			if e != nil {
+				return e
+			}
+
+			// Create SQL to insert new relation (if one does not already exist).
+			insertSQL := "INSERT INTO sales_channel_product (sales_channel_id, product_id) SELECT $1, $2 WHERE NOT EXISTS"
+			notExistsSQL := "(SELECT sales_channel_id, product_id FROM sales_channel_product WHERE sales_channel_id = $1 AND product_id = $2)"
+			execSQL := lib.Join(" ", insertSQL, notExistsSQL, ";")
+			_, err := ctx.DBConn.Exec(execSQL, sc.ID.Int64, prod.ID.Int64)
+			if err != nil {
+				return oops.ServerError("", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func ProductCollection(ctx *app.Context, productIDs, collectionIDs []int) oops.Error {
+	if len(collectionIDs) > 1 {
+		return oops.ServerError("", "That shit wont fly")
+	}
+	colID := collectionIDs[0]
+
+	for _, prodID := range productIDs {
+		// Retrieve the Product by ID.
+		prod, e := models.RetrieveProduct(ctx, prodID)
+		if e != nil {
+			return e
+		}
+
+		// Retrieve the Collection by ID.
+		collection, e := models.RetrieveCollection(ctx, colID)
+		if e != nil {
+			return e
+		}
+
+		// Create SQL to insert new relation (if one does not already exist).
+		updateSQL := "UPDATE collection_component SET collection_id =  $1 WHERE product_id = $2;"
+		_, err := ctx.DBConn.Exec(updateSQL, collection.ID.Int64, prod.ID.Int64)
+		if err != nil {
+			return oops.ServerError("", err)
+		}
+
+		e = pqdb.MongoRemoveProduct(*ctx, prod.ID.Int64)
+		if e != nil {
+			return e
+		}
+	}
+
+	return nil
+}
+
+func ProductOptionSet(ctx *app.Context, productIDs, optionSetIDs []int) oops.Error {
+	for _, prodID := range productIDs {
+		prod, e := models.RetrieveProduct(ctx, prodID)
+		if e != nil {
+			return e
+		}
+
+		for _, opSetID := range optionSetIDs {
+			// Get the Option Set via the OptionSet ID in the data payload.
+			opSet, e := models.RetrieveOptionSet(ctx, opSetID)
+			if e != nil {
+				return e
+			}
+
+			// Do not allow duplicate OptionSet sub-components. Check to make sure the desired
+			// OptionSet has not already been added...
+			for _, set := range prod.Components["option_sets"].(*models.OptionSetsComponent).OptionSetList {
+				if set.ID.Valid && opSet.ID.Int64 == set.ID.Int64 {
+					msg := fmt.Sprintf("Product: %d is already related to OptionSet: %d", prodID, opSet.ID.Int64, prod.Components["option_sets"])
+					return oops.BadRequest(msg, "")
+				}
+			}
+
+			// Create and fill-in a new OptionSetSubComponent using the established Product and OptionSet IDs.
+			subComponent := new(models.OptionSetComponent)
+			err := subComponent.ProductID.Set(prod.ID)
+			if err != nil {
+				return oops.ServerError("", err)
+			}
+
+			err = subComponent.OptionSetID.Set(opSet.ID)
+			if err != nil {
+				return oops.ServerError("", err)
+			}
+
+			err = subComponent.ParentID.Set(prod.Components["option_sets"].CompID())
+			if err != nil {
+				return oops.ServerError("", err)
+			}
+
+			// Insert the new OptionSet sub component into the database.
+			// Use table name?
+			_, e = pqdb.InsertQuery(ctx.DBConn, subComponent, "option_set_component")
+			if e != nil {
+				return e
+			}
+
+			// Remove the old Mongo cache for this product
+			e = pqdb.MongoRemoveProduct(*ctx, prod.ID.Int64)
+			if e != nil {
+				return e
+			}
+		}
+	}
+
+	return nil
+}
+
+func (c *RouteContext) CreateRelation(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("Relation", perm.ProductRelateOptionSetCreateAll|perm.ProductRelateOptionSetCreateGroup|perm.ProductRelateOptionSetCreateOwn|perm.ProductRelateCollectionCreateAll|perm.ProductRelateCollectionCreateGroup|perm.ProductRelateCollectionCreateOwn|perm.ProductRelateSalesChannelCreateAll|perm.ProductRelateSalesChannelCreateGroup|perm.ProductRelateSalesChannelCreateOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		panic(oops.NotImplemented("", ""))
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func (c *RouteContext) DeleteRelation(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("Relation", perm.ProductRelateOptionSetDeleteAll|perm.ProductRelateOptionSetDeleteGroup|perm.ProductRelateOptionSetDeleteOwn|perm.ProductRelateCollectionDeleteAll|perm.ProductRelateCollectionDeleteGroup|perm.ProductRelateCollectionDeleteOwn|perm.ProductRelateSalesChannelDeleteAll|perm.ProductRelateSalesChannelDeleteGroup|perm.ProductRelateSalesChannelDeleteOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		params := r.URL.Query()
+
+		if len(params) != 2 {
+			panic(oops.ServerError("", ""))
+		}
+
+		var keys []string
+		var ids [][]int
+		for k, v := range r.URL.Query() {
+			keys = append(keys, k)
+
+			split := strings.Split(v[0], ",")
+			var idSlice []int
+			for _, strID := range split {
+				id, err := strconv.Atoi(strID)
+				if err != nil {
+					panic(oops.ServerError("", err))
+				}
+				idSlice = append(idSlice, id)
+			}
+
+			ids = append(ids, idSlice)
+		}
+
+		pairings := make(map[string]func(*app.Context, []int, []int) oops.Error)
+		pairings["products-option_sets"] = DeleteProductOptionSet
+		pairings["products-collections"] = DeleteProductCollection
+		pairings["products-sales_channels"] = DeleteProductSalesChannel
+		pairings["manufacturers-sales_channels"] = DeleteManufacturerSalesChannel
+
+		forward := lib.Join("-", keys[0], keys[1])
+		reverse := lib.Join("-", keys[1], keys[0])
+
+		if f, ok := pairings[forward]; ok {
+			e := f(c.Context, ids[0], ids[1])
+			if e != nil {
+				panic(e)
+			}
+		} else if f, ok := pairings[reverse]; ok {
+			e := f(c.Context, ids[1], ids[0])
+			if e != nil {
+				panic(e)
+			}
+		} else {
+			panic(oops.ServerError("Oh shit", ""))
+		}
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+// DeleteOptionSetRelation will remove the relationship between an existing
+// product and an existing OptionSet (if the relation exists).
+func DeleteProductOptionSet(ctx *app.Context, productIDs, optionSetIDs []int) oops.Error {
+	for _, prodID := range productIDs {
+		// Get the Product via Product ID
+		prod, e := models.RetrieveProduct(ctx, prodID)
+		if e != nil {
+			return e
+		}
+
+		for _, opSetID := range optionSetIDs {
+			opSet, e := models.RetrieveOptionSet(ctx, opSetID)
+			if e != nil {
+				return e
+			}
+
+			var preds []pqdb.Predicate
+			preds = append(preds, pqdb.Predicate{"product_id", "=", prod.ID.Int64})
+			preds = append(preds, pqdb.Predicate{"option_set_id", "=", opSet.ID.Int64})
+
+			qParams := pqdb.QueryParams{
+				Limit:  1,
+				Offset: 0,
+				Preds:  preds}
+
+			e = pqdb.DeleteQuery(ctx.DBConn, "option_set_component", &qParams)
+			if e != nil {
+				return e
+			}
+
+			// Remove the old Mongo cache for this product
+			e = pqdb.MongoRemoveProduct(*ctx, prod.ID.Int64)
+			if e != nil {
+				return e
+			}
+		}
+	}
+
+	return nil
+}
+
+func DeleteProductCollection(ctx *app.Context, productIDs, collectionIDs []int) oops.Error {
+	if len(collectionIDs) > 1 {
+		return oops.ServerError("", "todo: fix me")
+	}
+
+	colID := collectionIDs[0]
+
+	for _, prodID := range productIDs {
+		// Retrieve the Product by ID.
+		prod, e := models.RetrieveProduct(ctx, prodID)
+		if e != nil {
+			return e
+		}
+
+		// Currently, we can remove the relation using just the Product ID since
+		// there is always only one component per product. But in case that
+		// changes in the future, (along with consistency) we will use the
+		// Collection ID provided.
+
+		// Retrieve the Collection by ID.
+		collection, e := models.RetrieveCollection(ctx, colID)
+		if e != nil {
+			return e
+		}
+
+		// Attempt to remove the relation from the database.
+		deleteSQL := "UPDATE collection_component SET collection_id = NULL WHERE product_id = $1 AND collection_id = $2;"
+		_, err := ctx.DBConn.Exec(deleteSQL, prod.ID.Int64, collection.ID.Int64)
+		if err != nil {
+			return oops.ServerError("", err)
+		}
+		e = pqdb.MongoRemoveProduct(*ctx, prod.ID.Int64)
+		if e != nil {
+			return e
+		}
+	}
+
+	return nil
+}
+
+// DeleteSalesChannelRelation will remove a relation between an existing product
+// and an existing Sales Channel (if such a relation exists).
+func DeleteProductSalesChannel(ctx *app.Context, productID, salesChannelID []int) oops.Error {
+	for _, prodID := range productID {
+		// Retrieve the Product by ID.
+		prod, e := models.RetrieveProduct(ctx, prodID)
+		if e != nil {
+			return e
+		}
+
+		// Retrieve the Sales Channel by ID.
+		for _, scID := range salesChannelID {
+			sc, e := models.RetrieveSalesChannel(ctx, scID)
+			if e != nil {
+				return e
+			}
+
+			// Attempt to delete the Product-Sales Channel relation from the database.
+			deleteSQL := "DELETE FROM sales_channel_product WHERE sales_channel_id = $1 AND  product_id = $2;"
+			_, err := ctx.DBConn.Exec(deleteSQL, sc.ID.Int64, prod.ID.Int64)
+			if err != nil {
+				return oops.ServerError("", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func DeleteManufacturerSalesChannel(ctx *app.Context, manufacturerIDs, salesChannelIDs []int) oops.Error {
+	for _, mfrID := range manufacturerIDs {
+		// Retrieve the Manufacturer by ID.
+		mfr, e := models.RetrieveManufacturer(ctx, mfrID)
+		if e != nil {
+			return e
+		}
+
+		for _, scID := range salesChannelIDs {
+			// Retrieve the Sales Channel by ID.
+			sc, e := models.RetrieveSalesChannel(ctx, scID)
+			if e != nil {
+				return e
+			}
+
+			// Select all product IDs for products related to the specified manufacturer.
+			prodQuery, e := pqdb.NewSelectQuery(ctx)
+			if e != nil {
+				return e
+			}
+
+			manCompTable := pqdb.NewTable("manufacturer_component")
+			prodQuery.AddColumn(manCompTable.Column("product_id"))
+			prodQuery.AddTable(manCompTable)
+			where := pqdb.WhereItem{
+				"",
+				pqdb.Predicate{manCompTable.Column("manufacturer_id"), "=", mfr.ID.Int64},
+				nil}
+
+			prodQuery.SetWhere(pqdb.WhereItem{Operand: "", Items: []pqdb.WhereItem{where}})
+
+			rows, e := prodQuery.Run()
+			if e != nil {
+				return e
+			}
+			defer rows.Close()
+
+			// Store the Product IDs in a slice.
+			var prodIDs []int
+
+			for rows.Next() {
+				var id int
+				err := rows.Scan(&id)
+				if err != nil {
+					return oops.ServerError("", err)
+				}
+
+				prodIDs = append(prodIDs, id)
+			}
+			if err := rows.Err(); err != nil {
+				panic(oops.ServerError("", "Rows has an internal error.", err))
+			}
+
+			// For each product ID, delete the association between the product and the sales channel.
+			deleteSQL := "DELETE FROM sales_channel_product WHERE sales_channel_id = $1 AND  product_id = $2;"
+			for _, id := range prodIDs {
+				_, err := ctx.DBConn.Exec(deleteSQL, sc.ID.Int64, id)
+				if err != nil {
+					return oops.ServerError("", err)
+				}
+			}
+		}
+	}
+
+	return nil
+}

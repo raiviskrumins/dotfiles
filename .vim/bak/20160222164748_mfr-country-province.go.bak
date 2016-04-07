@@ -1,0 +1,17 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20160222164748(txn *sql.Tx) {
+	txn.Exec(`ALTER TABLE manufacturer ADD COLUMN country VARCHAR;`)
+	txn.Exec(`ALTER TABLE manufacturer ADD COLUMN province VARCHAR;`)
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160222164748(txn *sql.Tx) {
+	txn.Exec(`ALTER TABLE manufacturer DROP COLUMN country;`)
+	txn.Exec(`ALTER TABLE manufacturer DROP COLUMN province;`)
+}

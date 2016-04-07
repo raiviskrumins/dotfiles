@@ -1,0 +1,10 @@
+<div data-target="#js_images">
+    <p><i>Select a feature image and add additional images that best represent your company's brand.</i></p>
+    {% for image in images | sort(attribute="id") %}
+    <div class="manu-image" data-id="{{image.id}}" data-image="{{image.url}}" style="background-image:url('{{image.url}}')">
+
+        {% if image.default %}<span class="default">Feature</span>{% endif %}
+    </div>
+    {% endfor %}
+    <a href="{{ url_for('account_view.image_new') }}" class="manu-image new-manu-image text-center js-rep-image"><span>+ New Image</span></a>
+</div>

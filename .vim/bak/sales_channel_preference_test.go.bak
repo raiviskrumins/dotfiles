@@ -1,0 +1,167 @@
+package models
+
+import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+// TestCreateSalesChannelPreference attempts to assert that a new SalesChannelPreference
+// will be inserted into the database, and returned as a SalesChannelPreference instance.
+func TestCreateSalesChannelPreference(t *testing.T) {
+	stringData := `{
+		"manufacture_id": 614,
+		"sales_channel_id": 8,
+		"identity_name": "alternate_name",
+		"description": "description",
+		"pricing_wholesales": true,
+		"pricing_trade_price": false,
+		"pricing_msrp": true,
+		"pricing_dealer_price": false,
+		"active": true
+	}`
+	jsonData := ioutil.NopCloser(bytes.NewBufferString(stringData))
+
+	pref, e := CreateSalesChannelPreference(TestCtx, jsonData)
+
+	if !assert.NoError(t, e) || !assert.NotNil(t, pref) {
+		assert.Fail(t, "A valid SalesChannelPreference must be returned without error.")
+		return
+	}
+
+	pref, e = RetrieveSalesChannelPreference(TestCtx, int(pref.ID.Int64))
+	assert.NotNil(t, pref)
+	assert.NoError(t, e)
+
+}
+
+// TestRetrieveSalesChannelPreference_MissingID tests that the non-existant
+// primary-key id result in being returned nil and an error.
+func TestRetrieveSalesChannelPreference_MissingID(t *testing.T) {
+	id := 101010
+
+	pref, e := RetrieveSalesChannelPreference(TestCtx, id)
+
+	assert.Nil(t, pref)
+	assert.Error(t, e)
+}
+
+// TestRetrieveSalesChannelPreference_ValidID tests that the valid, specified
+// SalesChannelPreference primary-key ID result in being returned a
+// valid SalesChannelPreference instance.
+func TestRetrieveSalesChannelPreference_Valid(t *testing.T) {
+	id := 19
+
+	pref, e := RetrieveSalesChannelPreference(TestCtx, id)
+
+	if assert.NotNil(t, id) && assert.NoError(t, e) {
+		assert.Equal(t, id, int(pref.ID.Int64))
+	}
+}
+
+// TestUpdateSalesChannelPreference_Returned asserts that attempting to update
+// an existing SalesChannelPrerence using valid data results being returned
+// an updated SalesChannelPreference.
+func TestUpdateSalesChannelPreference_Returned(t *testing.T) {
+	id := 1530
+
+	expected, e := RetrieveSalesChannelPreference(TestCtx, id)
+	if !assert.NotNil(t, expected) {
+		assert.Fail(t, "The generated, expected SalesChannelPreference must not be nil.")
+		return
+	}
+
+	expected.DescriptionDescription.Set("description")
+	expected.PricingTradePrice.Set(true)
+	expected.PricingWholesale.Set(true)
+
+	jsonBytes, err := json.Marshal(expected)
+
+	if !assert.NotEmpty(t, jsonBytes) || !assert.NoError(t, err) {
+		assert.Fail(t, "The marshalled JSON bytes must be valid & without error.")
+		return
+	}
+
+	jsonReadCloser := ioutil.NopCloser(bytes.NewBuffer(jsonBytes))
+
+	actual, e := UpdateSalesChannelPreference(TestCtx, id, jsonReadCloser)
+
+	if !assert.NoError(t, e) && assert.NotNil(t, actual) {
+		assert.Fail(t, "The SalesChannelPreference updated must be valid, and without error.")
+		return
+	}
+
+	assert.Equal(t, expected, actual)
+}
+
+// TestUpdateSalesChannelPreference_Updated asserts that attempting to update
+// an existing SalesChannelPreference using valid data results updating the
+// entry in the database.
+func TestUpdateSalesChannelPreference_Updated(t *testing.T) {
+	id := 1530
+
+	expected, e := RetrieveSalesChannelPreference(TestCtx, id)
+	if !assert.NotNil(t, expected) {
+		assert.Fail(t, "The generated, expected SalesChannelPreference must not be nil.")
+		return
+	}
+
+	if !assert.NoError(t, e) {
+		assert.Fail(t, "An error is not expected when retrieving the Sales Channel.")
+		return
+	}
+
+	expected.DescriptionDescription.Set("description")
+	expected.PricingTradePrice.Set(true)
+	expected.PricingWholesale.Set(true)
+
+	jsonBytes, err := json.Marshal(expected)
+
+	if !assert.NotEmpty(t, jsonBytes) || !assert.NoError(t, err) {
+		assert.Fail(t, "The marshalled JSON bytes must be valid & without error.")
+		return
+	}
+
+	jsonReadCloser := ioutil.NopCloser(bytes.NewBuffer(jsonBytes))
+
+	_, e = UpdateSalesChannelPreference(TestCtx, id, jsonReadCloser)
+
+	assert.NoError(t, e)
+
+	actual, e := RetrieveSalesChannelPreference(TestCtx, id)
+	if !assert.NoError(t, e) && assert.NotNil(t, actual) {
+		assert.Fail(t, "The SalesChannelPreference updated must be valid, and without error.")
+		return
+	}
+
+	assert.Equal(t, expected, actual)
+}
+
+// TestDeleteSalesChannelPreference_InvalidID asserts that it is not possible
+// to delete a SalesChannelPreference from the database using a rimary-key  ID
+// that is non-existant.
+func TestDeleteSalesChannelPreference_InvalidID(t *testing.T) {
+	// This primary-key does not exist in the database.
+	id := 101010
+
+	e := DeleteSalesChannelPreference(TestCtx, id)
+
+	assert.Error(t, e)
+}
+
+// TestDeleteSalesChannelPreference_Valid asserts that it is possible to delete
+// a SalesChannelPreference from the database using a existing primary-key ID.
+func TestDeleteSalesChannelPreference_Valid(t *testing.T) {
+	id := 10
+	e := DeleteSalesChannelPreference(TestCtx, id)
+
+	assert.NoError(t, e)
+
+	// Check to make sure the database entry was actually removed.
+	pref, e := RetrieveSalesChannelPreference(TestCtx, id)
+	assert.Nil(t, pref)
+	assert.Error(t, e)
+}

@@ -1,0 +1,168 @@
+from flask import Blueprint, request
+import json
+
+from amber_api.models import db
+from amber_api.auth import auth_required
+from amber_api.lib.decor import resource, errors
+from amber_api.autodoc import uri_parameter, body_parameter
+from amber_api.auth.permissions import permissions
+
+from amber_api.models.api_key import APIKey
+from amber_api.models.role import Role
+from amber_api.views.error import MissingAPIKey
+
+from amber_api.resource_schemas import Success, api_key_resource
+api_key_view = Blueprint('api_key_view', __name__)
+
+
+@api_key_view.route(
+    '/api/<string:version>/api_keys',
+    methods=['POST']
+)
+@resource(
+    resource=api_key_resource,
+    description='Creates a new API key.',
+    log_message='Create API key',
+    uri_parameters={
+        'version': uri_parameter.version,
+    },
+    body_parameters={
+    }
+)
+@auth_required(view_permission=permissions.api_key.create)
+def create_api_key(version):
+    """ Creates a new API key.
+    """
+    data = json.loads(request.data['data'])
+    api_key_data = {'name': data['name'], 'roles': []}
+    if data.get('roles'):
+        for r in data['roles']:
+            role = Role.query.filter_by(name=r).first()
+            if role:
+                api_key_data['roles'].append(role)
+    api_key = APIKey(**api_key_data)
+    db.session.add(api_key)
+    db.session.commit()
+    api_key.public, api_key.private = api_key.gen_keys()
+    db.session.commit()
+    return api_key.to_dict()
+
+
+@api_key_view.route(
+    '/api/<string:version>/api_keys/<int:api_key_id>',
+    methods=['GET']
+)
+@resource(
+    resource=api_key_resource,
+    description='Returns an API key based on ID.',
+    log_message='Get API key',
+    uri_parameters={
+        'version': uri_parameter.version,
+        'api_key_id': uri_parameter.api_key_id(
+            description='ID of the APIKey you wish to retrieve.'
+        ),
+    },
+    body_parameters={
+    }
+)
+@auth_required(view_permission=permissions.api_key.retrieve)
+@errors(MissingAPIKey)
+def retrieve_api_key(version, api_key_id):
+    """ Returns an API key based on ID.
+    """
+    api_key = APIKey.query.get(api_key_id)
+    if not api_key:
+        raise MissingAPIKey(object_id=api_key_id)
+    return api_key.to_dict()
+
+
+@api_key_view.route(
+    '/api/<string:version>/api_keys',
+    methods=['GET']
+)
+@resource(
+    resource=api_key_resource,
+    description='Returns a collection of all API keys.',
+    log_message='Get API keys',
+    uri_parameters={
+        'version': uri_parameter.version,
+    },
+    body_parameters={
+    }
+)
+@auth_required(view_permission=permissions.api_key.retrieve)
+def list_api_keys(version):
+    """ Returns a collection of all API keys.
+    """
+    api_keys = list(APIKey.query.all())
+    result = [a.serialize() for a in api_keys]
+    response = {'api_keys': result}
+    return response
+
+
+@api_key_view.route(
+    '/api/<string:version>/api_keys/<int:api_key_id>',
+    methods=['PUT']
+)
+@resource(
+    resource=api_key_resource,
+    description='Updates an existing API key.',
+    log_message='Update api key',
+    uri_parameters={
+        'version': uri_parameter.version,
+        'api_key_id': uri_parameter.api_key_id(
+            description='ID of the APIKey you wish to update.'
+        ),
+    },
+    body_parameters={
+    }
+)
+@auth_required(view_permission=permissions.api_key.update)
+@errors(MissingAPIKey)
+def update_api_key(version, api_key_id):
+    """ Updates an existing API key.
+    """
+    api_key = APIKey.query.get(api_key_id)
+    if not api_key:
+        raise MissingAPIKey(object_id=api_key_id)
+    data = json.loads(request.data['data'])
+    roles = []
+    if data.get('roles'):
+        for r in data['roles']:
+            role = Role.query.filter_by(name=r).first()
+            if role:
+                roles.append(role)
+    api_key.name = data['name']
+    api_key.roles = roles
+    db.session.commit()
+    return api_key.to_dict()
+
+
+@api_key_view.route(
+    '/api/<string:version>/api_keys/<int:api_key_id>',
+    methods=['DELETE']
+)
+@resource(
+    resource=api_key_resource,
+    description='Deletes an existing api key.',
+    log_message='Delete api key',
+    uri_parameters={
+        'version': uri_parameter.version,
+        'api_key_id': uri_parameter.api_key_id(
+            description='ID of the APIKey you wish to delete.'
+        ),
+    },
+    body_parameters={
+    }
+)
+@auth_required(view_permission=permissions.api_key.delete)
+@errors(MissingAPIKey)
+def delete_api_key(version, api_key_id):
+    """ Deletes an existing api key.
+    """
+    api_key = APIKey.query.get(api_key_id)
+    if not api_key:
+        raise MissingAPIKey(object_id=api_key_id)
+    db.session.delete(api_key)
+    db.session.commit()
+    return Success

@@ -1,0 +1,21 @@
+[DEFAULT]
+db-type: postgres
+db-host: localhost
+db-user: doodle
+db-password: doodle
+db-name: api
+test-db-file: api_test.sql
+db-sslmode: disable
+
+mongo-db-name: api
+mongo-host: 127.0.0.1
+mongo-port: 27017
+mongo-user: amber
+mongo-password: amber123
+
+elasticsearch-host: localhost
+elasticsearch-port: 9200
+
+port: 80
+
+log-errors: false

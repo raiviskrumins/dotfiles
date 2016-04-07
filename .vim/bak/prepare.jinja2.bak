@@ -1,0 +1,79 @@
+{% from 'macros.jinja2' import export_progress %}
+{% extends 'index.jinja2' %}
+
+{% block javascript %}
+{{super()}}
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/export.min.js')|cache_update }}"></script>
+{% endblock %}
+
+{% block content_main %}
+<div class="col-md-12">
+  {% if request.referrer and 'select' in request.referrer and session.mapping_id %}
+  <div class="row">
+    <div class="col-md-12">
+      {{ export_progress(['Select Retailer', 'Select Products', 'Confirm Products', 'Export'], 2) }}
+    </div>
+  </div>
+  {% elif request.referrer and 'select' in request.referrer %}
+  <div class="row">
+    <div class="col-md-12">
+      {{ export_progress(['Select Products', 'Confirm Products', 'Export'], 1) }}
+    </div>
+  </div>
+  {% else %}
+  <h1>Confirm Products</h1>
+  {% endif %}
+    <table class="table striped" id="export_table">
+        <tr>
+            <th></th>
+            <th width="15%">SKU</th>
+            <th width="65%">Item Name</th>
+            {% if configuration %}
+            <th>Status</th>
+            {% endif %}
+            <th width="60"></th>
+        </tr>
+        {% for product in products|sort(attribute='name') %}
+        <tr class="export-row" data-id="{{product.id}}">
+            {% set product_image = [] %}
+            {% for image in product.images.image_list|reverse %}
+                {% do product_image.append(image.full_size) %}
+            {% endfor %}
+            <td><img src="{{product_image[0]}}" width="65" /></td>
+            <td>{{product.sku}}</td>
+            <td>{{product.name}}</td>
+            {% if configuration %}
+            <td>check</td>
+            {% endif %}
+            <td><a href="#" class="js-remove"><span class="icon-remove"></span></a></td>
+        </tr>
+        {% endfor %}
+    </table>
+    <div class="form-footer">
+        <div class="footer-wrapper clearfix">
+            <a href="{{url_for('export_view.generate', export_id=export.id)}}" data-id="{{export.id}}" class="btn btn-primary pull-right js-full-export">Export</a>
+            <p class="selected-message pull-left"><i><span class="js-selected-count">{{ products|count }}</span> products ready to export</i></p>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="prepareDownload">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">Preparing File</h4>
+            </div>
+            <div class="modal-body">
+                <p>Preparing your file for download...</p>
+                <div class="progress">
+                  <div class="progress-bar progress-bar-striped active"  role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%">
+                    <span class="sr-only">Waiting...</span>
+                  </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block footer %}{% endblock %}

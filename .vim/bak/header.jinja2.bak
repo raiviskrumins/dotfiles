@@ -1,0 +1,27 @@
+<nav class="navbar{% block classes %}{% endblock %}" role="navigation">
+    <div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="glyphicon glyphicon-menu-hamburger"></span>
+            </button>
+            <a href="{{ url_for('index') }}" class="navbar-brand logo"></a>
+        </div>
+        <div id="navbar" class="pull-right navbar-collapse collapse">
+            <ul class="nav navbar-nav">
+                <li{% if request.path == "/" %} class="active"{% endif %}>
+                    <a href="{{ url_for('index') }}">Home</a>
+                </li>
+                <li{% if request.path == url_for('channel_manager') %} class="active"{% endif %}>
+                    <a href="{{ url_for('channel_manager') }}">Channel Manager</a>
+                </li>
+                <li{% if request.path == url_for('discover') %} class="active"{% endif %}>
+                    <a href="{{ url_for('discover') }}">Discover</a>
+                </li>
+                <li{% if request.path == url_for('contact') %} class="active"{% endif %}>
+                    <a href="{{ url_for('contact') }}">Contact</a>
+                </li>
+            </ul>
+        </div><!--/.nav-collapse -->
+    </div>
+</nav>

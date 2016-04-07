@@ -1,0 +1,371 @@
+package lib
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestGetFloat(t *testing.T) {
+	var (
+		testInt     int
+		testFloat   float64
+		testFailure string
+	)
+
+	testInt = 0
+	float, err := getFloat(testInt)
+	assert.NoError(t, err)
+	assert.Equal(t, float64(testInt), float)
+
+	testFloat = 0.122333
+	float, err = getFloat(testFloat)
+	assert.NoError(t, err)
+	assert.Equal(t, testFloat, float)
+
+	testFailure = "This should not work"
+	float, err = getFloat(testFailure)
+	assert.Error(t, err)
+}
+
+// TestNewError tests that the NewError function to ensure that ErrorJSON
+// instances will be initiated and returned correctly.
+func TestNewError(t *testing.T) {
+	key := "foo"
+	msg := "Hey! Listen!"
+
+	e := NewError(key, msg)
+	if assert.Len(t, e.Keys, 1) {
+		assert.Equal(t, key, e.Keys[0])
+	}
+	assert.Equal(t, msg, e.Msg)
+
+	e = NewError("", msg)
+	assert.Len(t, e.Keys, 0)
+	assert.Equal(t, msg, e.Msg)
+}
+
+// TestConvertErrors tests that correct conversion from standard errors to
+// custom ErrorJSON instances.
+func TestConvertErrors(t *testing.T) {
+	var errorSlice []error
+
+	ers := ConvertErrors(errorSlice)
+	assert.Nil(t, ers)
+
+	errorSlice = append(errorSlice, errors.New("Test error"))
+	ers = ConvertErrors(errorSlice)
+	assert.NotNil(t, ers)
+	assert.Len(t, ers, 1)
+}
+
+// TestAddKey tests the AddKey method of ErrorJSON to ensure it will correctly
+// add a new key entry to the slice of keys.
+func TestAddKey(t *testing.T) {
+	e := ErrorJSON{"My message", nil}
+	e.AddKey("First Key")
+	e.AddKey("Second Key")
+	assert.NotNil(t, e.Keys)
+	assert.Len(t, e.Keys, 2)
+}
+
+// TestError tests that an error message will be outputted in the expected
+// format when using the Error method of a ErrorJSON instance.
+func TestError(t *testing.T) {
+	e := ErrorJSON{"Foo bar", nil}
+	e.AddKey("Second")
+	e.AddKey("First")
+
+	assert.Equal(t, "[First.Second] Foo bar", e.Error())
+}
+
+// TestJSONElements tests the JSONVerifyElements function by utilizing a expected
+// JSON byte array with both a correct and incorrect JSON byte array.
+func TestJSONElements(t *testing.T) {
+	noErrActual := `{"id": 5, "name": "Curtis", "age": 22}`
+	withErrActual := `{"id": -3, "name": "Curt"}`
+
+	expected := `{"id": {"type": "int", "value": 5}, "name": {"type": "string", "regex": "[Cc]urtis"}, "age": {"type": "int", "range": {"min": 0}}}`
+
+	errs := JSONVerifyElements([]byte(noErrActual), []byte(expected))
+	assert.Nil(t, errs)
+
+	errs = JSONVerifyElements([]byte(withErrActual), []byte(expected))
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 3)
+}
+
+// TestJSONElement tests the JSONVerifyElement function by using two different kinds
+// of map[string]interface{} rules.
+func TestJSONElemnt(t *testing.T) {
+	key := "id"
+	rules := map[string]interface{}{
+		"type":  "int",
+		"value": float64(3)}
+	aMap := map[string]interface{}{
+		"id":   float64(3),
+		"name": "Curtis"}
+
+	errs := JSONVerifyElement(key, rules, aMap)
+	assert.Nil(t, errs)
+
+	aMap = map[string]interface{}{
+		"id":   float64(6),
+		"name": "Curtis"}
+
+	errs = JSONVerifyElement(key, rules, aMap)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+}
+
+func TestJSONBool_Value(t *testing.T) {
+	var value bool
+
+	value = true
+	rules := map[string]interface{}{"value": true}
+
+	errs := JSONVerifyBool(value, rules)
+	assert.Nil(t, errs)
+
+	value = false
+	errs = JSONVerifyBool(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+}
+
+func TestJSONFloat_Range(t *testing.T) {
+	var value float64
+	rules := map[string]interface{}{"range": map[string]interface{}{"min": 0.1, "max": 0.3}}
+	value = 0.2
+
+	errs := JSONVerifyFloat(value, rules)
+	assert.Nil(t, errs)
+
+	value = -3.14
+	errs = JSONVerifyFloat(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+
+	value = 43
+	errs = JSONVerifyFloat(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+
+	rules = map[string]interface{}{"range": map[string]interface{}{"min": 3.1, "max": -5.2}}
+	value = 0
+	errs = JSONVerifyFloat(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 2)
+}
+
+func TestJSONFloat_Value(t *testing.T) {
+	var value float64
+	rules := map[string]interface{}{"value": 3.14159}
+
+	value = 3.14159
+	errs := JSONVerifyFloat(value, rules)
+	assert.Nil(t, errs)
+
+	value = 0
+	errs = JSONVerifyFloat(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+}
+
+func TestJSONInt_Range(t *testing.T) {
+	var value int
+	rules := map[string]interface{}{"range": map[string]interface{}{"min": float64(1), "max": float64(3)}}
+	value = 2
+
+	errs := JSONVerifyInt(value, rules)
+	assert.Nil(t, errs)
+
+	value = -3
+	errs = JSONVerifyInt(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+
+	value = 43
+	errs = JSONVerifyInt(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+
+	rules = map[string]interface{}{"range": map[string]interface{}{"min": float64(3), "max": float64(-5)}}
+	value = 0
+	errs = JSONVerifyInt(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 2)
+}
+
+func TestJSONInt_Value(t *testing.T) {
+	var value int
+	rules := map[string]interface{}{"value": float64(3)}
+
+	value = 3
+	errs := JSONVerifyInt(value, rules)
+	assert.Nil(t, errs)
+
+	value = 0
+	errs = JSONVerifyInt(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+}
+
+func TestJSONList_Element(t *testing.T) {
+	list := []interface{}{1.0, 2.0, 3.0}
+	element := map[string]interface{}{"type": "int", "range": map[string]interface{}{"min": float64(1), "max": float64(3)}}
+	rules := map[string]interface{}{"type": "list", "element": element}
+
+	errs := JSONVerifyList(list, rules)
+	assert.Nil(t, errs)
+
+	list = []interface{}{66.0, 77.0, 88.0}
+	errs = JSONVerifyList(list, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 3)
+}
+
+func TestJSONList_Len(t *testing.T) {
+	list := []interface{}{1.0, 2.0, 3.0, 4.0, 5.0}
+	element := map[string]interface{}{"type": "int"}
+	rules := map[string]interface{}{"type": "list", "element": element, "len": 5}
+
+	errs := JSONVerifyList(list, rules)
+	assert.Nil(t, errs)
+
+	list = []interface{}{6.0, 70}
+	errs = JSONVerifyList(list, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+}
+
+func TestJSONString_Value(t *testing.T) {
+	var value string
+	rules := map[string]interface{}{"type": "string", "value": "fizz buzz"}
+
+	value = "fizz buzz"
+	errs := JSONVerifyString(value, rules)
+	assert.Nil(t, errs)
+
+	value = "foo bar"
+	errs = JSONVerifyString(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+}
+
+func TestJSONString_Regex(t *testing.T) {
+	var value string
+	rules := map[string]interface{}{"type": "string", "regex": "He(llo|y!) [Ll]isten!"}
+
+	value = "Hey! Listen!"
+	errs := JSONVerifyString(value, rules)
+	assert.Nil(t, errs)
+
+	value = "Hello world"
+	errs = JSONVerifyString(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+
+	rules = map[string]interface{}{"type": "string", "regex": "^.{5,7}$"}
+	value = "12345"
+	errs = JSONVerifyString(value, rules)
+	assert.Nil(t, errs)
+
+	value = "123456789"
+	errs = JSONVerifyString(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+}
+
+func TestJSONString_Len(t *testing.T) {
+	var value string
+	rules := map[string]interface{}{"type": "string", "len": 7}
+
+	value = "Listen!"
+	errs := JSONVerifyString(value, rules)
+	assert.Nil(t, errs)
+
+	value = "Hello world"
+	errs = JSONVerifyString(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+}
+
+func TestJSONObject_Object(t *testing.T) {
+	value := map[string]interface{}{"id": 5, "name": "Curtis"}
+	object := map[string]interface{}{"id": JSONMap{"type": "int"}, "name": JSONMap{"type": "string"}}
+	rules := map[string]interface{}{"type": "object", "object": object}
+
+	errs := JSONVerifyObject(value, rules)
+	assert.Nil(t, errs)
+}
+
+func TestJSONObject_Template(t *testing.T) {
+	value := map[string]interface{}{"foo": "bar", "fizz": "buzz"}
+	rules := map[string]interface{}{"type": "object", "template": "template.json"}
+
+	errs := JSONVerifyObject(value, rules)
+	assert.Nil(t, errs)
+
+	rules = map[string]interface{}{"type": "object", "template": "nested_template.json:parent.child"}
+	errs = JSONVerifyObject(value, rules)
+	assert.Nil(t, errs)
+}
+
+func TestGamut_BothMinMax(t *testing.T) {
+	var value float64
+	value = 3
+	rules := map[string]interface{}{"min": 1, "max": 5.4}
+
+	errs := gamut(value, rules)
+	assert.Nil(t, errs)
+
+	value = -123
+	errs = gamut(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+
+	value = 123
+	errs = gamut(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+
+	rules = map[string]interface{}{"max": 1, "min": 5.4}
+	value = 2.5
+	errs = gamut(value, rules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 2)
+
+}
+
+func TestGamut_OptionalMinMax(t *testing.T) {
+	var value float64
+	value = 21
+	minRules := map[string]interface{}{"min": 3.14159}
+	maxRules := map[string]interface{}{"max": 42}
+	noRules := map[string]interface{}{"shit": "dont exist"}
+
+	errs := gamut(value, minRules)
+	assert.Nil(t, errs)
+
+	errs = gamut(value, maxRules)
+	assert.Nil(t, errs)
+
+	errs = gamut(value, noRules)
+	assert.NotNil(t, errs)
+	assert.Len(t, errs, 1)
+}
+
+func TestRegex(t *testing.T) {
+	value := "hey! listen!"
+	r := "^he(llo|y!).*"
+
+	errs := regex(value, r)
+	assert.Nil(t, errs)
+
+	value = "help me obi wan!"
+	errs = regex(value, r)
+	assert.NotNil(t, errs)
+	assert.Error(t, errs)
+}

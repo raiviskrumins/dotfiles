@@ -1,0 +1,296 @@
+from wtforms.validators import (
+    ValidationError,
+    StopValidation,
+    URL
+)
+from flask import g
+from amber_portal.lib.utils import amber_api_connection
+from amber_portal.models.user import CMUser
+from amber_lib import errors
+from datetime import datetime
+import phonenumbers
+
+
+class ValidInteger(object):
+    """ Verifies an integer, used for custom error message
+    """
+
+    def __init__(self, message=None):
+        if not message:
+            message = u'Please enter a whole number.'
+        self.message = message
+
+    def __call__(self, form, field):
+        if field.data and not field.data.isdigit():
+            raise ValidationError(self.message)
+
+
+class UnregisteredManufacturer(object):
+    """ Verifies data from a manufacturer has not been registered
+    """
+
+    def __init__(self, data=None, message=None):
+        if not message:
+            message = (
+                u'This email is already in use. ' +
+                'Please select a different email address.'
+            )
+        if not data:
+            data = 'email'
+        self.message = message
+        self.data = data
+
+    def __call__(self, form, field):
+        api_conn = amber_api_connection()
+        if field.data:
+            # TODO: i have no idea what im doing
+            try:
+                mfrs = api_conn.Manufacturer.query()
+            except errors.NotFound:
+                mfrs = []
+            for mfr in mfrs:
+                if mfr.get(self.data):
+                    if self.data == 'email':
+                        user = CMUser.query.filter_by(
+                            email=form.data['email'].lower()
+                        ).first()
+                        if user:
+                            raise ValidationError(self.message)
+                    if mfr.get(self.data).lower() == field.data.lower():
+                        raise ValidationError(self.message)
+
+
+class RequiredIf(object):
+    """ Makes a field required if another is filled in.
+    """
+
+    def __init__(self, dependent_field, message=None):
+        if not message:
+            message = u'This field is required.'
+        self.message = message
+        self.dependent_field = dependent_field
+
+    def __call__(self, form, field):
+        dependent_field = form._fields.get(self.dependent_field)
+        if dependent_field is None:
+            raise Exception('Field %s does not exist.' % self.dependent_field)
+
+        # If the dependent field contains data, raise a validation error
+        # if:
+        #   (1) the current field is None, or ...
+        #   (2) the field is a RadioField and contains an invalid choice, or ..
+        #   (3) the current field is a string and contains no info
+        if bool(dependent_field.data):
+            if (
+                not field.data or
+                (
+                    field.type == 'RadioField' and
+                    field.data not in [opt[0] for opt in field.choices]
+                ) or
+                isinstance(field.data, str) and
+                not field.data.strip()
+            ):
+                field.errors[:] = []
+                raise StopValidation(self.message)
+
+
+class RequireEither(object):
+    """ Require that data must be present in at least one of the fields: the
+    original parent field, or the specified companion field. If and only if
+    both fields have no data is a validation exception is raised.
+    """
+
+    def __init__(self, companion_field, message=None):
+        if not message:
+            message = u'This field or %s must be provided.' % companion_field
+        self.message = message
+        self.companion_field = companion_field
+
+    def __call__(self, form, field):
+        companion_field = form._fields.get(self.companion_field)
+        if companion_field is None:
+            raise Exception('Field %s does not exist.' % self.companion_field)
+
+        if not field.data and not companion_field.data:
+            field.errors[:] = []
+            raise StopValidation(self.message)
+
+
+class AlphanumericLength(object):
+    """ Validates a string to ensure a total alphanumeric character count.
+    """
+    def __init__(self, message=None, bottom_num=0, top_num=0):
+        self.bottom_num = bottom_num
+        self.top_num = top_num
+        if not message:
+            message = u'Please submit an entry containing between '\
+                + bottom_num + ' and ' + top_num + ' alphanumeric characters.'
+        self.message = message
+
+    def __call__(self, form, field):
+        stripped_string = ''
+        if field.data:
+            stripped_string = filter(lambda char: char.isalnum(), field.data)
+        else:
+            # If the filed contains no data - do not continue validating.
+            return
+
+        if len(stripped_string) < self.bottom_num \
+                or len(stripped_string) > self.top_num:
+            field.errors[:] = []
+            raise StopValidation(self.message)
+
+
+class PhoneNumber(object):
+    """ Validates a phone number in a range of standards
+    """
+    def __init__(self, message=None, local_format="US"):
+        self.format = local_format
+        if not message:
+            message = u'Please enter a valid phone number.'
+        self.message = message
+
+    def __call__(self, form, field):
+        try:
+            parsed_number = phonenumbers.parse(field.data, self.format)
+            pass
+        except phonenumbers.NumberParseException:
+            raise StopValidation(self.message)
+        if phonenumbers.is_possible_number(parsed_number):
+            return
+        else:
+            raise StopValidation(self.message)
+
+
+class ExpirationMonth(object):
+    """ Validates an expiration month for a credit card.
+    """
+    def __init__(self, year_field, message=None):
+        if not message:
+            message = u'Invalid expiration month.'
+        self.message = message
+        self.year_field = year_field
+
+    def __call__(self, form, field):
+        now = datetime.utcnow()
+        month = now.month
+        year = now.year
+
+        # try to get a valid year. if it fails, returns and lets the year
+        # validation handle any errors
+        try:
+            form_year = int(form.__getitem__(self.year_field).data)
+        except:
+            return
+
+        try:
+            form_month = int(field.data)
+        except:
+            raise ValidationError(self.message)
+
+        # if the year is the current year, month must be current month or later
+        if year == form_year and form_month < month:
+            raise ValidationError(self.message)
+
+        # otherwise month should be a number from 1-12
+        if form_month > 12 or form_month < 1:
+            raise ValidationError(self.message)
+
+
+class ExpirationYear(object):
+    """ Validates an expiration year for a credit card.
+    """
+    def __init__(self, message=None):
+        if not message:
+            message = u'Invalid expiration year.'
+        self.message = message
+
+    def __call__(self, form, field):
+        now = datetime.utcnow()
+        year = now.year
+
+        try:
+            form_year = int(field.data)
+        except:
+            raise ValidationError(self.message)
+
+        # year should be current year or later
+        if form_year < year:
+            raise ValidationError(self.message)
+
+        # max out at current year + 50 (same as stripe validation)
+        if form_year > (year + 50):
+            raise ValidationError(self.message)
+
+
+class PasswordRequirement(object):
+    """ Validates password to only return one message at a time
+    """
+    def __init__(self, min=0, max=0):
+        self.min = min
+        self.max = max
+
+    def __call__(self, form, field):
+        if field.data:
+            contains_number = any(char.isdigit() for char in field.data)
+            if len(field.data) < 8 and not contains_number:
+                raise ValidationError(
+                    u'Password must contain a minimum of '
+                    'eight characters with at least one number.'
+                )
+            elif not contains_number:
+                raise ValidationError(
+                    u'Password must contain at least one number.'
+                )
+            elif len(field.data) < 8:
+                raise ValidationError(
+                    u'Password must contain a minimum of eight characters.'
+                )
+
+
+class ExtendedURL(URL):
+    """Extends URL validator with custom functionality
+    """
+
+    def __init__(self, require_http=False, message=None):
+        if not message:
+            message = u'Please provide a valid URL for your website.'
+        self.message = message
+        self.require_http = require_http
+        super(ExtendedURL, self).__init__(message=self.message)
+
+    def __call__(self, form, field):
+        if not self.require_http:
+            field.data = self.fix_url(field.data)
+            super(ExtendedURL, self).__call__(form, field)
+
+    def fix_url(self, url):
+        if url[:4] != "http":
+            return "http://"+url
+        else:
+            return url
+
+
+class ValidateCollection(object):
+    def __init__(self, collection_id=None, collection_name=None):
+        self.collection_name = collection_name
+        self.collection_id = None
+        if collection_id:
+            self.collection_id = int(collection_id)
+
+    def __call__(self, form, field):
+        if not self.collection_id:
+            return False
+        if (
+            self.collection_id not in
+            [col['id'] for col in g.collections]
+        ):
+            if self.collection_name:
+                raise ValidationError(
+                    ('"%s" no longer exists. Please select another collection '
+                     'from the menu.') % (self.collection_name)
+                )
+            raise ValidationError(
+                'The previously selected collection no longer exists. Please'
+                ' choose a different collection.'
+            )

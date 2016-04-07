@@ -1,0 +1,48 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+)
+
+// Up is executed when this migration is applied
+func Up_20160204165653(txn *sql.Tx) {
+	tables := []string{
+		"box",
+		"cushion",
+		"door",
+		"drawer",
+		"image",
+		"option_set",
+		"pillow",
+		"shelf",
+		"table_leaf",
+	}
+
+	sql := `ALTER TABLE %s ALTER COLUMN parent_id SET NOT NULL`
+
+	for _, table := range tables {
+		txn.Exec(fmt.Sprintf(sql, table+"_component"))
+	}
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160204165653(txn *sql.Tx) {
+	tables := []string{
+		"box",
+		"cushion",
+		"door",
+		"drawer",
+		"image",
+		"option_set",
+		"pillow",
+		"shelf",
+		"table_leaf",
+	}
+
+	sql := `ALTER TABLE %s ALTER COLUMN parent_id DROP NOT NULL`
+
+	for _, table := range tables {
+		txn.Exec(fmt.Sprintf(sql, table+"_component"))
+	}
+}

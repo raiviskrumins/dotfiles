@@ -1,0 +1,260 @@
+"""
+amber_portal.lib.postman
+~~~~~~~~~~~~~~~~~~
+
+An object for sending emails. Uses the Mailgun API.
+
+
+:copyright: (c) 2014 by Doodle Home
+"""
+
+
+import os
+
+import requests
+
+from jinja2 import Template
+
+from email import utils
+from time import mktime
+from datetime import datetime, timedelta
+
+
+class Postman(object):
+    """ Wrapper class for sending emails, wraps :class:`MailgunAPI`
+    """
+
+    def __init__(self, app=None):
+        """ Class initializer, sets up :class:`MailgunAPI`
+
+        :param app: app to load config stuff from
+        :type app: :class:`flask.Flask` instance
+        """
+
+        self.app = app
+        self.scrivener = Scrivener(abs_path=app.config['ABS_PATH'])
+        self.mailgun_api = MailgunAPI(
+            app.config['MAILGUN_DOMAIN'],
+            app.config['MAILGUN_API_KEY']
+        )
+        self.default_from = app.config.get('MAILGUN_DEFAULT_FROM_EMAIL')
+
+    def add_user(self, email=None, name=None, description=None, list=None):
+        """ Adds a user to the specified Mailgun list
+
+        :param email: address of user
+        :type email: str
+
+        :param name: user's name
+        :type name: str
+
+        :param description: description of recipient
+        :type description: str
+
+        :param list: name of Mailgun list to subscribe user to
+        :type list: str
+
+        :return: response from Mailgun
+        :rtype: requests.Response instance
+        """
+
+        if not all([email, name, list]):
+            raise ValueError('"Email", "name" & "list" are all required kwargs.')
+
+        data = {
+            'subscribed': True,
+            'address': email,
+            'name': name,
+            'description': description or 'member'
+        }
+
+        return self.mailgun_api.add_user_to_list(list, **data)
+
+    def deliver(self, sender=None, to=None, cc=None, subject=None, template_name=None,
+                template_vars=None, campaign=None, delay=None):
+        """ Renders templates, passes along data to :attr:`mailgun_api`
+
+        :param to: recipient of letter
+        :type to: str
+
+        :param cc: recipient of carbon copy letter
+        :type cc: str
+
+        :param subject: subject line
+        :type subject: str
+
+        :param template: base name of template(s) to render
+        :type template: str
+
+        :param template_vars: contextual vars for rendering templates
+        :type template_vars: dict
+
+        :param campaign: name of Mailgun campaign thru which to track
+        :type campaign: str
+
+        :param delay: amount of time to delay the delivery
+        :type delay: datetime.timedelta
+
+        :return: response from Mailgun
+        :rtype: requests.Response instance
+        """
+
+        if not to:
+            raise ValueError('Need "to" kwarg to deliver letter.')
+
+        if not subject:
+            raise ValueError('Need "subject" kwarg to deliver letter.')
+
+        kwargs = {
+            'to': to,
+            'cc': cc,
+            'subject': subject,
+            'campaign': campaign
+        }
+
+        if delay is not None:
+            if delay > timedelta(days=3):
+                raise ValueError('Mailgun does not support delays greater than 3 days.')
+
+            delivery_date = datetime.now() + delay
+            delivery_time = mktime(delivery_date.timetuple())
+            kwargs['delivery_time'] = utils.formatdate(delivery_time)
+
+        if sender is not None:
+            kwargs['from'] = sender
+        else:
+            if self.default_from:
+                kwargs.setdefault('from', self.default_from)
+
+        template_vars = template_vars or {}
+        template_vars.setdefault('email', to)
+
+        html, text = self.scrivener.draft(template_name, template_vars)
+
+        if html is not None:
+            kwargs['html'] = html
+
+        if text is not None:
+            kwargs['text'] = text
+        print("&*$#@" * 300)
+        print(html)
+        print("&*$#@" * 300)
+        return self.mailgun_api.send_email(**kwargs)
+
+
+class Scrivener(object):
+    """ Simplistic, compositional class for templating
+    """
+
+    def __init__(self, abs_path=None):
+        self.abs_path = '/'.join(abs_path.split('/')[:-1])
+
+    def get_template(self, template_name, extension=None):
+        """ Helper method to load a template
+
+        :param template_name: name of template file, excepting the extension
+        :type template_name: str
+
+        :param extension: filetype
+        :type extension: str
+
+        :return: template object or None when none exists
+        :rtype: jinja2.Template instance or None
+        """
+
+        extension = extension or 'jinja2'
+
+        filename = '%s.%s' % (template_name, extension)
+
+
+        pathname = os.path.join(self.abs_path, 'emails', filename)
+
+        if not os.path.exists(pathname):
+            return None
+
+        with open(pathname) as template_file:
+            content = template_file.read()
+            content = content.decode('utf-8')
+            template = Template(content)
+
+        return template
+
+    def draft(self, template_name, template_vars=None):
+        """ Convenience method for rendering templates
+
+        :param template_name: name of template file to render
+        :type template_name: str
+
+        :param template_vars: contextual variables for rendering template
+        :type template_vars: dict
+
+        :return: rendered html, rendered text
+        :rtype: tuple
+        """
+
+        html = self.get_template(template_name, extension='jinja2')
+        text = self.get_template(template_name, extension='txt')
+
+        if not (html or text):
+            raise ValueError(
+                'No email templates for "%s" exist' % (template_name)
+            )
+
+        template_vars = template_vars or {}
+
+        if html is not None:
+            html = html.render(**template_vars)
+
+        if text is not None:
+            text = text.render(**template_vars)
+
+        return html, text
+
+
+class MailgunAPI(object):
+    """ Simple interface to mailgun api
+    """
+
+    def __init__(self, domain, api_key):
+        self.domain = domain
+        self.api_key = api_key
+
+    def send_email(self, **kwargs):
+        if 'campaign' in kwargs:
+            kwargs['o:campaign'] = kwargs.pop('campaign')
+
+        if 'delivery_time' in kwargs:
+            kwargs['o:deliverytime'] = kwargs.pop('delivery_time')
+
+        response = requests.post(
+            self.messages_endpoint,
+            data=kwargs,
+            auth=self.auth
+        )
+        response.raise_for_status()
+        return response
+
+    def add_user_to_list(self, list_name, **kwargs):
+        endpoint = self.build_lists_endpoint(list_name)
+
+        response = requests.post(
+            endpoint,
+            data=kwargs,
+            auth=self.auth
+        )
+        # not going to raise for status here...
+        # with local dev servers, we are likely to be already subscribed
+        # and i'd rather not issue a 400 exception here.
+        return response
+
+    @property
+    def auth(self):
+        return ('api', self.api_key)
+
+    @property
+    def messages_endpoint(self):
+        return 'https://api.mailgun.net/v2/{}/messages'.format(self.domain)
+
+    def build_lists_endpoint(self, list_name):
+        list = '{}@{}'.format(list_name, self.domain)
+        return 'https://api.mailgun.net/v2/lists/{}/members'.format(list)

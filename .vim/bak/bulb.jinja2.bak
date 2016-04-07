@@ -1,0 +1,10 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+
+<div class="row">
+  <div class="col-md-5">{{ basic_field(form.bulb.form.type) }}</div>
+  <div class="col-md-5">{{ basic_field(form.bulb.base) }}</div>
+</div>
+<div class="row">
+  <div class="col-md-5">{{ basic_field(form.bulb.quantity) }}</div>
+  <div class="col-md-5">{{ append_field(form.bulb.wattage, 'W') }}</div>
+</div>

@@ -1,0 +1,196 @@
+package routes
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/models"
+	"github.com/AmberEngine/api/oops"
+	"github.com/gorilla/context"
+	"github.com/julienschmidt/httprouter"
+	"github.com/justinas/alice"
+)
+
+func DefineFormSchemaRoutes(router *lib.Router, ctx *RouteContext, handlers alice.Chain) {
+	router.Post("/form_schemas", handlers.ThenFunc(ctx.CreateAPIKey))
+	router.Put("/api_keys/:id", handlers.ThenFunc(ctx.UpdateAPIKey))
+	router.Get("/api_keys/:id", handlers.ThenFunc(ctx.RetrieveAPIKey))
+	router.Get("/api_keys", handlers.ThenFunc(ctx.ListAPIKeys))
+	router.Delete("/api_keys/:id", handlers.ThenFunc(ctx.DeleteAPIKey))
+}
+
+// CreateAPIKey will generate a new API key using the provided JSON data
+// payload, and return the created API Key as marshalled JSON.
+func (c *RouteContext) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
+	reqPayload, e := lib.RequestData(r)
+	if e != nil {
+		panic(e)
+	}
+
+	dataPayload := lib.JSONReaderCloser{bytes.NewReader(reqPayload.Data)}
+	apiKey, e := models.CreateAPIKey(c.Context, dataPayload, reqPayload.PublicKey)
+	if e != nil {
+		panic(e)
+	}
+
+	res, e := lib.NewResource(apiKey)
+	if e != nil {
+		panic(e)
+	}
+
+	selfLink := lib.HALHref{Endpoint: "/api_keys/" + strconv.Itoa(int(apiKey.ID.Int64))}
+	res.AddLink("self", selfLink)
+
+	jsonResponse, err := json.Marshal(res)
+	if err != nil {
+		panic(oops.ServerError("", "Could not marshal API Key to JSON.", err, apiKey))
+	}
+
+	w.Header().Set("Content-Type", "application/hal+json")
+	fmt.Fprint(w, string(jsonResponse))
+}
+
+// UpdateAPIKey will update the specified API Key and return it as mashalled
+// JSON. The desired API key to updatee is specified via the ID URL-parameter.
+func (c *RouteContext) UpdateAPIKey(w http.ResponseWriter, r *http.Request) {
+	reqPayload, e := lib.RequestData(r)
+	if e != nil {
+		panic(e)
+	}
+
+	params := context.Get(r, "params").(httprouter.Params)
+
+	if len(params.ByName("id")) == 0 {
+		panic(oops.BadRequest("Must specify an APIKey ID to update."))
+	}
+
+	id, err := strconv.Atoi(params.ByName("id"))
+	if err != nil {
+		panic(oops.ServerError("", "Could not convert string API Key ID to int.", err))
+	}
+
+	payloadReader := bytes.NewReader(bytes.NewBuffer(reqPayload.Data).Bytes())
+	payload := lib.JSONReaderCloser{payloadReader}
+
+	apiKey, e := models.UpdateAPIKey(c.Context, id, payload)
+	if e != nil {
+		panic(e)
+	}
+
+	res, e := lib.NewResource(apiKey)
+	if e != nil {
+		panic(e)
+	}
+
+	selfLink := lib.HALHref{Endpoint: lib.Join("", "api_keys/", params.ByName("id"))}
+	res.AddLink("self", selfLink)
+
+	jsonResponse, err := json.Marshal(res)
+	if err != nil {
+		panic(oops.ServerError("", "Could not marshal API Key to JSON.", err, apiKey))
+	}
+
+	w.Header().Set("Content-Type", "application/hal+json")
+	fmt.Fprint(w, string(jsonResponse))
+}
+
+// RetrieveAPIKey will retrieve an API Key as mashalled JSON. The desired API
+// key to retrieve is specified via the ID URL-parameter.
+func (c *RouteContext) RetrieveAPIKey(w http.ResponseWriter, r *http.Request) {
+	params := context.Get(r, "params").(httprouter.Params)
+
+	if len(params.ByName("id")) == 0 {
+		panic(oops.BadRequest("Must specify an APIKey ID to retrieve."))
+	}
+
+	id, err := strconv.Atoi(params.ByName("id"))
+	if err != nil {
+		panic(oops.ServerError("", "Could not convert string API Key ID to int.", err))
+	}
+
+	apiKey, e := models.RetrieveAPIKey(c.Context, id)
+	if e != nil {
+		panic(e)
+	}
+
+	res, e := lib.NewResource(apiKey)
+	if e != nil {
+		panic(e)
+	}
+
+	selfLink := new(lib.HALHref)
+	selfLink.FromURI(r.RequestURI)
+	res.AddLink("self", *selfLink)
+
+	jsonResponse, err := json.Marshal(res)
+	if err != nil {
+		panic(oops.ServerError("", "Could not marshal API Key to JSON.", err, apiKey))
+	}
+
+	w.Header().Set("Content-Type", "application/hal+json")
+	fmt.Fprint(w, string(jsonResponse))
+}
+
+// ListAPIKeys will return a collection of APIKeys associated with the provided
+// public key.
+func (c *RouteContext) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	var collection []models.APIKey
+
+	if publicKey := r.URL.Query().Get("public_key"); len(publicKey) > 0 {
+		apiKey, e := models.RetrieveAPIKeyByPublic(c.Context, publicKey)
+		if e != nil {
+			panic(e)
+		}
+		collection = append(collection, *apiKey)
+	}
+
+	resultMap := make(map[string]int)
+	resultMap["total"] = len(collection)
+	resultMap["count"] = len(collection)
+
+	responseResource, e := lib.NewResource(resultMap)
+	if e != nil {
+		panic(e)
+	}
+
+	responseResource.AddNavLinks(len(collection), 0, 0)
+
+	for _, val := range collection {
+		res, e := lib.NewResource(val)
+		if e != nil {
+			panic(e)
+		}
+		res.AddLink("self", lib.HALHref{Endpoint: "/api_keys/" + strconv.Itoa(int(val.ID.Int64))})
+		responseResource.EmbedIn("api_keys", res)
+	}
+
+	jsonResponse, err := json.Marshal(responseResource)
+	if err != nil {
+		panic(err)
+	}
+
+	w.Header().Set("Content-Type", "application/hal+json")
+	fmt.Fprint(w, string(jsonResponse))
+}
+
+// DeleteAPIKey will delete a API Key as specified by the URL-paramater ID number,
+// and return a "success" JSON object.
+func (c *RouteContext) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
+	params := context.Get(r, "params").(httprouter.Params)
+	id, err := strconv.Atoi(params.ByName("id"))
+	if err != nil {
+		panic(err)
+	}
+
+	e := models.DeleteAPIKey(c.Context, id)
+	if e != nil {
+		panic(e)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprint(w, `{}`)
+}

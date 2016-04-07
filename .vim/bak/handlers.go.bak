@@ -1,0 +1,278 @@
+package routes
+
+import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"reflect"
+	"time"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/models"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/permissions"
+	"github.com/gorilla/context"
+)
+
+func RecoverHandlerTesting(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				var caughtErr oops.Error
+				var ok bool
+				if caughtErr, ok = err.(oops.Error); !ok {
+					caughtErr = oops.ServerError("", err)
+				}
+
+				//caughtErr.Log() // Sometimes this is useful.
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(caughtErr.HTTPStatus())
+				json.NewEncoder(w).Encode(caughtErr)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+func RecoverHandler(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				var caughtErr oops.Error
+				var ok bool
+
+				if caughtErr, ok = err.(oops.Error); !ok {
+					caughtErr = oops.ServerError("", err)
+				}
+
+				caughtErr.Log()
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(caughtErr.HTTPStatus())
+				json.NewEncoder(w).Encode(caughtErr)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+func LoggingHandler(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		logger := log.New(os.Stdout, "", log.LstdFlags)
+		t1 := time.Now()
+		next.ServeHTTP(w, r)
+		t2 := time.Now()
+		logger.Printf("[%s] %q %v\n", r.Method, r.URL.String(), t2.Sub(t1))
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+func (c *RouteContext) AuthenticationHandler(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		req, e := lib.RequestData(r)
+
+		if e != nil {
+			panic(e)
+		}
+		signature := req.Signature
+
+		ourBytes, err := base64.StdEncoding.DecodeString(signature)
+		if err != nil {
+			panic(oops.ServerError("Failed to decode authentication signature", "Cannot base64 decode signature", err))
+		}
+
+		req.Signature = string(ourBytes)
+
+		publicKey := req.PublicKey
+		decodedSignature := req.Signature
+		req.Signature = ""
+
+		marshalledReq, err := req.MarshalJSON()
+		if err != nil {
+			panic(oops.ServerError("", "Cannot marshal request", err))
+		}
+
+		apiKey, e := models.RetrieveAPIKeyByPublic(c.Context, publicKey)
+		if e != nil {
+			panic(e)
+		}
+		hash := sha256.New()
+		hash.Write(marshalledReq)
+		hash.Write([]byte(apiKey.Private.String))
+
+		// Seems like on dev enviroments, Scheme and Host are not set correctly.
+		if len(r.URL.Scheme) == 0 {
+			if r.TLS == nil {
+				r.URL.Scheme = "http"
+			} else {
+				r.URL.Scheme = "https"
+			}
+		}
+
+		if len(r.URL.Host) == 0 {
+			r.URL.Host = r.Host
+		}
+
+		var url string
+		err = json.Unmarshal(req.URL, &url)
+		if err != nil {
+			panic(err)
+		}
+
+		if url != r.URL.String() {
+			msg := fmt.Sprintf("Payload URL: %s does not match Requested URL: %s", url, r.URL.String())
+			panic(oops.BadRequest(msg, ""))
+		}
+
+		if string(decodedSignature) == fmt.Sprintf("%x", hash.Sum([]byte{})) {
+			next.ServeHTTP(w, r)
+		} else {
+			panic(oops.Unauthorized("Authentication failed", apiKey))
+		}
+		c.Role = permissions.UserRole(apiKey.RoleName.String)
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+func (c *RouteContext) PermissionsHandler(resourceName string, perms ...permissions.Permission) func(next http.Handler) http.Handler {
+	fmt.Println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+	return func(next http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			// Reset context vars between requests
+			c.APIKey = new(models.APIKey)
+			c.Role = make(map[string]permissions.Permission)
+
+			req, e := lib.RequestData(r)
+			if e != nil {
+				panic(e)
+			}
+			signature := req.Signature
+
+			ourBytes, err := base64.StdEncoding.DecodeString(signature)
+			if err != nil {
+				panic(oops.ServerError("Failed to decode authentication signature", "Cannot base64 decode signature", err))
+			}
+
+			req.Signature = string(ourBytes)
+
+			publicKey := req.PublicKey
+			decodedSignature := req.Signature
+			req.Signature = ""
+
+			marshalledReq, err := req.MarshalJSON()
+			if err != nil {
+				panic(oops.ServerError("", "Cannot marshal request", err))
+			}
+
+			apiKey, e := models.RetrieveAPIKeyByPublic(c.Context, publicKey)
+			if e != nil {
+				panic(e)
+			}
+			hash := sha256.New()
+			hash.Write(marshalledReq)
+			hash.Write([]byte(apiKey.Private.String))
+
+			// Seems like on dev enviroments, Scheme and Host are not set correctly.
+			if len(r.URL.Scheme) == 0 {
+				if r.TLS == nil {
+					r.URL.Scheme = "http"
+				} else {
+					r.URL.Scheme = "https"
+				}
+			}
+
+			if len(r.URL.Host) == 0 {
+				r.URL.Host = r.Host
+			}
+
+			var url string
+			err = json.Unmarshal(req.URL, &url)
+			if err != nil {
+				panic(err)
+			}
+
+			if url != r.URL.String() {
+				msg := fmt.Sprintf("Payload URL: %s does not match Requested URL: %s", url, r.URL.String())
+				panic(oops.BadRequest(msg, ""))
+			}
+
+			if string(decodedSignature) == fmt.Sprintf("%x", hash.Sum([]byte{})) {
+				c.Role = permissions.UserRole(apiKey.RoleName.String)
+				c.APIKey = apiKey
+				permSet := c.Role[resourceName]
+				allowed := true
+				for _, perm := range perms {
+					if permSet&perm == 0 {
+						allowed = false
+						break
+					}
+				}
+				if !allowed {
+					panic(oops.Forbidden(fmt.Sprintf("User does not have required permissions in role %s.", apiKey.RoleName.String)))
+				}
+				next.ServeHTTP(w, r)
+			} else {
+				panic(oops.Unauthorized("Authentication failed", apiKey))
+			}
+		}
+
+		return http.HandlerFunc(fn)
+	}
+}
+
+func AcceptHandler(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept") != "application/hal+json" {
+			panic(oops.NotAcceptable("", ""))
+		}
+
+		next.ServeHTTP(w, r)
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+func ContentTypeHandler(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Content-Type") != "application/hal+json" {
+			panic(oops.UnsupportedMediaType("", ""))
+		}
+
+		next.ServeHTTP(w, r)
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+func BodyHandler(v interface{}) func(http.Handler) http.Handler {
+	t := reflect.TypeOf(v)
+
+	m := func(next http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			val := reflect.New(t).Interface()
+			err := json.NewDecoder(r.Body).Decode(val)
+
+			if err != nil {
+				panic(oops.ServerError("", err))
+			}
+
+			if next != nil {
+				context.Set(r, "body", val)
+				next.ServeHTTP(w, r)
+			}
+		}
+
+		return http.HandlerFunc(fn)
+	}
+
+	return m
+}

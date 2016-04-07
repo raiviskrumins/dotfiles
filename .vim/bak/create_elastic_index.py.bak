@@ -1,0 +1,270 @@
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from amber_api import app
+from amber_api.models import db
+
+from amber_api.lib.es_util import (
+    create_es_connection,
+    ProductSearchDocument,
+    ManufacturerSearchDocument
+)
+from amber_api.lib.assemblage import fetch_products
+from elasticsearch import helpers
+
+synonym_list = [
+    'sofa, couch',
+    'coffee table, cocktail table',
+    'kitchen, dining',
+    'end table, side table',
+    'window treatment, drapery, curtain',
+    'fabric, textile',
+    'flush mount, ceiling mount',
+    'throw, blanket',
+    'book end, bookend',
+    'art, picture',
+    'kid, youth',
+    'artwork, art work'
+]
+
+
+def build_manufacturer_index():
+    es = create_es_connection()
+    bulk_data = []
+    index = 'manufacturer-index'
+
+    manufacturers = db.session.execute(
+        'select '
+        'id, '
+        'name, '
+        'date_added, '
+        'date_updated, '
+        'active, '
+        'featured, '
+        'logo_url, '
+        'url '
+        'from manufacturer'
+    ).fetchall()
+    manufacturers = [dict(m) for m in manufacturers]
+
+    if es.indices.exists(index):
+        es.indices.delete(index=index)
+
+    es.indices.create(
+        index=index,
+        body={
+            'settings': {
+                'number_of_shards': 1,
+                'number_of_replicas': 0,
+                'analysis': {
+                    'analyzer': {
+                        'case_insensitive_sort': {
+                            'tokenizer': 'keyword',
+                            'filter': ['lowercase']
+                        }
+                    }
+                }
+            },
+            'mappings': {
+                'manufacturer': {
+                    'properties': {
+                        'id': {
+                            'type': 'integer'
+                        },
+                        'name': {
+                            'type': 'string',
+                            'fields': {
+                                'raw': {
+                                    'type': 'string',
+                                    'analyzer': 'case_insensitive_sort'
+                                }
+                            }
+                        },
+                        'date_added': {
+                            'type': 'date'
+                        },
+                        'date_updated': {
+                            'type': 'date'
+                        },
+                        'active': {
+                            'type': 'boolean'
+                        },
+                        'featured': {
+                            'type': 'boolean'
+                        },
+                        'logo_url': {
+                            'type': 'string'
+                        },
+                        'url': {
+                            'type': 'string'
+                        },
+                        'featured_url': {
+                            'type': 'string'
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+    for m in manufacturers:
+        featured_url = db.session.execute(
+            'select url from manufacturer_image where manufacturer_id = %d '
+            'and manufacturer_image.default = true'
+            % m['id']
+        ).first()
+        print("Feature URL", feature_url)
+        m['featured_url'] = featured_url[0] if featured_url else None
+        manufacturer_doc = ManufacturerSearchDocument()
+        manufacturer_doc.map_manufacturer(m)
+        manufacturer = manufacturer_doc.to_dict()
+        manufacturer_dict = {
+            '_index': index,
+            '_type': 'manufacturer',
+            '_id': manufacturer['id'],
+            '_source': manufacturer
+        }
+        bulk_data.append(manufacturer_dict)
+
+    helpers.bulk(es, bulk_data)
+
+
+def build_product_index():
+    es = create_es_connection()
+    bulk_data = []
+    index = 'product-index'
+
+    products = fetch_products()
+
+    if es.indices.exists(index):
+        es.indices.delete(index=index)
+
+    es.indices.create(
+        index=index,
+        body={
+            'settings': {
+                'number_of_shards': 1,
+                'number_of_replicas': 0,
+                'analysis': {
+                    'filter': {
+                        'synonym': {
+                            'type': 'synonym',
+                            'synonyms': synonym_list
+                        }
+                    },
+                    'analyzer': {
+                        'case_insensitive_sort': {
+                            'tokenizer': 'keyword',
+                            'filter': ['lowercase']
+                        },
+                        'synonym': {
+                            'tokenizer': 'standard',
+                            'filter': [
+                                'lowercase',
+                                'porter_stem',
+                                'stop',
+                                'synonym'
+                            ]
+                        },
+                        'english': {
+                            'tokenizer': 'standard',
+                            'filter': ['lowercase', 'porter_stem']
+                        }
+                    }
+                }
+            },
+            'mappings': {
+                'product': {
+                    'properties': {
+                        'id': {
+                            'type': 'integer'
+                        },
+                        'name': {
+                            'type': 'string',
+                            'fields': {
+                                'synonym': {
+                                    'type': 'string',
+                                    'analyzer': 'synonym'
+                                },
+                                'stemming': {
+                                    'type': 'string',
+                                    'analyzer': 'english'
+                                },
+                                'raw': {
+                                    'type': 'string',
+                                    'analyzer': 'case_insensitive_sort'
+                                }
+                            }
+                        },
+                        'manufacturer_name': {
+                            'type': 'string'
+                        },
+                        'manufacturer_id': {
+                            'type': 'integer'
+                        },
+                        'manufacturer_active': {
+                            'type': 'boolean'
+                        },
+                        'manufacturer_sku': {
+                            'type': 'string'
+                        },
+                        'description': {
+                            'type': 'string',
+                            'fields': {
+                                'synonym': {
+                                    'type': 'string',
+                                    'analyzer': 'synonym'
+                                },
+                                'stemming': {
+                                    'type': 'string',
+                                    'analyzer': 'english'
+                                }
+                            }
+                        },
+                        'active': {
+                            'type': 'boolean'
+                        },
+                        'meets_posting_requirements': {
+                            'type': 'boolean'
+                        },
+                        'date_added': {
+                            'type': 'date'
+                        },
+                        'date_updated': {
+                            'type': 'date'
+                        },
+                        'category': {
+                            'type': 'string'
+                        },
+                        'full_size_image': {
+                            'type': 'string'
+                        },
+                        'thumbnail_image': {
+                            'type': 'string'
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+    for p in products:
+        product_doc = ProductSearchDocument()
+        product_doc.map_product(p)
+        product = product_doc.to_dict()
+        product_dict = {
+            '_index': index,
+            '_type': 'product',
+            '_id': product['id'],
+            '_source': product
+        }
+        bulk_data.append(product_dict)
+
+    helpers.bulk(es, bulk_data)
+
+
+if __name__ == '__main__':
+    with app.app_context():
+        build_manufacturer_index()
+        build_product_index()

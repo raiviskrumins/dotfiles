@@ -1,0 +1,16 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20160203115058(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE shipping_information_component ADD COLUMN country_of_origin character varying;")
+
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160203115058(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE shipping_information_component DROP COLUMN country_of_origin;")
+}

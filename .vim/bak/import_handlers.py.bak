@@ -1,0 +1,325 @@
+from copy import deepcopy
+import os
+import sys
+import urllib
+
+sys.path.insert(
+    0, os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from amber_portal import app
+from amber_portal.lib.s3 import (
+    upload_image,
+    upload_stream
+)
+
+
+def default_format(product_dict, attr_map, value):
+    list_keys_field = attr_map.get('list_keys')
+    keys_field = attr_map.get('keys')
+    index_list = product_dict
+    if keys_field and 'product_id' in keys_field:
+        index_list['id'] = value
+    # row is used for the headers/subheaders and active_row is index we're
+    # incrementing through the number of total rows, so we add the values to
+    # start on just the product rows. If list_keys_field was set in the
+    # attr_map for this attribute then that means the field is actually a list
+    # in the dictionary representation of the product.
+    if list_keys_field:
+        for arg in list_keys_field[:-1]:
+            # Here we either create a new sub-dictionary for the key in the
+            # dictionary representation of the product or we use the one that
+            # already exists.
+            index_list[arg] = index_list.get(
+                arg, {}
+            )
+            index_list = index_list[arg]
+
+        # Similarly here we either create the new list or we use the existing
+        # one.
+        index_list[list_keys_field[-1]] = (
+            index_list.get(list_keys_field[-1], [])
+        )
+        index_list = index_list[list_keys_field[-1]]
+
+        # If single_cell is set to true that means we have multiple attribute
+        # values in a single cell. We need to turn those values into a list and
+        # add them to each of the items in the list within the product
+        # dictionary.
+        if isinstance(value, list):
+            for i in xrange(len(value)):
+                while i >= len(index_list):
+                    index_list.append({})
+                index_item = index_list[i]
+                for arg in keys_field[:-1]:
+                    index_item[arg] = index_item.get(arg, {})
+                    index_item = index_item[arg]
+                if value[i] is not None:
+                    index_item[keys_field[-1]] = value[i]
+        else:
+            new_item = {}
+            new_item_index = new_item
+            for arg in keys_field[:-1]:
+                new_item_index[arg] = {}
+            new_item_index[keys_field[-1]] = value
+            found = False
+            for i in xrange(len(index_list)):
+                if index_list and keys_field[-1] not in index_list[i]:
+                    index_list_item = deepcopy(index_list[i])
+                    index_list_item.update(new_item)
+                    index_list[i] = index_list_item
+                    found = True
+                    break
+            if not found:
+                index_list.append(new_item)
+
+    else:
+        for arg in keys_field[:-1]:
+            index_list[arg] = index_list.get(arg, {})
+            index_list = index_list[arg]
+        index_list[keys_field[-1]] = value
+
+
+def concatenate_values(product_dict, attr_map, value):
+    if value and isinstance(value, str):
+        keys = attr_map.get('keys')
+        delimiter = attr_map.get('delimiter', ' x ')
+        val_list = value.split(delimiter)
+        for index in xrange(len(val_list)):
+            index_attr_map = {
+                'keys': keys[index]
+            }
+            default_format(product_dict, index_attr_map, val_list[index])
+
+
+def price_format(product_dict, attr_map, value):
+    if isinstance(value, str) or isinstance(value, unicode):
+        unformatted_price = value.replace('$', '')
+        if unformatted_price.find('.') > -1:
+            float_price = float(unformatted_price)
+            float_price *= 100.0
+            unformatted_price = int(float_price)
+        else:
+            unformatted_price += '00'
+        price_value = int(unformatted_price)
+        default_format(product_dict, attr_map, price_value)
+    elif value and isinstance(value, int):
+        default_format(product_dict, attr_map, value*100)
+    elif value and isinstance(value, float):
+        value = int(100.0*value)
+        default_format(product_dict, attr_map, value)
+
+
+def default_repeat_format(product_dict, attr_map, value):
+    default_format(product_dict, attr_map, value)
+
+
+def list_length_repeat(product_dict, attr_map, value):
+    corrected_attr_map = {
+        'keys': attr_map.get('keys')
+    }
+    default_format(product_dict, corrected_attr_map, value)
+
+
+def multi_default_handler(product_dict, attr_map, value):
+    if attr_map.get('single_cell') and isinstance(value, list):
+        keys_list = attr_map.get('keys')
+        for index in xrange(len(value)):
+            this_attr_map = {
+                'keys': keys_list[index]
+            }
+            default_format(product_dict, this_attr_map, value[index])
+    # TODO: if single_cell is false then this gets pretty complicated.
+    # We won't have a way of determining which list inside of keys
+    # corresponds to the value retrieved.
+
+
+def lead_time(product_dict, attr_map, value):
+    unit = attr_map.get('unit', '')
+    lead_time_keys = [
+        'ordering_information',
+        'lead_time'
+    ]
+    lead_time_unit_keys = [
+        'ordering_information',
+        'lead_time_unit'
+    ]
+    value_attr_map = {
+        'keys': lead_time_keys
+    }
+    unit_attr_map = {
+        'keys': lead_time_unit_keys
+    }
+    default_format(product_dict, value_attr_map, value)
+    default_format(product_dict, unit_attr_map, unit)
+
+
+def category_format(product_dict, attr_map, value):
+    keys = attr_map.get('keys', [])
+    if value:
+        value = value.lower()
+        value = value.replace(' ', '_')
+    if keys[-1] == 'category':
+        default_format(product_dict, attr_map, value)
+    elif keys[-1] == 'primary_sub_category':
+        prepend = product_dict.get('category', {}).get('category')
+        if prepend:
+            value = '%s_%s' % (prepend, value)
+            default_format(product_dict, attr_map, value)
+    elif keys[-1] == 'secondary_sub_category':
+        prepend = product_dict.get('category', {}).get('primary_sub_category')
+        if prepend:
+            value = '%s_%s' % (prepend, value)
+            default_format(product_dict, attr_map, value)
+
+
+def keywords(product_dict, attr_map, value):
+    values = value.split(',')
+    for i in xrange(len(values)):
+        values[i] = values[i].strip()
+    values_str = ',' + ','.join(values)
+    default_format(product_dict, attr_map, values_str)
+
+
+def ch_images(product_dict, attr_map, value):
+    from time import time
+    if 'did not work' in value:
+        return
+    from StringIO import StringIO
+    from base64 import encodestring
+    from PIL import Image
+    import json
+    import pika
+    from time import sleep
+    access = app.config['S3_ACCESS']
+    secret = app.config['S3_SECRET']
+    s3_bucket = app.config['S3_BUCKET']
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(host='localhost')
+    )
+    channel = connection.channel()
+    channel.queue_declare(queue='image_queue', durable=True)
+    values = value.split(',')
+    first = 1
+    if attr_map.get('range'):
+        first = attr_map['range'][0]
+        values[1] = attr_map['range'][1]
+    for i in xrange(first, int(values[1])+1):
+        digit_count = len(str(i))
+        sub_str_index = (-1 * (digit_count - 1))
+        url = values[0]
+        url += str(i) + '.jpg'
+        img_file = urllib.urlopen(url)
+        if img_file.getcode() != 200:
+            if sub_str_index < 0:
+                url = values[0][:sub_str_index] + str(i) + '.jpg'
+                img_file = urllib.urlopen(url)
+                if img_file.getcode() != 200:
+                    continue
+            else:
+                continue
+
+        image_buffer = StringIO(img_file.read())
+        filename = url
+        while filename.find('/') > -1:
+            filename = filename[filename.find('/')+1:]
+        img_file.filename = filename
+        img_url = upload_image(img_file, access, secret, s3_bucket=s3_bucket, stream=True, mimetype='image/jpeg')
+        try:
+            image = Image.open(image_buffer)
+        except Exception as e:
+            sleep(1)
+            image_buffer = StringIO(urllib.urlopen(img_url).read())
+            image = Image.open(image_buffer)
+        image_container = StringIO()
+        image.save(image_container, 'jpeg')
+        img_string = encodestring(image_container.getvalue())
+
+        message = json.dumps({
+            'url': img_url,
+            'image': img_string
+        })
+
+        channel.basic_publish(
+            exchange='',
+            routing_key='image_queue',
+            body=message,
+            properties=pika.BasicProperties(delivery_mode=2)
+        )
+        image_attr_map = {
+            'list_keys': [
+                'image',
+                'images'
+            ],
+            'keys': ['full_size']
+        }
+        default_format(product_dict, image_attr_map, img_url)
+
+        if i == 1:
+            image_attr_map['keys'] = ['default']
+            default_format(product_dict, image_attr_map, True)
+
+        image_attr_map['keys'] = ['thumbnail']
+        temp_url = img_url[:-5] + '_150.jpeg'
+        default_format(product_dict, image_attr_map, temp_url)
+
+        image_attr_map['keys'] = ['medium']
+        temp_url = img_url[:-5] + '_300.jpeg'
+        default_format(product_dict, image_attr_map, temp_url)
+
+        image_attr_map['keys'] = ['large']
+        temp_url = img_url[:-5] + '_640.jpeg'
+        default_format(product_dict, image_attr_map, temp_url)
+    if values[0] == 'http://cornerltd.com/jpegs/PC777_paris_ottoman_bed/PC777-000' and 'range' not in attr_map:
+        new_attr_map = {
+            'range': [12, 19]
+        }
+        ch_images(product_dict, new_attr_map, value)
+        new_attr_map['range'] = [40, 61]
+        ch_images(product_dict, new_attr_map, value)
+
+    if values[0] == 'http://cornerltd.com/jpegs/TBM-10_tivoli_bamboo_magazine_lamp_table/TBM-10-000':
+        val = 'http://cornerltd.com/jpegs/TBM-10_tivoli_bamboo_magazine_lamp_table/TBM-10_000,3'
+        ch_images(product_dict, attr_map, val)
+
+    connection.close()
+
+
+def ch_keywords(product_dict, attr_map, value):
+    values = value.split(',')
+    for i in xrange(len(values)):
+        values[i] = values[i].strip()
+    values_str = ',' + ','.join(values)
+    default_format(product_dict, attr_map, values_str)
+
+
+# TODO: Uncomment this when the API has been updated to allow us to access the
+# assemblage information for multi value fields.
+"""def multi_value_list(product_dict, attr_map, values):
+    assemblages = attr_map.get('assemblages')
+    keys = attr_map.get('keys', [])
+    attr_map.pop('assemblages', None)
+    attr_map.pop('handler', None)
+    for assemblage in assemblages.values():
+        component = assemblage.get('components', [])
+        found = False
+        for comp in component:
+            if comp.get('name') == keys[0]:
+                component = comp.get('fields')
+                for key in keys[1:]:
+                    component = component.get(key)
+                    if not component:
+                        break
+                if component:
+                    found = True
+                break
+        if found:
+            choices = component.get('choices', [])
+            value_ids = []
+            if values:
+                for value in values:
+                    for choice in choices:
+                        if choice[1] == value:
+                            value_ids.append(choice[0])
+                default_format(product_dict, attr_map, value_ids)
+            return"""

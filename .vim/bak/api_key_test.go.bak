@@ -1,0 +1,298 @@
+package models
+
+import (
+	"bytes"
+	"database/sql"
+	"encoding/json"
+	"testing"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/test_utils"
+	"github.com/stretchr/testify/assert"
+)
+
+const clientPublicKey = "8abe_1_test_public_test_public_test_public_test_public_test_publ"
+
+// CreateMockAPIKey creates a pointer to a new instance of the APIKey struct, and
+// populates the struct with the parameters provided.
+func CreateMockAPIKey(id int64, name, pub, priv, keyType string, mfrID, scID int64, role string) *APIKey {
+	return &APIKey{
+		ID:             lib.IntField{sql.NullInt64{id, id > 1}},
+		Name:           lib.StringField{sql.NullString{name, len(name) > 0}},
+		Public:         lib.StringField{sql.NullString{pub, len(pub) > 0}},
+		Private:        lib.StringField{sql.NullString{priv, len(priv) > 0}},
+		Kind:           lib.StringField{sql.NullString{keyType, len(keyType) > 0}},
+		ManufacturerID: lib.IntField{sql.NullInt64{mfrID, mfrID > 1}},
+		SalesChannelID: lib.IntField{sql.NullInt64{scID, scID > 1}},
+		RoleName:       lib.StringField{sql.NullString{role, len(role) > 0}},
+	}
+}
+
+// TestDeleteAPIKey_InvalidKey asserts that it is not possible to delete a
+// key from the database using a APIKey ID that is non-existant.
+func TestDeleteAPIKey_InvalidKey(t *testing.T) {
+	// This key does not exist in the database.
+	keyID := 101010
+
+	e := DeleteAPIKey(TestCtx, keyID)
+
+	assert.Error(t, e)
+}
+
+// TestDeleteAPIKey_Valid asserts that it is possible to delete a APIKey
+// from the database using a existing APIKey ID.
+func TestDeleteAPIKey_Valid(t *testing.T) {
+	keyID := 48
+	e := DeleteAPIKey(TestCtx, keyID)
+
+	if !assert.NoError(t, e) {
+		return
+	}
+
+	// Check to make sure the API was actually removed.
+	apiKey, e := RetrieveAPIKey(TestCtx, keyID)
+	assert.Nil(t, apiKey)
+	assert.Error(t, e)
+}
+
+// TestCreateAPIKey attempts to assert that a new API Key will be inserted into the
+// database, and returned as a API Key instance.
+func TestCreateAPIKey(t *testing.T) {
+	var jsonData [2]test_utils.MockJSON
+	jsonData[0] = test_utils.MockJSON{bytes.NewBufferString(`{"name": "john2@example.com", "type": "user_key", "role_name": "ManufacturerUser"}`)}
+	jsonData[1] = test_utils.MockJSON{bytes.NewBufferString(`{"name": "jane2@example.com", "type": "user_key", "role_name": "ManufacturerUser"}`)}
+
+	for _, value := range jsonData {
+		createdAPIKey, e := CreateAPIKey(TestCtx, value, clientPublicKey)
+		if assert.NotNil(t, createdAPIKey) && assert.NoError(t, e) {
+			if assert.True(t, createdAPIKey.ID.Valid) {
+				assert.True(t, createdAPIKey.ID.Int64 > 0, "The Primary-key ID must be greater than 0.")
+			}
+			apiKey, e := RetrieveAPIKey(TestCtx, int(createdAPIKey.ID.Int64))
+			if assert.NotNil(t, apiKey) && assert.NoError(t, e) {
+				assert.True(t, apiKey.ID.Int64 > 0, "The Primary-key ID must be greater than 0.")
+			}
+		}
+
+	}
+}
+
+// TestGeneratePublicPrivateKeys_MissingAPIKeyName tests that it is not possible
+// to generate the public and private keys for an API Key instance if the Name attribute
+// of the API Key is empty or invlid, and that instead an non-nil error is returned.
+func TestGeneratePublicPrivateKeys_MissingAPIKeyName(t *testing.T) {
+	apiKey := CreateMockAPIKey(
+		int64(42),
+		"",
+		"",
+		"",
+		"client_key",
+		int64(22),
+		int64(8),
+		"ManufacturerUser",
+	)
+
+	clientName := "ae"
+
+	e := generatePublicPrivateKeys(apiKey, clientName)
+
+	assert.Error(t, e)
+	assert.NotNil(t, apiKey)
+
+	assert.Empty(t, apiKey.Public.String)
+	assert.False(t, apiKey.Public.Valid)
+
+	assert.Empty(t, apiKey.Private.String)
+	assert.False(t, apiKey.Private.Valid)
+}
+
+// TestGeneratePublicPrivateKeys_MissingClientName tests that it is not possible
+// to generate the public and private keys if the Name of the client making the
+// request is empty, and that instead an non-nil error is returned.
+func TestGeneratePublicPrivateKeys_MissingClientName(t *testing.T) {
+	apiKey := CreateMockAPIKey(
+		int64(42),
+		"ae@example.com",
+		"",
+		"",
+		"client_key",
+		int64(22),
+		int64(8),
+		"ManufacturerUser",
+	)
+
+	clientName := ""
+
+	e := generatePublicPrivateKeys(apiKey, clientName)
+
+	assert.Error(t, e)
+	assert.NotNil(t, apiKey)
+
+	assert.Empty(t, apiKey.Public.String)
+	assert.False(t, apiKey.Public.Valid)
+
+	assert.Empty(t, apiKey.Private.String)
+	assert.False(t, apiKey.Private.Valid)
+}
+
+// TestGeneratePublicPrivateKeys_Valid tests that it is possible to generate
+// the public and private keys for an API Key instance, that these keys are of
+// the correct length, and that they are not equal to each other.
+func TestGeneratePublicPrivateKeys_Valid(t *testing.T) {
+	apiKey := CreateMockAPIKey(
+		int64(42),
+		"ae@example.com",
+		"",
+		"",
+		"client_key",
+		int64(22),
+		int64(8),
+		"ManufacturerUser",
+	)
+
+	clientName := "ae"
+
+	e := generatePublicPrivateKeys(apiKey, clientName)
+
+	assert.NoError(t, e)
+	assert.NotNil(t, apiKey)
+
+	if assert.True(t, apiKey.Public.Valid) && assert.True(t, apiKey.Private.Valid) {
+		assert.Len(t, apiKey.Public.String, 64)
+		assert.Len(t, apiKey.Private.String, 64)
+		assert.NotEqual(t, apiKey.Public.String, apiKey.Private.String)
+	}
+}
+
+// TestRetrieveAPIKey_MissingID tests that the non-existant api_key id numbers
+// result in being returned a nil APIKey and an error.
+func TestRetrieveAPIKey_MissingID(t *testing.T) {
+	keyID := 101010
+
+	apiKey, e := RetrieveAPIKey(TestCtx, keyID)
+
+	assert.Nil(t, apiKey)
+	assert.Error(t, e)
+}
+
+// TestRetrieveAPIKey_ValidID tests that the valid, specified api_key id number
+// result in being returned a valid APIKey instance.
+func TestRetrieveAPIKey_Valid(t *testing.T) {
+	keyID := 18
+
+	apiKey, e := RetrieveAPIKey(TestCtx, keyID)
+
+	assert.NotNil(t, apiKey)
+	assert.NoError(t, e)
+}
+
+// TestRetrieveAPIKeyByPublic_MissingID tests that attempting to retrieve a
+// API Key using a invalid/non-existant public key returns a nil apiKey and
+// an error.
+func TestRetrieveAPIKeyByPublic_MissingID(t *testing.T) {
+	publicKey := "this_key_doesnt_exist!"
+
+	apiKey, e := RetrieveAPIKeyByPublic(TestCtx, publicKey)
+
+	assert.Nil(t, apiKey)
+	assert.Error(t, e)
+}
+
+// TestRetrieveAPIKeyByPublic_Valid tests that the valid API Key is returned
+// when specified by an existing public key.
+func TestRetrieveAPIKeyByPublic_Valid(t *testing.T) {
+	publicKey := clientPublicKey
+
+	apiKey, e := RetrieveAPIKeyByPublic(TestCtx, publicKey)
+
+	assert.NotNil(t, apiKey)
+	assert.NoError(t, e)
+}
+
+// TestUpdateAPIKey_Updated asserts that attempting to update a existing
+// APIKey using valid data results in a successful update within the database.
+func TestUpdateAPIKey_Updated(t *testing.T) {
+	keyID := 42
+
+	expectedAPIKey := CreateMockAPIKey(
+		int64(42),
+		"ae@example.com",
+		"",
+		"",
+		"client_key",
+		int64(22),
+		int64(6),
+		"ManufacturerUser",
+	)
+
+	if !assert.NotNil(t, expectedAPIKey) {
+		return
+	}
+
+	actualAPIKey, e := RetrieveAPIKey(TestCtx, keyID)
+
+	if !assert.NotNil(t, actualAPIKey) || !assert.NoError(t, e) {
+		return
+	}
+
+	expectedAPIKey.Public = actualAPIKey.Public
+	expectedAPIKey.Private = actualAPIKey.Private
+
+	jsonBytes, err := json.Marshal(expectedAPIKey)
+
+	if assert.NotEmpty(t, jsonBytes) && assert.NoError(t, err) {
+		jsonReadCloser := test_utils.MockJSON{bytes.NewBuffer(jsonBytes)}
+
+		_, e := UpdateAPIKey(TestCtx, keyID, jsonReadCloser)
+		if !assert.NoError(t, e) {
+			return
+		}
+
+		apiKey, e := RetrieveAPIKey(TestCtx, keyID)
+
+		if assert.NotNil(t, apiKey) && assert.NoError(t, e) {
+			assert.Equal(t, expectedAPIKey, apiKey)
+		}
+	}
+}
+
+// TestUpdateAPIKey_Returned asserts that attempting to update a existing
+// APIKey using valid data results receiving a successfulyl updated APIKey.
+func TestUpdateAPIKey_Returned(t *testing.T) {
+	keyID := 42
+	expectedAPIKey := CreateMockAPIKey(
+		int64(42),
+		"ae@example.com",
+		"",
+		"",
+		"client_key",
+		int64(22),
+		int64(6),
+		"ManufacturerUser",
+	)
+
+	if !assert.NotNil(t, expectedAPIKey) {
+		return
+	}
+
+	actualAPIKey, e := RetrieveAPIKey(TestCtx, keyID)
+
+	if !assert.NotNil(t, actualAPIKey) || !assert.NoError(t, e) {
+		return
+	}
+
+	expectedAPIKey.Public = actualAPIKey.Public
+	expectedAPIKey.Private = actualAPIKey.Private
+
+	jsonBytes, err := json.Marshal(expectedAPIKey)
+
+	if assert.NotEmpty(t, jsonBytes) && assert.NoError(t, err) {
+		jsonReadCloser := test_utils.MockJSON{bytes.NewBuffer(jsonBytes)}
+
+		apiKey, e := UpdateAPIKey(TestCtx, keyID, jsonReadCloser)
+
+		if assert.NotNil(t, apiKey) && assert.NoError(t, e) {
+			assert.Equal(t, expectedAPIKey, apiKey)
+		}
+	}
+}

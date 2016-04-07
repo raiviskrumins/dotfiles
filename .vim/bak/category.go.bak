@@ -1,0 +1,48 @@
+package routes
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/models"
+	"github.com/justinas/alice"
+)
+
+// DefineCategoryRoutes maps the various possible HTTP methods + route paths to the
+// available API Key resource functions defined.
+func DefineCategoryRoutes(router *lib.Router, ctx *RouteContext, handlers alice.Chain) {
+	router.Get("/categories", handlers.ThenFunc(ctx.ListCategories))
+}
+
+// ListCategories will return a JSON response to the client, which will contain
+// a collection of Categorys, category names, and counts for the categories being returned,
+func (c *RouteContext) ListCategories(w http.ResponseWriter, r *http.Request) {
+	manufacturers := r.URL.Query().Get("manufacturers")
+	products := r.URL.Query().Get("products")
+	primary := r.URL.Query().Get("primary")
+	secondary := r.URL.Query().Get("secondary")
+
+	resultMap, e := models.GetCategories(c.Context, manufacturers, products, primary, secondary)
+	if e != nil {
+		panic(e)
+	}
+
+	responseResource, e := lib.NewResource(resultMap)
+	if e != nil {
+		panic(e)
+	}
+
+	selfLink := new(lib.HALHref)
+	selfLink.FromURI(r.RequestURI)
+	responseResource.AddLink("self", *selfLink)
+
+	jsonResponse, err := json.Marshal(responseResource)
+	if err != nil {
+		panic(err)
+	}
+
+	w.Header().Set("Content-Type", "application/hal+json")
+	fmt.Fprint(w, string(jsonResponse))
+}

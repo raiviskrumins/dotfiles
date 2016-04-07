@@ -1,0 +1,1523 @@
+package pqdb
+
+import (
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"gopkg.in/mgo.v2/bson"
+)
+
+type Rows interface {
+	Scan(...interface{}) error
+	Columns() ([]string, error)
+}
+
+type FromItem interface {
+	SQL() (string, oops.Error)
+}
+
+type Delete struct {
+	Ctx   *app.Context
+	Table *Table
+	Where WhereItem
+	Index *int
+}
+
+// NewDeleteQuery creates a new instance of Delete and adds the given Context.
+func NewDeleteQuery(ctx *app.Context) (*Delete, oops.Error) {
+	q := Delete{Ctx: ctx}
+	return &q, nil
+}
+
+// Run executes the SQL generated from the attributes of the struct and returns the result.
+func (q Delete) Run() (sql.Result, oops.Error) {
+	s, e := q.SQL()
+	if e != nil {
+		return nil, e
+	}
+
+	params := lib.FlattenInterfaceSlice(q.Where.Values())
+	results, err := q.Ctx.DBConn.Exec(s, params...)
+	if err != nil {
+		return nil, oops.ServerError("", "", err)
+	}
+
+	return results, nil
+}
+
+// SQL generates a SQL statement based on the attributes stored in the struct
+// and returns the statement as a string.
+func (q Delete) SQL() (string, oops.Error) {
+	q.Index = new(int)
+	*q.Index = 1
+	sql := "DELETE FROM"
+
+	tableSQL, e := q.Table.SQL()
+	if e != nil {
+		return "", e
+	}
+
+	sql = lib.Join(" ", sql, tableSQL)
+
+	w, e := q.Where.SQL(q.Index)
+	if e != nil {
+		return "", e
+	}
+
+	if w != "" {
+		sql = lib.Join(" ", sql, "WHERE", w)
+	}
+
+	return sql, nil
+}
+
+// SetWhere set the Where clause of the DELETE query to the given WhereItem.
+func (q *Delete) SetWhere(item WhereItem) {
+	q.Where = item
+}
+
+type Update struct {
+	Ctx   *app.Context
+	Table *Table
+	Set   SetClause
+	Where WhereItem
+	Index *int
+}
+
+// NewUpdateQuery creates a new instance of Update and adds the given Context.
+func NewUpdateQuery(ctx *app.Context) (*Update, oops.Error) {
+	q := Update{Ctx: ctx}
+	return &q, nil
+}
+
+// Run executes the SQL generated from the attributes of the struct and returns the result.
+func (q Update) Run() (sql.Result, oops.Error) {
+	s, e := q.SQL()
+	if e != nil {
+		return nil, e
+	}
+
+	var params []interface{}
+	params = append(params, q.Set.Values()...)
+	params = append(params, lib.FlattenInterfaceSlice(q.Where.Values())...)
+
+	results, err := q.Ctx.DBConn.Exec(s, params...)
+	if err != nil {
+		return nil, oops.ServerError("", "", err)
+	}
+
+	return results, nil
+}
+
+// SQL generates a SQL statement based on the attributes stored in the struct
+// and returns the statement as a string.
+func (q Update) SQL() (string, oops.Error) {
+	q.Index = new(int)
+	*q.Index = 1
+	sql := "UPDATE"
+
+	if q.Table == nil {
+		return "", oops.ServerError("", "Query was not provided a pqdb.Table.")
+	}
+
+	tableSQL, e := q.Table.SQL()
+	if e != nil {
+		return "", e
+	}
+
+	sql = lib.Join(" ", sql, tableSQL)
+
+	setSQL, e := q.Set.SQL(q.Index)
+	if e != nil {
+		return "", e
+	}
+
+	sql = lib.Join(" ", sql, setSQL)
+
+	w, e := q.Where.SQL(q.Index)
+	if e != nil {
+		return "", e
+	}
+
+	if w != "" {
+		sql = lib.Join(" ", sql, "WHERE", w)
+	}
+
+	return sql, nil
+}
+
+// SetWhere set the Where clause of the UPDATE query to the given WhereItem.
+func (q *Update) SetWhere(item WhereItem) {
+	q.Where = item
+}
+
+type Insert struct {
+	Ctx       *app.Context
+	Columns   []Column
+	Table     *Table
+	Values    interface{}
+	Returning *Column
+	Index     *int
+	Returned  interface{}
+}
+
+// Run executes the SQL generated from the attributes of the struct and returns the resulting rows.
+func (q *Insert) Run() (sql.Result, oops.Error) {
+	s, e := q.SQL()
+	if e != nil {
+		return nil, e
+	}
+	var result sql.Result
+	var err error
+
+	switch t := q.Values.(type) {
+	case []interface{}:
+		if q.Returning != nil {
+			err = q.Ctx.DBConn.QueryRow(s, t...).Scan(&q.Returned)
+		} else {
+			result, err = q.Ctx.DBConn.Exec(s, t...)
+		}
+	case [][]interface{}:
+		var innerVals []interface{}
+		for _, val := range t {
+			innerVals = append(innerVals, val...)
+		}
+		result, err = q.Ctx.DBConn.Exec(s, innerVals...)
+	case Select:
+		params := lib.FlattenInterfaceSlice(t.Where.Values())
+		result, err = q.Ctx.DBConn.Exec(s, params)
+	default:
+		err = errors.New("Invalid query values")
+	}
+
+	if err != nil {
+		return nil, oops.ServerError("", "", err)
+	}
+	return result, nil
+}
+
+// SQL generates a SQL statement based on the attributes stored in the struct and returns
+// the statement as a string.
+func (q Insert) SQL() (string, oops.Error) {
+	q.Index = new(int)
+	*q.Index = 1
+	sql := "INSERT INTO"
+
+	tableSQL, _ := q.Table.SQL()
+	sql = lib.Join(" ", sql, tableSQL)
+
+	var cols []string
+	for _, col := range q.Columns {
+		colSQL, e := col.SQL()
+		if e != nil {
+			return "", e
+		}
+		cols = append(cols, colSQL)
+	}
+
+	sql = lib.Join(" ", sql, lib.Join("", "(", lib.Join(", ", cols...), ")"))
+
+	switch t := q.Values.(type) {
+	case []interface{}:
+		var valuesSQL = "VALUES ("
+		var sqlPlaceholders []string
+
+		for range t {
+			sqlPlaceholders = append(sqlPlaceholders, lib.Join("", "$", strconv.Itoa(*q.Index)))
+			*q.Index++
+		}
+
+		valuesSQL = lib.Join("", valuesSQL, lib.Join(", ", sqlPlaceholders...), ")")
+		sql = lib.Join(" ", sql, valuesSQL)
+
+	case [][]interface{}:
+		var valuesSQL = "VALUES "
+
+		for innerIndex, innerVals := range t {
+			var sqlPlaceholders []string
+			valuesSQL = lib.Join("", valuesSQL, "(")
+			for range innerVals {
+				sqlPlaceholders = append(sqlPlaceholders, lib.Join("", "$", strconv.Itoa(*q.Index)))
+				*q.Index++
+			}
+			valuesSQL = lib.Join("", valuesSQL, lib.Join(", ", sqlPlaceholders...), ")")
+			if innerIndex < len(t)-1 {
+				valuesSQL = lib.Join("", valuesSQL, ", ")
+			}
+		}
+
+		sql = lib.Join(" ", sql, valuesSQL)
+	case *Select:
+		selectSQL, e := t.SQL(false)
+		if e != nil {
+			return "", e
+		}
+		sql = lib.Join(" ", sql, selectSQL)
+	}
+
+	if q.Returning != nil {
+		returningSQL, e := q.Returning.SQL()
+		if e != nil {
+			return "", e
+		}
+
+		sql = lib.Join(" ", sql, "RETURNING", returningSQL)
+	}
+
+	return sql, nil
+}
+
+// AddColumn appends the given Column to the Columns on the Insert Query.
+func (q *Insert) AddColumn(column *Column) {
+	q.Columns = append(q.Columns, *column)
+}
+
+// NewInsertQuery creates a new instance of Insert and adds the given Context.
+func NewInsertQuery(ctx *app.Context) (*Insert, oops.Error) {
+	i := Insert{Ctx: ctx}
+	return &i, nil
+}
+
+type Select struct {
+	Ctx      *app.Context
+	Distinct bool
+	Columns  []Column
+	From     FromClause
+	Where    WhereItem
+	GroupBy  GroupClause
+	OrderBy  OrderClause
+	Limit    LimitClause
+	Index    *int
+}
+
+// Run executes the SQL generated from the attributes of the struct and returns the resulting rows.
+func (q Select) Run() (*sql.Rows, oops.Error) {
+	s, e := q.SQL(false)
+	if e != nil {
+		return nil, e
+	}
+	params := lib.FlattenInterfaceSlice(q.Where.Values())
+	rows, err := q.Ctx.DBConn.Query(s, params...)
+	if err != nil {
+		return nil, oops.ServerError("", "", err)
+	}
+
+	return rows, nil
+}
+
+// Count executes a Count function on the SQL generated from the attributes of the struct and returns the result.
+func (q Select) Count() (int, oops.Error) {
+	s, e := q.SQL(true)
+	if e != nil {
+		return 0, e
+	}
+	params := lib.FlattenInterfaceSlice(q.Where.Values())
+	var count int
+
+	err := q.Ctx.DBConn.QueryRow(s, params...).Scan(&count)
+	if err != nil {
+		return 0, oops.ServerError("", "", err)
+	}
+
+	return count, nil
+}
+
+// SQL generates a SQL statement based on the attributes stored in the struct and the count parameter and returns
+// the statement as a string.
+func (q Select) SQL(count bool) (string, oops.Error) {
+	q.Index = new(int)
+	*q.Index = 1
+	sql := "SELECT"
+
+	if count {
+		sql = lib.Join(" ", sql, "COUNT(*)")
+	} else {
+		var cols []string
+		for _, col := range q.Columns {
+			colSQL, e := col.SQL()
+			if e != nil {
+				return "", e
+			}
+			cols = append(cols, colSQL)
+		}
+		sql = lib.Join(" ", sql, lib.Join(", ", cols...))
+	}
+
+	fromSQL, e := q.From.SQL()
+	if e != nil {
+		return "", e
+	}
+	from := lib.Join(" ", "FROM", fromSQL)
+
+	sql = lib.Join(" ", sql, from)
+
+	w, e := q.Where.SQL(q.Index)
+	if e != nil {
+		return "", e
+	}
+
+	if w != "" {
+		sql = lib.Join(" ", sql, "WHERE", w)
+	}
+
+	g, e := q.GroupBy.SQL()
+	if e != nil {
+		return "", e
+	}
+
+	if g != "" {
+		sql = lib.Join(" ", sql, g)
+	}
+
+	if !count {
+		o, e := q.OrderBy.SQL()
+		if e != nil {
+			return "", e
+		}
+		if o != "" {
+			sql = lib.Join(" ", sql, o)
+		}
+
+		l, e := q.Limit.SQL()
+		if e != nil {
+			return "", e
+		}
+		if l != "" {
+			sql = lib.Join(" ", sql, l)
+		}
+	}
+
+	return sql, nil
+}
+
+// AddTable appends the given Table to the From clause of the Select query.
+func (s *Select) AddTable(table *Table) {
+	s.From.Items = append(s.From.Items, table)
+}
+
+// AddColumn appends the give Column to the Columns on the Select Query.
+func (s *Select) AddColumn(column *Column) {
+	s.Columns = append(s.Columns, *column)
+}
+
+// SetWhere set the Where clause of the Select query to the given WhereItem.
+func (s *Select) SetWhere(item WhereItem) {
+	s.Where = item
+}
+
+// MakeWhereItem creates a new instance of WhereItem.
+func MakeWhereItem(op string, pred Predicate) WhereItem {
+	return WhereItem{Operand: op, Pred: pred, Items: nil}
+}
+
+// LeftJoin appends a JoinClause with a left join to the From Items on the Select query.
+func (s *Select) LeftJoin(table *Table, pred Predicate) {
+	s.From.LeftJoin(table, pred)
+}
+
+// NewSelectQuery creates a new instance of Select and adds the given Context.
+func NewSelectQuery(ctx *app.Context) (*Select, oops.Error) {
+	s := Select{Ctx: ctx}
+	return &s, nil
+}
+
+type Table struct {
+	RealName string
+	Alias    string
+	Columns  map[string]*Column
+}
+
+// Name returns the qualified name fo the Table to account for the presence of an Alias.
+func (t Table) Name() string {
+	if t.Alias != "" {
+		return t.Alias
+	}
+	return t.RealName
+}
+
+// SQL returns the name or name and alias of the table in SQL ready format.
+func (t Table) SQL() (string, oops.Error) {
+	if t.Alias != "" {
+		return lib.Join(" AS ", t.RealName, t.Alias), nil
+	}
+	return t.RealName, nil
+}
+
+// Column creates a new instance of Column based on the current Table.
+func (t *Table) Column(name string, params ...func(*Column)) *Column {
+	col := Column{RealName: name, Table: t}
+	for _, param := range params {
+		param(&col)
+	}
+
+	if t.Columns == nil {
+		t.Columns = make(map[string]*Column)
+	}
+	t.Columns[name] = &col
+	return &col
+}
+
+// NewTable creates a new instance of Table with the provided name and allows for optional parameters.
+func NewTable(name string, params ...func(*Table)) *Table {
+	t := Table{RealName: name}
+	for _, param := range params {
+		param(&t)
+	}
+	return &t
+}
+
+// TableAlias is an optional parameter for NewTable. It sets the Alias of the Table.
+func TableAlias(alias string) func(*Table) {
+	return func(t *Table) {
+		t.Alias = alias
+	}
+}
+
+type Column struct {
+	RealName string
+	Alias    string
+	Table    *Table
+}
+
+// NewColumn will return a pointer to a new instance of a Column.
+func NewColumn(name string) *Column {
+	return &Column{name, "", nil}
+}
+
+// Name returns the qualified name of the column including the Table name.
+func (c Column) Name() string {
+	name := c.RealName
+	if c.Table != nil {
+		name = lib.Join(".", c.Table.Name(), name)
+	}
+	return name
+}
+
+// SQL returns the a constructed identifier of the Column name and/or Alias to be used in a Select queries column section.
+func (c Column) SQL() (string, oops.Error) {
+	name := c.RealName
+	if c.Alias != "" {
+		name = lib.Join(" AS ", c.RealName, c.Alias)
+	}
+	if c.Table != nil {
+		name = lib.Join(".", c.Table.Name(), name)
+	}
+	return name, nil
+}
+
+// ColumnAlias is an optional parameter for NewColumn. It sets the Alias of the Column.
+func ColumnAlias(alias string) func(*Column) {
+	return func(c *Column) {
+		c.Alias = alias
+	}
+}
+
+type RecordCell struct {
+	Column *Column
+	Value  interface{}
+}
+
+// NewRecordCell will create a new RecordCell by using the value provided and
+// initializing a new column with the name specified.
+func NewRecordCell(colName string, val interface{}) *RecordCell {
+	return &RecordCell{NewColumn(colName), val}
+}
+
+// Predicate will return a new instance of the Predicate struct, populated
+// using the Column and Value data stored in the RecordCell.
+func (rc RecordCell) Predicate() Predicate {
+	return Predicate{Subject: rc.Column, Operand: "=", Value: rc.Value}
+}
+
+// SetExpressions will return a new instance of the SetExpression struct,
+// populated using the data contained in the RecordCell.
+func (rc RecordCell) SetExpression() SetExpression {
+	return SetExpression{Column: rc.Column, Value: rc.Value}
+}
+
+// Name is a helper method for returning the name of a Cell's column.
+func (rc RecordCell) Name() string {
+	if rc.Column != nil {
+		return rc.Column.RealName
+	}
+	return ""
+}
+
+type Record struct {
+	Cells []*RecordCell
+}
+
+// NewRecord will create a new record, populated with the provided RecordCells.
+func MakeRecord(cells ...*RecordCell) Record {
+	rec := Record{}
+
+	for _, cell := range cells {
+		rec.Cells = append(rec.Cells, cell)
+	}
+
+	return rec
+}
+
+// SetClause will return a SetClause instance containing the SetExpressions
+// generated from all the RecordCells.
+func (rec Record) SetClause() SetClause {
+	var exps []SetExpression
+	for _, cell := range rec.Cells {
+		exps = append(exps, cell.SetExpression())
+	}
+
+	return SetClause{exps}
+}
+
+// Column will return the Column as specified by the name provided, or nil
+// if the record cannot be found.
+func (rec Record) Column(name string) *Column {
+	for _, cell := range rec.Cells {
+		if cell.Column.RealName == name {
+			return cell.Column
+		}
+	}
+
+	return nil
+}
+
+func (rec Record) Cell(name string) *RecordCell {
+	for _, cell := range rec.Cells {
+		if cell.Column.RealName == name {
+			return cell
+		}
+	}
+
+	return nil
+}
+
+// Columns will return a slice containing pointers to all the Columns
+// residing in the current Record.
+func (rec Record) Columns() []*Column {
+	var colSlice []*Column
+	for _, cell := range rec.Cells {
+		colSlice = append(colSlice, cell.Column)
+	}
+
+	return colSlice
+}
+
+// Values will return an interface slice of all the values referenced by the
+// columns contained in the Record's cells.
+func (rec Record) Values() interface{} {
+	var values []interface{}
+	for _, cell := range rec.Cells {
+		values = append(values, cell.Value)
+	}
+	return values
+}
+
+// ApplyTable will point each contained cell's column's table to the specified
+// table address.
+func (rec Record) ApplyTable(t *Table) {
+	for _, cell := range rec.Cells {
+		cell.Column.Table = t
+	}
+}
+
+// StructColumns will return a slice of columns generated based on the DB and
+// JSON tags for a struct instance.
+func StructColumns(obj interface{}) []*Column {
+	var columns []*Column
+
+	typeOf := reflect.TypeOf(obj)
+
+	for i := 0; i < typeOf.NumField(); i++ {
+		tag := typeOf.Field(i).Tag
+
+		if len(tag.Get("db")) > 0 {
+			columns = append(columns, NewColumn(tag.Get("db")))
+		} else if len(tag.Get("json")) > 0 {
+			columns = append(columns, NewColumn(tag.Get("json")))
+		}
+	}
+
+	return columns
+}
+
+// StructRecord will return a Record which is populated from the tags of the
+// struct of the provided instance.
+func StructRecord(obj interface{}, includePrimaries bool) Record {
+	rec := MakeRecord()
+
+	typeOf := reflect.TypeOf(obj)
+	valueOf := reflect.ValueOf(obj)
+
+	for i := 0; i < typeOf.NumField(); i++ {
+		tag := typeOf.Field(i).Tag
+		val := valueOf.Field(i)
+
+		// Only include "Primary" attributes when desired.
+		if tag.Get("primary") == "true" && includePrimaries == false {
+			continue
+		}
+
+		if len(tag.Get("db")) > 0 {
+			rec.Cells = append(rec.Cells, NewRecordCell(tag.Get("db"), val.Interface()))
+		} else if len(tag.Get("json")) > 0 {
+			rec.Cells = append(rec.Cells, NewRecordCell(tag.Get("json"), val.Interface()))
+		}
+	}
+
+	return rec
+}
+
+// FromClause has a FromItem that can be either a Table, a Select with aliases, or another FromItem plus a join
+type FromClause struct {
+	Items []FromItem
+}
+
+// NewFromClause creates a new instance of a FromClause with the provided table as it's first element.
+func NewFromClause(table *Table) *FromClause {
+	f := FromClause{[]FromItem{table}}
+	return &f
+}
+
+// LeftJoin adds a JoinClause with a left join to the current FromClause.
+func (f *FromClause) LeftJoin(table *Table, pred Predicate) {
+	var tableExists func(t *Table, fi FromItem) bool
+	tableExists = func(t *Table, fi FromItem) bool {
+		switch tieFighter := fi.(type) {
+		case *Table:
+			if tieFighter.RealName == t.RealName {
+				return true
+			}
+		case FromClause:
+			for _, item := range tieFighter.Items {
+				if tableExists(t, item) {
+					return true
+				}
+			}
+		}
+		return false
+
+	}
+	if !tableExists(table, f) {
+		f.Items = append(f.Items, JoinClause{"LEFT JOIN", table, pred})
+	}
+}
+
+// SQL will return a string containing the SQL for the FROM-clause.
+func (f FromClause) SQL() (string, oops.Error) {
+	var sql []string
+	for _, fi := range f.Items {
+		innerSQL, e := fi.SQL()
+		if e != nil {
+			return "", e
+		}
+		sql = append(sql, innerSQL)
+	}
+	return lib.Join(" ", sql...), nil
+}
+
+type JoinClause struct {
+	JoinType string
+	JoinItem FromItem
+	On       Predicate
+}
+
+// SQL will return a string containing the SQL for the JOIN-clause.
+func (j JoinClause) SQL() (string, oops.Error) {
+	on, e := j.On.unsafeSQL()
+	if e != nil {
+		return "", e
+	}
+
+	joinSQL, e := j.JoinItem.SQL()
+	if e != nil {
+		return "", e
+	}
+
+	sql := lib.Join(" ", j.JoinType, joinSQL, "ON", on)
+	return sql, nil
+}
+
+type WhereItem struct {
+	Operand string
+	Pred    Predicate
+	Items   []WhereItem
+}
+
+// DefaultOperands will set the default operand to "AND" for for all non-first,
+// empty-operanded WhereItems recursively.
+func (wc *WhereItem) DefaultOperands() {
+	for i, item := range wc.Items {
+		if len(item.Operand) == 0 && i > 0 {
+			item.Operand = "AND"
+			wc.Items[i] = item // Yuck, but whatevs
+		}
+		if len(item.Items) > 0 {
+			item.DefaultOperands()
+		}
+	}
+}
+
+// SQL will return a string containing the SQL for the WHERE-clause.
+func (wc WhereItem) SQL(index *int) (string, oops.Error) {
+	var pSQL []string
+	var pred string
+	var e oops.Error
+	op := ""
+	if wc.Operand != "" {
+		op = lib.Join("", " ", wc.Operand, " ")
+	}
+	if wc.Pred != (Predicate{}) {
+		pred, e = wc.Pred.SQL(index)
+		if e != nil {
+			return "", e
+		}
+	}
+	for _, item := range wc.Items {
+		cSQL, e := item.SQL(index)
+		if e != nil {
+			return "", e
+		}
+		pSQL = append(pSQL, cSQL)
+	}
+
+	inner := lib.Join("", pSQL...)
+	if wc.Pred == (Predicate{}) && len(inner) > 0 {
+		inner = lib.Join("", "(", inner, ")")
+	}
+	pred = lib.Join("", op, pred, inner)
+
+	if pred != "" {
+		return pred, nil
+	}
+	return "", nil
+}
+
+// Values will return an interface slice of the various values specified in
+// WHERE-itewms string containing the SQL for the JOIN-clause.
+func (wc WhereItem) Values() []interface{} {
+	var values []interface{}
+	if wc.Pred != (Predicate{}) && wc.Pred.Value != nil {
+		values = append(values, wc.Pred.Value)
+	}
+
+	for _, pred := range wc.Items {
+		vals := pred.Values()
+		values = append(values, vals...)
+	}
+	return values
+}
+
+// Predicate is a struct for containing information necessary for representing a
+// WHERE-clause predicate; namely, a key, operand and value. Note that while
+// the Key and Operand must be strings, Value can be of any interface as it will
+// be properly (and safely!) inserted into the SQL.
+type Predicate struct {
+	Subject interface{} `json:"subject"`
+	Operand string      `json:"operand"`
+	Value   interface{} `json:"value"`
+}
+
+// Key will return a string of the string value of the Predicate's key attribute.
+func (p Predicate) Key() string {
+	keyName := ""
+	switch key := p.Subject.(type) {
+	default:
+		keyName = ""
+	case Column:
+		keyName = key.Name()
+	case *Column:
+		keyName = key.Name()
+	case string:
+		keyName = key
+	}
+	return keyName
+}
+
+// ValidationError will indicate whether the current Clause instance is valid and available
+// to be converted into a SQL string. A Clause is valid if it has non-empty Key and
+// Operand values, as well as an operand which is one of the many possible types.
+func (c Predicate) ValidationError() oops.Error {
+	if len(c.Key()) == 0 || len(c.Operand) == 0 {
+		return oops.ServerError("", "Must provide a non-empty Key and Operand")
+	}
+
+	if strings.Contains(c.Key(), " ") {
+		return oops.ServerError("", "Clause must not have a Key containing spaces", c)
+	}
+
+	kind := reflect.ValueOf(c.Value).Kind()
+	if kind >= reflect.Complex64 && kind != reflect.String && reflect.TypeOf(c.Value) != reflect.TypeOf(Column{}) && reflect.TypeOf(c.Value) != reflect.TypeOf(&Column{}) && kind != reflect.Slice {
+		return oops.ServerError("", "Clause must only have simple types for its Value", c)
+	}
+
+	validOperands := []string{
+		"=",
+		"!=",
+		"<>",
+		">=",
+		">",
+		"<=",
+		"<",
+		"in",
+		"IN",
+		"not in",
+		"NOT IN",
+		"&",
+		"|",
+		"~",
+		"<<",
+		">>",
+		"#",
+		"is",
+		"IS",
+		"is not",
+		"IS NOT"}
+
+	for _, op := range validOperands {
+		// Mixed-casing is NOT supported.
+		if c.Operand == op {
+			return nil
+		}
+	}
+
+	return oops.ServerError("", "invalid Clause.Operand provided")
+}
+
+// SQL will attempt to return the current Clause instance as a SQL WHERE-statement.
+// The SQL statement will make use of the Postgres positional parameters for injecting
+// the Clause.Value attribute into the statement.
+func (c Predicate) SQL(index *int) (string, oops.Error) {
+	e := c.ValidationError()
+	if e != nil {
+		return "", e
+	}
+
+	var sql string
+	if reflect.ValueOf(c.Value).Kind() == reflect.Slice {
+		var slice []string
+
+		for i := reflect.ValueOf(c.Value).Len(); i > 0; i-- {
+			slice = append(slice, lib.Join("", "$", strconv.Itoa(*index)))
+			*index++
+		}
+		sql = lib.Join(" ", c.Key(), c.Operand, lib.Join("", "(", lib.Join(", ", slice...), ")"))
+
+	} else {
+		if c.Operand == "=" && c.Value == nil {
+			sql = lib.Join(" ", c.Key(), "IS NULL")
+		} else if c.Operand == "!=" && c.Value == nil {
+			sql = lib.Join(" ", c.Key(), "IS NOT NULL")
+		} else {
+			sql = lib.Join(" ", c.Key(), c.Operand, lib.Join("", "$", strconv.Itoa(*index)))
+			*index++
+		}
+	}
+
+	return sql, nil
+}
+
+// unsafeSQL will return unescaped SQL for valid Predicate instances.
+func (c Predicate) unsafeSQL() (string, oops.Error) {
+	e := c.ValidationError()
+	if e != nil {
+		return "", e
+	}
+
+	sql := ""
+	switch cv := c.Value.(type) {
+	default:
+		sql = ""
+	case bool:
+		sql = lib.Join(" ", c.Key(), c.Operand, fmt.Sprintf("%t", cv))
+	case int:
+		sql = lib.Join(" ", c.Key(), c.Operand, strconv.Itoa(cv))
+	case string:
+		sql = lib.Join(" ", c.Key(), c.Operand, cv)
+	case *Column:
+		sql = lib.Join(" ", c.Key(), c.Operand, cv.Name())
+	}
+	return sql, nil
+}
+
+type SetClause struct {
+	Expressions []SetExpression
+}
+
+// Values will return a slice of all the values from each of the SetExpressions
+// stored in the current SetClause.
+func (sc SetClause) Values() []interface{} {
+	var slice []interface{}
+
+	for _, exp := range sc.Expressions {
+		slice = append(slice, exp.Value)
+	}
+
+	return slice
+}
+
+// SQL will return the SET-clause SQL based on the contains SetExpression SQL strings
+// which are collected.
+func (sc SetClause) SQL(i *int) (string, oops.Error) {
+	var sql []string
+	for _, exp := range sc.Expressions {
+		innerSQL, e := exp.SQL(i)
+		if e != nil {
+			return "", e
+		}
+		sql = append(sql, innerSQL)
+	}
+
+	if len(sql) > 0 {
+		return lib.Join(" ", "SET", lib.Join(", ", sql...)), nil
+	}
+
+	return "", nil
+}
+
+type SetExpression struct {
+	Column *Column
+	Value  interface{}
+}
+
+// SQL will return a string representation of the SQL grouping expression.
+func (exp SetExpression) SQL(i *int) (string, oops.Error) {
+	columnName := exp.Column.Name()
+	sql := lib.Join(" ", columnName, "=", lib.Join("", "$", strconv.Itoa(*i)))
+	*i++
+
+	return sql, nil
+}
+
+type GroupClause struct {
+	Group []GroupExpression
+}
+
+func (gp GroupClause) SQL() (string, oops.Error) {
+	var sql []string
+	for _, exp := range gp.Group {
+		innerSQL, e := exp.SQL()
+		if e != nil {
+			return "", e
+		}
+		sql = append(sql, innerSQL)
+	}
+
+	if len(sql) > 0 {
+		return lib.Join(" ", "GROUP BY", lib.Join(", ", sql...)), nil
+	}
+
+	return "", nil
+}
+
+type GroupExpression struct {
+	Column *Column
+}
+
+// SQL will return a string representation of the SQL grouping expression.
+func (exp GroupExpression) SQL() (string, oops.Error) {
+	columnName := exp.Column.Name()
+	return columnName, nil
+}
+
+type OrderClause struct {
+	Order []OrderExpression
+}
+
+func (oc *OrderClause) Add(column Column, asc, nullFirst bool) {
+	oc.Order = append(oc.Order, OrderExpression{column, asc, nullFirst})
+}
+
+func (oc *OrderClause) Append(oe OrderExpression) {
+	oc.Order = append(oc.Order, oe)
+}
+
+// SQL will return a string for the SQL text representing the order-clause.
+func (oc OrderClause) SQL() (string, oops.Error) {
+	var sql []string
+	for _, oe := range oc.Order {
+		innerSQL, e := oe.SQL()
+		if e != nil {
+			return "", e
+		}
+		sql = append(sql, innerSQL)
+	}
+	if len(sql) > 0 {
+		return lib.Join(" ", "ORDER BY", lib.Join(", ", sql...)), nil
+	}
+	return "", nil
+}
+
+type OrderExpression struct {
+	Column    Column
+	ASC       bool
+	NullFirst bool
+}
+
+// SQL will return a string representation of the SQL Ordering expression.
+func (oe OrderExpression) SQL() (string, oops.Error) {
+	direction := "ASC"
+	if !oe.ASC {
+		direction = "DESC"
+	}
+	nulls := "NULLS FIRST"
+	if !oe.NullFirst {
+		nulls = "NULLS LAST"
+	}
+	columnName := oe.Column.Name()
+	return lib.Join(" ", columnName, direction, nulls), nil
+}
+
+type LimitClause struct {
+	Limit  int
+	Offset int
+}
+
+// SQL will return a string representation of Limit and Offset clauses.
+func (lc LimitClause) SQL() (string, oops.Error) {
+	var limit, offset, separator string
+	if lc.Limit > 0 {
+		limit = lib.Join(" ", "LIMIT", strconv.Itoa(lc.Limit))
+	}
+	if lc.Offset > 0 {
+		offset = lib.Join(" ", "OFFSET", strconv.Itoa(lc.Offset))
+	}
+
+	if limit != "" && offset != "" {
+		separator = " "
+	}
+	return lib.Join(separator, limit, offset), nil
+}
+
+type QueryParams struct {
+	Preds  []Predicate
+	Limit  int
+	Offset int
+}
+
+// NewQueryParams will create a new QueryParams pointer using the provided
+// limit, offset, and clauses.
+func NewQueryParams(limit, offset int, clauses ...Predicate) (*QueryParams, oops.Error) {
+	p := new(QueryParams)
+	p.Limit = limit
+	p.Offset = offset
+	p.Preds = clauses
+
+	// TODO: refector this
+	return p, nil
+}
+
+// whereClauseSQL will accept a positional-parameter offset index and a variable
+// number of Clause instances, and will return the SQL WHERE-statement, a slice
+// of the parameter values, and an error (if one occurred).
+func whereClauseSQL(offset int, clauses ...Predicate) (string, []interface{}, oops.Error) {
+	if len(clauses) == 0 {
+		return "", nil, nil
+	}
+
+	var whereClauses []string
+	var whereParams []interface{}
+
+	sql := "WHERE"
+
+	for i, clause := range clauses {
+		index := offset + i + 1
+		clauseSQL, e := clause.SQL(&index)
+		if e != nil {
+			return "", nil, e
+		}
+
+		whereClauses = append(whereClauses, clauseSQL)
+		whereParams = append(whereParams, clause.Value)
+	}
+
+	// TODO: refactor to allow for other comparitors besides "AND".
+	whereSQL := lib.Join(" AND ", whereClauses...)
+	sql = lib.Join(" ", sql, whereSQL)
+
+	return sql, whereParams, nil
+}
+
+// CountQuery takes a DB, a table name, and a QueryParams pointer, and will return
+// the number of rows in the database using the provided information.
+func CountQuery(db app.DBConnection, tableName string, qParams *QueryParams) (int, oops.Error) {
+	if qParams == nil {
+		return 0, oops.ServerError("", "Must provide query parameters for table.", tableName)
+	}
+
+	sql := lib.Join(" ", "SELECT COUNT(*) FROM", tableName)
+
+	where, whereParams, e := whereClauseSQL(0, qParams.Preds...)
+	if e != nil {
+		return 0, e
+	}
+	sql = lib.Join(" ", sql, where)
+
+	var count int
+	err := db.QueryRow(sql, whereParams...).Scan(&count)
+	if err != nil {
+		return 0, oops.ServerError("", "Failed to Scan a QueryRow correctly.", err)
+	}
+
+	return count, nil
+}
+
+// SelectQuery takes a DB, a comma separated string of columns, a table name, and a string of clauses and returns
+// a pointer to rows in the DB for the constructed query.
+func SelectQuery(db app.DBConnection, columns string, tableName string, qParams *QueryParams) (*sql.Rows, oops.Error) {
+	if qParams == nil {
+		return nil, oops.ServerError("", "Must provide non-nil QueryParams pointer.", tableName, columns)
+	}
+
+	sql := lib.Join(" ", "SELECT", columns, "FROM", tableName)
+
+	where, whereParams, e := whereClauseSQL(0, qParams.Preds...)
+	if e != nil {
+		return nil, e
+	}
+	sql = lib.Join(" ", sql, where)
+
+	if qParams.Limit > 0 {
+		sql = lib.Join(" ", sql, "LIMIT", strconv.Itoa(qParams.Limit))
+	}
+
+	if qParams.Offset > 0 {
+		sql = lib.Join(" ", sql, "OFFSET", strconv.Itoa(qParams.Offset))
+	}
+
+	rows, err := db.Query(sql, whereParams...)
+	if err != nil {
+		return nil, oops.ServerError("", "Failed to Query the database.", err)
+	}
+	return rows, nil
+}
+
+func Upsert(db app.DBConnection, exists bool, subject lib.Iterable, tableName string, params *QueryParams) oops.Error {
+	var e oops.Error
+	if exists {
+		e = UpdateQuery(db, subject, tableName, params)
+	} else {
+		pkid, e := InsertQuery(db, subject, tableName)
+		if e == nil {
+			for iter := subject.NewIterator(); iter.Next(); {
+				field := iter.Item()
+				tag := field.Tag()
+				if tag.Get("primary") == "true" {
+					field.Set(pkid)
+				}
+			}
+		}
+	}
+	return e
+}
+
+func InsertQuery(db app.DBConnection, subject lib.Iterable, tableName string) (interface{}, oops.Error) {
+	var columns []string
+	var placeHolders []string
+	var values []interface{}
+	var primaryField int64
+	var primaryKeyName string
+	index := 0
+	for iter := subject.NewIterator(); iter.Next(); {
+		field := iter.Item()
+		tag := field.Tag()
+		if tag.Get("private") == "true" {
+			continue
+		}
+		if tag.Get("multi_value") == "true" {
+			continue
+		}
+		if tag.Get("primary") != "true" {
+			//get column names to set
+			if tag.Get("list_sub_field") == "" && tag.Get("relation") == "" {
+				columns = append(columns, field.ColumnName())
+
+				//get placeholders for values
+				placeHolders = append(placeHolders, "$"+strconv.Itoa(index+1))
+
+				//get values to set
+				fieldVal, err := field.Addr().(lib.Field).Value()
+				if err != nil {
+					return nil, oops.ServerError("", err, field, tag)
+				}
+				values = append(values, fieldVal)
+
+				index++
+			}
+		} else {
+			primaryKeyName = tag.Get("db")
+			if primaryKeyName == "" {
+				primaryKeyName = tag.Get("json")
+			}
+		}
+	}
+
+	queryString := lib.Join(
+		" ",
+		"INSERT INTO",
+		tableName,
+		lib.Join("", "(", lib.Join(", ", columns...), ")"),
+		"VALUES",
+		lib.Join("", "(", lib.Join(", ", placeHolders...), ")"),
+		"RETURNING",
+		primaryKeyName)
+
+	err := db.QueryRow(queryString, values...).Scan(&primaryField)
+
+	if err != nil {
+		return nil, oops.ServerError("", "Failed to scan a QueryRow.", err, queryString, values)
+	}
+
+	return primaryField, nil
+}
+
+func UpdateQuery(db app.DBConnection, subject lib.Iterable, tableName string, qParams *QueryParams) oops.Error {
+	if qParams == nil {
+		return oops.ServerError("", "Must provide non-nil QueryParams pointer.")
+	}
+
+	if len(qParams.Preds) == 0 {
+		return oops.ServerError("", "Must specify at least one clause.", tableName)
+	}
+
+	var columns []string
+	var placeHolders []string
+	var values []interface{}
+	index := 0
+
+	for iter := subject.NewIterator(); iter.Next(); {
+		field := iter.Item()
+		tag := field.Tag()
+		if tag.Get("primary") != "true" && tag.Get("multi_value") != "true" {
+			//get column names to set
+			if tag.Get("list_sub_field") == "" && tag.Get("relation") == "" && tag.Get("private") != "true" {
+				columns = append(columns, field.ColumnName())
+
+				//get placeholders for values
+				placeHolders = append(placeHolders, "$"+strconv.Itoa(index+1))
+
+				//get values to set
+				fieldVal, err := field.Addr().(lib.Field).Value()
+				if err != nil {
+					return oops.ServerError("", err, field, tag)
+				}
+				values = append(values, fieldVal)
+
+				index++
+			}
+		}
+	}
+
+	columnsSQL := lib.Join("", "(", lib.Join(",", columns...), ")")
+	valuesSQL := lib.Join("", "(", lib.Join(",", placeHolders...), ")")
+
+	sql := lib.Join(" ", "UPDATE", tableName, "SET", columnsSQL, "=", valuesSQL)
+
+	where, whereParams, e := whereClauseSQL(len(placeHolders), qParams.Preds...)
+	if e != nil {
+		return e
+	}
+	sql = lib.Join(" ", sql, where)
+
+	for _, val := range whereParams {
+		values = append(values, val)
+	}
+
+	_, err := db.Exec(sql, values...)
+	if err != nil {
+		return oops.ServerError("Database could not insert object.", err, sql, values)
+	}
+	return nil
+}
+
+func DeleteQuery(db app.DBConnection, tableName string, qParams *QueryParams) oops.Error {
+	if qParams == nil {
+		return oops.ServerError("", "Must provide a non-nil QueryParams pointer.", tableName)
+	}
+
+	if len(qParams.Preds) == 0 {
+		return oops.ServerError("", "Must specify at least one Clause.", tableName)
+	}
+
+	where, whereParams, e := whereClauseSQL(0, qParams.Preds...)
+	if e != nil {
+		return e
+	}
+
+	sql := lib.Join(" ", "DELETE FROM", tableName, where)
+
+	res, err := db.Exec(sql, whereParams...)
+	if err != nil {
+		return oops.ServerError("", "Database could not delete object", err, sql, whereParams)
+	}
+
+	num, err := res.RowsAffected()
+	if err != nil {
+		return oops.ServerError("", err)
+	} else if num == 0 {
+		return oops.BadRequest("No rows were deleted", sql, whereParams)
+	}
+
+	return nil
+}
+
+// Columns will return a string of comma-delimited SQL Column names using the
+// iterable names provided. Names can be excluded via the excludes-parameter.
+func Columns(subject lib.Iterable, excludes []string) string {
+	columnNames := subject.ColumnNames()
+	for _, exception := range excludes {
+		for i, column := range columnNames {
+			if column == exception {
+				columnNames = append(columnNames[:i], columnNames[i+1:]...)
+				break
+			}
+		}
+	}
+	return lib.Join(", ", columnNames...)
+}
+
+func ScanRows(destination interface{}, rows *sql.Rows) (interface{}, oops.Error) {
+	defer rows.Close()
+
+	totalScanned := 0
+	for rows.Next() {
+		err := Scan(destination, rows)
+		if err != nil {
+			return destination, err
+		}
+		totalScanned++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", "SQL Row error.", err)
+	}
+	if totalScanned == 0 {
+		return nil, oops.NotFound("No results found.", "No rows were available to be scanned into the destination.")
+	}
+	return destination, nil
+}
+
+// Scan stores data from the DB and into the destination struct.
+func Scan(destination interface{}, rows *sql.Rows) oops.Error {
+	var fields []interface{}
+
+	var cols []string
+	for iter := destination.(lib.Iterable).NewIterator(); iter.Next(); {
+		val := iter.Item()
+		tag := val.Tag()
+		if tag.Get("private") == "true" {
+			continue
+		}
+		if tag.Get("multi_value") == "true" {
+			continue
+		}
+		if tag.Get("list_sub_field") == "" && tag.Get("relation") == "" {
+			// Field is not a slice sub-field
+			columnName := tag.Get("db")
+			if columnName == "" {
+				columnName = tag.Get("json")
+			}
+			fields = append(fields, val.Addr())
+			cols = append(cols, columnName)
+		}
+	}
+
+	err := rows.Scan(fields...)
+	if err != nil {
+		return oops.ServerError("", "Could not scan the row into the provided destination interface.", err)
+	}
+
+	return nil
+}
+
+// MongoRemoveProduct is a helper function for removing a product from the mongo cache based on ID
+func MongoRemoveProduct(context *app.Context, productID int64) oops.Error {
+	mSession, e := context.MongoDB.Open()
+	if e != nil {
+		return e
+	}
+	defer mSession.Close()
+
+	c := mSession.DB("api").C("product_cache")
+	_, err := c.RemoveAll(bson.M{"ID": productID})
+	if err != nil {
+		return oops.ServerError("", "Could not remove product from MongoDB.", err, productID)
+	}
+	return nil
+}
+
+func MongoRemoveCache(context *app.Context, thingName string, id int64) oops.Error {
+	var query string
+	switch thingName {
+	case "manufacturer":
+		query = "value.manufacturer.manufacturer_id"
+	case "product":
+		query = "value.id"
+	case "option":
+		query = "value.option_sets.option_set_list.option_list.id"
+	case "option_set":
+		query = "value.option_sets.option_set_list.id"
+	case "collection":
+		query = "value.collection.collection_id"
+	default:
+		return oops.ServerError("", "Bad thing name")
+	}
+
+	mSession, e := context.MongoDB.Open()
+	if e != nil {
+		return e
+	}
+	defer mSession.Close()
+
+	c := mSession.DB("api").C("product_cache")
+	_, err := c.RemoveAll(bson.M{query: id})
+
+	if err != nil {
+		return oops.ServerError("", "Could not remove product from MongoDB.", err, id)
+	}
+	return nil
+}
+
+// MongoRemoveProductByManufacturer is a helper function for removing all products from the mongo cache based on manufacturer ID
+func MongoRemoveProductByManufacturer(context *app.Context, mfrID int64) oops.Error {
+	mSession, e := context.MongoDB.Open()
+	if e != nil {
+		return e
+	}
+	defer mSession.Close()
+
+	c := mSession.DB("api").C("product_cache")
+	_, err := c.RemoveAll(bson.M{"value.manufacturer.manufacturer_id": mfrID})
+
+	if err != nil {
+		return oops.ServerError("", "Could not remove product from MongoDB.", err, mfrID)
+	}
+	return nil
+}
+
+// MongoInsertProduct is a helper function for inserting a product into the mongo cache
+func MongoInsertProduct(context app.Context, productID int64, prodJSON string) oops.Error {
+	mSession, e := context.MongoDB.Open()
+	if e != nil {
+		return e
+	}
+	defer mSession.Close()
+
+	c := mSession.DB("api").C("product_cache")
+	var prodMap map[string]interface{}
+	err := json.Unmarshal([]byte(prodJSON), &prodMap)
+	if err != nil {
+		return oops.ServerError("", "Failed to marshal product.", err)
+	}
+	err = c.Insert(map[string]interface{}{"ID": productID, "value": prodMap})
+	if err != nil {
+		return oops.ServerError("", "Could not insert product into MongoDB.", err, productID, prodJSON)
+	}
+	return nil
+}

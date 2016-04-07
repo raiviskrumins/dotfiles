@@ -1,0 +1,102 @@
+{% extends "index.jinja2" %}
+{% from 'macros.jinja2' import select_field, basic_field, site_messages %}
+{% block javascript %}
+{{super()}}
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/folder.min.js')|cache_update }}"></script>
+{% endblock %}
+
+{% block content_main %}
+<div class="row">
+  <div class="col-md-4">
+    {{ site_messages(get_flashed_messages()) }}
+  </div>
+</div>
+<div class="row">
+  <div class="col-md-12">
+    <h1>{{ folder.name }} (<span class="count-folder-id-{{ folder.id }}">{{ products|length }}</span>)
+      <span aria-hidden="true"  data-folder-id="{{ folder.id }}" data-ref="/folder/edit" data-action-url="{{ url_for('folder_view.folder_edit', id=folder.id) }}" class="js-show-edit-folder icon-pencil hidden-xs hidden-sm"></span>
+      <span aria-hidden="true"  data-folder-id="{{ folder.id }}" data-ref="/folder/edit" data-action-url="{{ url_for('folder_view.folder_edit', id=folder.id) }}" class="js-show-edit-folder edit-folder-txt hidden-md hidden-lg">(Edit Folder)</span>
+    </h1>
+  </div>
+</div>
+
+<div id="toolBar" class="collapse in js-collapsable-filters">
+  <form action="/products" method="POST" id="queryForm">
+    <div class="row">
+      <div class="col-md-3">
+          {{ basic_field(form.search, hide_label=true, placeholder="Search Products")}}
+          <a href="#" class="js-clear-search clear-search"><span class="icon-x"></span></a>
+      </div>
+      <div class="col-md-3">
+        <div class="form-group">
+          {{ select_field(form.manufacturer, hide_label=true) }}
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-group">
+          {{ select_field(form.category, hide_label=true) }}
+        </div>
+      </div>
+      <div class="col-md-3 col-xs-12">
+        <div class="input-group form-group">
+          <span class="input-group-addon">Sort by</span>
+          {{ select_field(form.sort, hide_label=true) }}
+          <div class="input-group-btn">
+            <span class="caret pull-right"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row toolbar">
+      <div class="col-md-2 col-md-offset-10">
+        <a href="" class="btn btn-reset js-reset-all pull-right">Reset All</a>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="row hidden-md hidden-lg toggle-toolbar">
+  <div class="col-xs-6 col-xs-offset-3 text-center">
+    <a data-toggle="collapse" href="#toolBar" aria-expanded="false" aria-controls="collapseExample">Hide Filters</a>
+  </div>
+  <div class="clearfix"></div>
+  <hr>
+</div>
+
+<div class="product-grid row product-list folders" id="folderProductList">
+  {% for product in products %}
+  <div class="col-lg-3 col-md-4 col-sm-6 product-container" id="{{ folder.id }}-{{ product.product_id }}" data-category="{{ product.product_category }}" data-product-name="{{ product.product_name }}" data-manufacturer="{{ product.manufacturer_name }}" data-date-added="{{ product.id }}">
+    <button class="js-show-remove-product-from-folder btn btn-danger remove-product-btn hidden-xs hidden-sm" data-folder-id="{{ folder.id }}" data-product-id="{{ product.product_id }}" data-action-url="{{ url_for('folder_view.folder_confirm_product_delete', folder=folder.id, product=product.product_id)}}" data-ref="/product/{{ product.product_id }}">Remove</button>
+    <a href="/products/{{ product.product_id }}">
+      <div class="product-image" style="background-image:url(' {{ product.product_image }}')"></div>
+    </a>
+    <div class="product-header">
+      <h3 class="product-name">{{ product.product_name }}</h3>
+      <p class="product-manufacturer">{{ product.manufacturer_name }}</p>
+      <a class="js-show-remove-product-from-folder remove-product-btn hidden-md hidden-lg" data-folder-id="{{ folder.id }}" data-product-id="{{ product.product_id }}" data-action-url="{{ url_for('folder_view.folder_confirm_product_delete', folder=folder.id, product=product.product_id)}}" data-ref="/product/{{ product.product_id }}">Remove From Folder</a>
+    </div>
+  </div>
+  {% if loop.index % 4 == 0 %}
+      <div class="clearfix visible-lg-block"></div>
+  {% endif %}
+  {% if loop.index % 3 == 0 %}
+      <div class="clearfix visible-md-block"></div>
+  {% endif %}
+  {% else %}
+  <div class="col-md-12">
+    <div id="no-products">
+      <img src="/static/img/gui/products_empty.svg" class="empty-folder" />
+      <h3>You haven't added any products yet.</h3>
+      <p>Add items to this folder by clicking on the Products tab to the left. When you find a product you'd like to save, click the "Add to Folder" button.</p>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row">
+  <div class="col-md-12">
+    <ul class="pagination pagination-sm pull-right"></ul>
+  </div>
+</div>
+
+{% endblock content_main %}

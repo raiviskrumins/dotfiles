@@ -1,0 +1,155 @@
+from amber_api.models.option import (
+    OptionSet,
+    Option,
+    TextileOption,
+    LeatherOption,
+    HardwareOption,
+    NailheadOption,
+    TrimOption
+)
+from amber_api.views.error import (
+    MissingOptionSet,
+    MissingOption
+)
+from amber_api.models.component_types import OptionSetSubComponent
+from amber_api.models import db
+from amber_api.lib.product import fetch_product, save_product
+from amber_api.lib.model_utilities import partial_cache_update
+
+
+def get_option_set(option_set_id):
+    """Helper function for searching for an option set
+    """
+    option_set = OptionSet.query.get(option_set_id)
+    if not option_set:
+        raise MissingOptionSet(object_id=option_set_id)
+    return option_set
+
+
+def get_option_sets(manufacturer_id):
+    """Helper function for retrieving all option sets
+    """
+    option_sets = OptionSet.query.filter_by(
+        manufacturer_id=manufacturer_id
+    ).order_by(OptionSet.id).all()
+    return option_sets
+
+
+def save_option_set(option_set):
+    """Helper function for saving an option set
+    """
+    db.session.add(option_set)
+    db.session.commit()
+    components = OptionSetSubComponent.query.filter_by(
+        option_set_id=option_set.id
+    )
+    product_ids = [comp.product_id for comp in components]
+    if product_ids:
+        partial_cache_update(product_ids, option_set, 'option_set')
+
+
+def delete_option_set_helper(option_set, api_key):
+    """Helper function for deleting an option set and performing other needed
+    actions
+    """
+    option_set_subs = OptionSetSubComponent.query.filter_by(
+        option_set_id=option_set.id
+    ).all()
+    for option_set_sub in option_set_subs:
+        product_id = option_set_sub.product_id
+        db.session.delete(option_set_sub)
+        db.session.commit()
+        product = fetch_product(product_id, reload_cache=True, api_key=api_key)
+        save_product(product)
+    db.session.delete(option_set)
+    db.session.commit()
+    components = OptionSetSubComponent.query.filter_by(
+        option_set_id=option_set.id
+    )
+    product_ids = [comp.product_id for comp in components]
+    if product_ids:
+        partial_cache_update(product_ids, option_set, 'option_set')
+
+
+def get_option(option_id):
+    """Helper function for retrieving an option
+    """
+    option_type = get_option_type(option_id)
+    option = Option.query.get(option_id).to_dict()
+    if option_type != 'finish':
+        option_type = option_type + '_option'
+        type_data = db.session.execute(
+            'select * from %s where option_id=%d'
+            % (option_type, option_id)
+        )
+        print("=" * 100)
+        import pprint
+        pprint.pprint(type_data)
+        option['type_data'] = [dict(t) for t in type_data][0]
+    if not option:
+        raise MissingOption(object_id=option_id)
+    return option
+
+
+def save_option(option):
+    """Helper function for saving an option
+    """
+    db.session.add(option)
+    db.session.commit()
+
+
+def delete_option_helper(option_id):
+    """Helper function for deleting an option
+    """
+    option = Option.query.get(option_id)
+    db.session.delete(option)
+    db.session.commit()
+
+
+def clear_default_options(option_set_id):
+    """Helper function for removing all default options for an option set
+    """
+    options = Option.query.filter_by(option_set_id=option_set_id).all()
+    for option in options:
+        option.default = False
+        db.session.add(option)
+    db.session.commit()
+
+
+def save_option_type(option, type_data):
+    """Helper function for creating or updating an option's type data
+    """
+    # TODO pass data when front end part is finished
+    set_type = get_option_type(option.id)
+    if set_type != 'finish':
+        option_class = None
+        if set_type == 'textile':
+            option_class = TextileOption
+        elif set_type == 'leather':
+            option_class = LeatherOption
+        elif set_type == 'hardware':
+            option_class = HardwareOption
+        elif set_type == 'nailhead':
+            option_class = NailheadOption
+        elif set_type == 'trim':
+            option_class = TrimOption
+        typed_option = option_class.query.filter_by(
+            option_id=option.id
+        ).first()
+        if not typed_option:
+            typed_option = option_class()
+            typed_option.option_id = option.id
+        # typed_option.deserialize('input', type_data)
+        db.session.add(typed_option)
+        db.session.commit()
+
+
+def get_option_type(option_id):
+    """Helper function for finding an option's type
+    """
+    set_type = db.session.execute(
+        'select set_type from option_set where id in '
+        '(select option_set_id from option where id=%d) '
+        % option_id
+    ).first()[0]
+    return set_type

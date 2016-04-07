@@ -1,0 +1,58 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field %}
+<div class="modal fade">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title">
+                {% if image %}
+                    Edit Image
+                {% else %}
+                    New Image
+                {% endif %}
+                </h4>
+            </div>
+            {% if image %}
+                <form action="{{ url_for('manufacturer_view.image_save', mfr_id=mfr_id, image_id=image.id) }}" method="POST" id="imageForm">
+            {% else %}
+                <form action="{{ url_for('manufacturer_view.image_new', mfr_id=mfr_id) }}" method="POST" id="imageForm">
+            {% endif %}
+                <div class="modal-body clearfix">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="text-center">
+                                <a data-target="#feature_image" class="image-upload-wrapper js-file-trigger">
+                                    <div class="modal-image-holder js-image-holder text-center">
+                                        {% if image %}
+                                            <img src="{{image.url}}">
+                                        {% else %}
+                                            <div class="placeholder-image"></div>
+                                        {% endif %}
+                                    </div>
+                                    <button class="upload-btn btn btn-info text-center">
+                                        {% if image %}
+                                            Update Image
+                                        {% else %}
+                                            Upload Image
+                                        {% endif %}
+                                    </button>
+                                </a>
+                            </div>
+                            <input type="file" id="feature_image" name="feature_image" accept=".jpg,.jpeg,.png,.gif">
+                            {% if image %}
+                                {{ basic_field(form.logo_url, value=image.url, hide_label=True) }}
+                            {% else %}
+                                {{ basic_field(form.logo_url, hide_label=True) }}
+                            {% endif %}
+                            {{ checkbox_field(form.default) }}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <input type="submit" class="btn btn-primary pull-right" value="Save">
+                    <button class="btn btn-default pull-right" data-dismiss="modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

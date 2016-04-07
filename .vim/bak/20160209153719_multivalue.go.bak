@@ -1,0 +1,247 @@
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+)
+
+// Up is executed when this migration is applied
+func Up_20160209153719(txn *sql.Tx) {
+	jsonData := `
+{
+  "pattern": {
+    "color": [
+      "Aqua/Teal",
+      "Beige",
+      "Black",
+      "Blue",
+      "Brown",
+      "Burgundy",
+      "Copper",
+      "Coral/Peach",
+      "Gold",
+      "Gray",
+      "Green",
+      "Light Blue",
+      "Light Green",
+      "Light Multi-Color",
+      "Light Yellow",
+      "Multicolored",
+      "Off-White",
+      "Orange",
+      "Pastel",
+      "Pink",
+      "Purple",
+      "Red",
+      "Rust",
+      "Silver",
+      "Tan/Taupe",
+      "White",
+      "Yellow"
+    ],
+    "design_type": [
+      "Antique",
+      "Patterned",
+      "Traditional",
+      "Borders",
+      "Abstract",
+      "Animal/Skins",
+      "Asian",
+      "Basketweave",
+      "Botanical",
+      "Check",
+      "Chevron",
+      "Chintz",
+      "Contemporary",
+      "Corduroy",
+      "Country/Lodge/Cabin",
+      "Crewel",
+      "Damask",
+      "Denim",
+      "Diamond",
+      "Distressed",
+      "Dots/Circles",
+      "Flamestitch",
+      "Floral",
+      "Foliage",
+      "Fleur De Lis",
+      "Greek Key",
+      "Geometric",
+      "Gros Point",
+      "Ethnic",
+      "Hand Blocked",
+      "Herringbone",
+      "Houndstooth",
+      "Ikat",
+      "Imberline",
+      "Jacobean",
+      "Juvenile",
+      "Lattice/Frette",
+      "Medallion",
+      "Moire",
+      "Nautical",
+      "Nature",
+      "Novelty",
+      "Ogee",
+      "Ottoman",
+      "Paisley",
+      "Plaid/Gingham",
+      "Plain",
+      "Print",
+      "Quilted",
+      "Scroll",
+      "Solid",
+      "Stripe",
+      "Southwestern",
+      "Texture",
+      "Toile",
+      "Tropical",
+      "Twill"
+    ]
+  },
+  "textile": {
+    "usage": [
+      "Athletic",
+      "ATV/Motorcycle",
+      "Automotive",
+      "Bedding",
+      "Casino",
+      "Commercial",
+      "Drapery",
+      "Earth Friendly",
+      "Healthcare",
+      "Hospitality",
+      "Indoor-Outdoor",
+      "Motor Home/RV",
+      "Multipurpose",
+      "Outdoor",
+      "Performance",
+      "Residential",
+      "Slipcover",
+      "Upholstery",
+      "Wall Fabric"
+    ],
+    "weave_type": [
+      "Boucles",
+      "Breathables",
+      "Brocade",
+      "Casement",
+      "Chenille",
+      "Crypton",
+      "Environmentally Friendly",
+      "Faux Fur",
+      "Faux Leather",
+      "Faux Silk",
+      "Faux Wool",
+      "Jacquard",
+      "Lace",
+      "Leather",
+      "Linen",
+      "Lining",
+      "Matelasse",
+      "Microsuede",
+      "Mohair",
+      "Pleated/Pintuck",
+      "Polyurethane",
+      "Raffia",
+      "Satin",
+      "Sheer",
+      "Silk",
+      "Synthetic",
+      "Solid",
+      "Suede",
+      "Taffeta",
+      "Tapestry",
+      "Tweed/Texture",
+      "Velvet",
+      "Vinyl",
+      "Wovens",
+      "Wool",
+      "Cotton",
+      "Metallic",
+      "Natural Fiber",
+      "Grasscloth",
+      "Paper",
+      "Fur",
+      "Hide",
+      "Embroidery"
+    ]
+  }
+}`
+	var mvSQL, dataSQL, mvsSQL []string
+	mvSQL = append(mvSQL, `CREATE TYPE multi_value_type AS ENUM ('weave_type', 'design_type', 'usage', 'color');`)
+	mvSQL = append(mvSQL, `ALTER TABLE component ADD UNIQUE (component_name);`)
+
+	mvSQL = append(mvSQL, `
+		CREATE SEQUENCE multi_value_id_seq
+			START WITH 1
+			INCREMENT BY 1
+			NO MINVALUE
+			NO MAXVALUE
+			CACHE 1;`)
+	mvSQL = append(mvSQL, `ALTER TABLE multi_value_id_seq OWNER TO doodle;`)
+
+	mvSQL = append(mvSQL, `
+		CREATE TABLE multi_value (
+		id integer NOT NULL DEFAULT nextval('multi_value_id_seq'::regclass),
+		value_type multi_value_type,
+		label character varying,
+		component character varying);`)
+	mvSQL = append(mvSQL, `ALTER TABLE multi_value OWNER TO doodle;`)
+
+	mvSQL = append(mvSQL, `ALTER SEQUENCE multi_value_id_seq OWNED BY multi_value.id;`)
+	mvSQL = append(mvSQL, `ALTER TABLE ONLY multi_value ADD CONSTRAINT pk_multi_value PRIMARY KEY (id);`)
+	mvSQL = append(mvSQL, `CREATE INDEX ix_multi_value_id ON multi_value USING btree (id);`)
+	mvSQL = append(mvSQL, `ALTER TABLE ONLY multi_value ADD CONSTRAINT fk_multi_value_component_component FOREIGN KEY (component) REFERENCES component(component_name) ON DELETE CASCADE;`)
+	for _, stmt := range mvSQL {
+		txn.Exec(stmt)
+	}
+
+	mvMap := make(map[string]map[string][]string)
+	err := json.Unmarshal([]byte(jsonData), &mvMap)
+	if err != nil {
+		panic(err)
+	}
+
+	for c, cMap := range mvMap {
+		for vt, vtSlice := range cMap {
+			for _, v := range vtSlice {
+				dataSQL = append(dataSQL, `INSERT INTO multi_value (value_type, label, component) VALUES ('`+vt+`', '`+v+`', '`+c+`');`)
+			}
+		}
+	}
+	for _, stmt := range dataSQL {
+		txn.Exec(stmt)
+	}
+
+	mvsSQL = append(mvsSQL, `
+		CREATE SEQUENCE multi_values_id_seq
+			START WITH 1
+			INCREMENT BY 1
+			NO MINVALUE
+			NO MAXVALUE
+			CACHE 1;`)
+	mvsSQL = append(mvsSQL, `ALTER TABLE multi_values_id_seq OWNER TO doodle;`)
+
+	mvsSQL = append(mvsSQL, `
+		CREATE TABLE multi_values (
+		id integer NOT NULL DEFAULT nextval('multi_values_id_seq'::regclass),
+		product_id integer NOT NULL,
+		multi_value_id integer NOT NULL);`)
+	mvsSQL = append(mvsSQL, `ALTER TABLE multi_values OWNER TO doodle;`)
+
+	mvsSQL = append(mvsSQL, `ALTER SEQUENCE multi_values_id_seq OWNED BY multi_values.id;`)
+	mvsSQL = append(mvsSQL, `ALTER TABLE ONLY multi_values ADD CONSTRAINT pk_multi_values PRIMARY KEY (id);`)
+	mvsSQL = append(mvsSQL, `CREATE INDEX ix_multi_values_id ON multi_values USING btree (id);`)
+	mvsSQL = append(mvsSQL, `ALTER TABLE ONLY multi_values ADD CONSTRAINT fk_multi_values_multi_value_id_multi_value FOREIGN KEY (multi_value_id) REFERENCES multi_value(id) ON DELETE CASCADE;`)
+	mvsSQL = append(mvsSQL, `ALTER TABLE ONLY multi_values ADD CONSTRAINT fk_multi_values_product_id_product_entity FOREIGN KEY (product_id) REFERENCES product_entity(id) ON DELETE CASCADE;`)
+	for _, stmt := range mvsSQL {
+		txn.Exec(stmt)
+	}
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160209153719(txn *sql.Tx) {
+	txn.Exec("DROP TABLE multi_values")
+	txn.Exec("DROP TABLE multi_value")
+}

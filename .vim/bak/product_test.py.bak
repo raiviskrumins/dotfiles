@@ -1,0 +1,2073 @@
+import unittest
+import unittest.mock as mock
+
+import json
+import io
+
+from flask.ext.testing import TestCase as FlaskTestCase
+
+from werkzeug.exceptions import NotFound
+
+from amber_portal import app
+from amber_portal.views import product
+from amber_portal.models import db
+
+
+PRODUCT_ID = 1234
+MANUFACTURER_ID = 1337
+OPTION_SET_ID = 42
+OPTION_ID = 8
+
+
+class ProductViewTests(FlaskTestCase):
+
+    def create_app(self):
+        app.config.from_object('config.TestingConfig')
+        return app
+
+    def setUp(self):
+        self.client = self.app.test_client()
+        self._ctx = self.app.test_request_context()
+        self._ctx.push()
+        db.create_all()
+
+    def tearDown(self):
+        db.session.remove()
+        db.drop_all()
+
+    @mock.patch('amber_portal.views.product.render_template')
+    def testTemplateNone(self, mock_render_template):
+        """
+        Tests the route for loading an empty product list page.
+        """
+        product.template_none()
+        mock_render_template.assert_called_once_with(
+            'product/no_products.jinja2'
+        )
+
+    @mock.patch('amber_portal.views.product.render_template')
+    def testTemplateRows(self, mock_render_template):
+        """
+        Tests the route that returns product rows.
+        """
+        mock_render_template.return_value = u'What a webpage!'
+
+        resp = self.client.put(
+            '/products/rows', content_type='application/json',
+            data='{"products": ["ohai"]}'
+        )
+        self.assert200(
+            resp, 'No errors should have occurred for this request.'
+        )
+        mock_render_template.assert_called_once_with(
+            'product/product_rows.jinja2', products=['ohai']
+        )
+
+    @mock.patch('amber_portal.views.product.current_app.logger.error')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProdGetWithRaisesError(
+        self,
+        mock_api,
+        mock_error
+    ):
+        """
+        Tests the prod_get route when the call to the API fails.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_client.Product.retrieve = mock.Mock()
+
+        err = NotFound(404, 'No such fake product!')
+
+        def mock_get_prod(unused_prod_id):
+            raise err
+        # When amber_client.get_product is called on line 261 we want it to
+        # raise an error, so we mock out get_product and use a side effect to
+        # run mock_get_prod when it runs, which raises the desired error.
+        mock_client.Product.retrieve.side_effect = mock_get_prod
+
+        with self.assertRaises(NotFound):
+            product.prod_get(PRODUCT_ID)
+
+    @mock.patch('amber_portal.views.product.build_product_form')
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProdGetWithPanels(
+            self,
+            mock_api,
+            mock_render_template,
+            mock_build_product_form
+        ):
+        """
+        Tests the prod_get route when the session includes panel data to properly restore open panels.
+        """
+        with self.client.session_transaction() as sess:
+            sess['panels'] = {'panels': 'all the panels'}
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_client.Product.retrieve = mock.Mock()
+        mock_product = mock.MagicMock()
+
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_render_template.return_value = u''
+
+        mock_form = mock.Mock()
+        mock_build_product_form.return_value = mock_form
+
+        resp = self.client.get(
+            '/products/1234'
+        )
+
+        self.assert200(resp)
+        mock_client.Product.retrieve.assert_called_once_with(PRODUCT_ID)
+        mock_render_template.assert_called_once_with(
+            'product.jinja2',
+            form=mock_form,
+            product=mock_product,
+            product_components=mock_product.get_components(),
+            skip_components=product.skip_components,
+            priority_components=product.priority_components,
+            general_components=product.general_components,
+            common_components=product.common_components
+        )
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess['panels'], {'panels': 'all the panels'})
+
+    @mock.patch('amber_portal.views.product.build_product_form')
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProdGetNoPanels(
+            self,
+            mock_api,
+            mock_render_template,
+            mock_build_product_form):
+        """
+        Tests the prod_get route when no panel data is included in the session.
+        """
+        with self.client.session_transaction() as sess:
+            if 'panels' in sess:
+                del(sess['panels'])
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_client.Product.retrieve = mock.Mock()
+        mock_product = mock.MagicMock()
+
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_render_template.return_value = u''
+
+        mock_form = mock.Mock()
+        mock_build_product_form.return_value = mock_form
+
+        resp = self.client.get(
+            '/products/1234'
+        )
+        self.assert200(resp)
+        mock_client.Product.retrieve.assert_called_once_with(PRODUCT_ID)
+        mock_render_template.assert_called_once_with(
+            'product.jinja2',
+            form=mock_form,
+            product=mock_product,
+            product_components=mock_product.get_components(),
+            skip_components=product.skip_components,
+            priority_components=product.priority_components,
+            general_components=product.general_components,
+            common_components=product.common_components
+        )
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess['panels'], {})
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.build_component_form')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProductImageModalValidate(
+        self,
+        mock_api,
+        mock_build_component_form,
+        mock_render_template
+    ):
+        """
+        Tests the product_image_modal route when form validation succeeds.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        data_id = 2345
+
+        mock_form = mock.Mock()
+        mock_build_component_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = True
+
+        mock_render_template.return_value = u''
+
+        mock_product = mock.MagicMock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        product.product_image_modal(PRODUCT_ID, data_id)
+        mock_render_template.assert_called_once_with(
+            'product/components/images.jinja2',
+            product=mock_product
+        )
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.build_component_form')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProductImageModalNotValidate(
+        self,
+        mock_api,
+        mock_build_component_form,
+        mock_render_template
+    ):
+        """
+        Tests the product_image_modal route when the form validation fails.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        data_id = 1234
+
+        mock_form = mock.Mock()
+        mock_build_component_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u''
+
+        product.product_image_modal(PRODUCT_ID, data_id)
+        mock_render_template.assert_called_once_with(
+            'product/image_modal.jinja2',
+            form=mock_form,
+            prod_id=PRODUCT_ID,
+            sub_component_data_id=data_id
+        )
+
+    @mock.patch('amber_portal.views.product.build_component_form')
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProductImageModalNewNotValidate(
+        self,
+        mock_api,
+        mock_render_template,
+        mock_build_component_form
+    ):
+        """
+        Tests the product_image_modal_new route when the form validation fails.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_form = mock.Mock()
+        mock_form.errors = {'category': ['error']}
+        mock_build_component_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u''
+
+        mock_product = mock.MagicMock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        product.product_image_modal_new(PRODUCT_ID)
+        mock_render_template.assert_called_once_with(
+            'product/image_modal.jinja2',
+            form=mock_form,
+            prod_id=PRODUCT_ID
+        )
+        mock_client.Product.retrieve.assert_called_once_with(PRODUCT_ID)
+
+    @mock.patch('amber_portal.views.product.build_component_form')
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProductImageModalNewValidateProduct(
+        self,
+        mock_api,
+        mock_render_template,
+        mock_build_component_form,
+    ):
+        """
+        Tests the product_image_modal_new route when the form validation
+        succeeds.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_form = mock.Mock()
+        mock_build_component_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = True
+
+        mock_product = mock.MagicMock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_render_template.return_value = u''
+
+        product.product_image_modal_new(PRODUCT_ID)
+        mock_render_template.assert_called_once_with(
+            'product/components/images.jinja2',
+            product=mock_product
+        )
+
+    @mock.patch('amber_portal.views.product.render_template')
+    def testProductImageDeleteModal(self, mock_render_template):
+        """
+        Tests the product_image_delete route.
+        """
+        mock_render_template.return_value = u''
+        data_id = 1234
+
+        product.product_image_delete_modal(data_id)
+        mock_render_template.assert_called_once_with(
+            'product/image_delete_modal.jinja2',
+            data_id=data_id
+        )
+
+    @mock.patch('amber_portal.views.product.jsonify')
+    def testImageProcessingRotationZero(self, mock_jsonify):
+        """
+        Tests the image_processing route when the rotation angle provided is 0.
+        """
+        full_size_url = "1234"
+        mock_jsonify.return_value = u''
+        resp = self.client.post(
+            '/products/image/process',
+            content_type='application/json',
+            data='{"rotation_angle": "0", "full_size": "%s"}' % full_size_url
+        )
+        self.assert200(
+            resp, 'No errors should have occurred for this request.'
+        )
+        mock_jsonify.assert_called_once_with(
+            {'success': True, 'image_url': full_size_url}
+        )
+
+    @mock.patch('amber_portal.views.product.json.loads')
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.urlopen')
+    @mock.patch('amber_portal.views.product.upload_image')
+    def testImageProcessingInvalidImageType(
+        self,
+        mock_upload,
+        mock_urlopen,
+        mock_jsonify,
+        mock_loads
+    ):
+        """
+        Tests the image_processing route when the provided image is not of a
+        supported file type.
+        """
+        mock_upload = mock.Mock()
+        full_size_url = "something.fake"
+        mock_loads.return_value = {
+            "rotation_angle": "90",
+            "full_size": full_size_url
+        }
+        mock_jsonify.return_value = u''
+
+        mock_urlopen.return_value = mock.Mock()
+        mock_urlopen.return_value.read.return_value = b''
+
+        resp = self.client.post(
+            '/products/image/process',
+            content_type='application/json',
+            data='{"rotation_angle": "90", "full_size": "%s"}' % full_size_url
+        )
+
+        mock_jsonify.assert_called_once_with(
+            {'success': False, 'image_url': full_size_url}
+        )
+
+    @mock.patch('amber_portal.views.product.current_app.logger.error')
+    @mock.patch('amber_portal.views.product.json.loads')
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.urlopen')
+    @mock.patch('amber_portal.views.product.Image.open')
+    @mock.patch('amber_portal.views.product.Image.new')
+    @mock.patch('amber_portal.views.product.upload_image')
+    def testImageProcessingSaveError(
+        self,
+        mock_upload,
+        mock_image_new,
+        mock_image_open,
+        mock_urlopen,
+        mock_jsonify,
+        mock_loads,
+        mock_logger
+    ):
+        """
+        Tests the image_processing route when an error is thrown by the image
+        object on its attempt to save the rotation changes.
+        """
+        full_size_url = "something.jpg"
+        mock_loads.return_value = {
+            "rotation_angle": "90",
+            "full_size": full_size_url
+        }
+        mock_jsonify.return_value = u''
+        mock_rotated_image = mock.MagicMock()
+
+        mock_urlopen.return_value = mock.Mock()
+        mock_urlopen.return_value.read.return_value = b''
+
+        mock_image = mock.Mock()
+        mock_image_copy = mock.Mock()
+        mock_canvas = mock.Mock()
+        mock_rotated_canvas = mock.Mock()
+
+        mock_image_open.return_value = mock_image
+        mock_image.copy.return_value = mock_image_copy
+        mock_image_new.return_value = mock_canvas
+        mock_canvas.rotate.return_value = mock_rotated_canvas
+        mock_rotated_canvas.crop.return_value = mock_rotated_image
+
+        mock_image_copy.height = 1337
+        mock_image_copy.width = 42
+
+        def mock_save_side_effect(some_image_container, some_mime_format):
+            raise KeyError('Fun error time.')
+
+        mock_image.copy.return_value.rotate.return_value = mock_rotated_image
+        mock_rotated_image.save.side_effect = mock_save_side_effect
+        mock_upload.return_value = "something-new.jpg"
+
+        resp = self.client.post(
+            '/products/image/process',
+            content_type='application/json',
+            data='{"rotation_angle": "90", "full_size": "%s"}' % full_size_url
+        )
+        mock_jsonify.assert_called_once_with(
+            {'success': False, 'image_url': full_size_url}
+        )
+
+    @mock.patch('amber_portal.views.product.pika.BasicProperties')
+    @mock.patch('amber_portal.views.product.pika.ConnectionParameters')
+    @mock.patch('amber_portal.views.product.pika.BlockingConnection')
+    @mock.patch('amber_portal.views.product.upload_stream')
+    @mock.patch('amber_portal.views.product.json.loads')
+    @mock.patch('amber_portal.views.product.json.dumps')
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.base64.encodestring')
+    @mock.patch('amber_portal.views.product.urlopen')
+    @mock.patch('amber_portal.views.product.Image.open')
+    @mock.patch('amber_portal.views.product.upload_image')
+    @mock.patch('amber_portal.views.product.Image.new')
+    def testImageProcessingSave(
+        self,
+        mock_image_new,
+        mock_upload,
+        mock_image_open,
+        mock_urlopen,
+        mock_base64_encodestring,
+        mock_jsonify,
+        mock_dumps,
+        mock_loads,
+        mock_upload_stream,
+        mock_blocking_conn,
+        mock_connection_params,
+        mock_basic_props
+    ):
+        """
+        Tests the image_processing route when everything succeeds.
+        """
+        full_size_url = "something.jpg"
+        new_full_size_url = "something-new.jpg"
+        mock_loads.return_value = {
+            "rotation_angle": "90",
+            "full_size": full_size_url
+        }
+        mock_jsonify.return_value = u''
+        mock_rotated_image = mock.MagicMock()
+
+        mock_urlopen.return_value = mock.Mock()
+        mock_urlopen.return_value.read.return_value = b''
+        mock_urlopen.return_value.getcode.return_value = 200
+
+        mock_image = mock.Mock()
+        mock_image_copy = mock.Mock()
+
+        mock_image_open.return_value = mock_image
+        mock_image.copy.return_value = mock_image_copy
+
+        mock_image_copy.height = 1337
+        mock_image_copy.width = 42
+
+        mock_image.copy.return_value.rotate.return_value = mock_rotated_image
+
+        mock_image_string = 'image string'
+        mock_base64_encodestring.return_value = mock_image_string
+
+        mock_upload_stream.return_value = new_full_size_url
+
+        mock_blocking_conn.return_value = mock.Mock()
+        mock_upload.return_value = "something-new.jpg"
+
+        resp = self.client.post(
+            '/products/image/process',
+            content_type='application/json',
+            data='{"rotation_angle": "90", "full_size": "%s"}' % full_size_url
+        )
+        mock_image_new.return_value.paste.assert_called_once_with(
+            mock_image_copy, (647, 0, 690, 1337)
+        )
+
+        mock_jsonify.assert_called_once_with(
+            {'success': True, 'image_url': new_full_size_url}
+        )
+
+    @mock.patch('amber_portal.views.product.build_product_form')
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProdGetReferrerNotMfr(
+            self,
+            mock_api,
+            mock_render_template,
+            mock_build_product_form
+        ):
+        """
+        Tests the prod_get route when the referrer is included in the session but the referrer is not 'manufacturer'.
+        """
+        with self.client.session_transaction() as session:
+            session['referrer'] = {'name': 'NOT manufacturer'}
+            session['product_ids'] = [1, 2, 3, 4]
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_client.Product.retrieve = mock.Mock()
+        mock_product = mock.MagicMock()
+
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_render_template.return_value = u''
+
+        mock_form = mock.Mock()
+        mock_build_product_form.return_value = mock_form
+
+        resp = self.client.get(
+            '/products/1234'
+        )
+
+        self.assert200(resp)
+        mock_client.Product.retrieve.assert_called_once_with(PRODUCT_ID)
+        mock_render_template.assert_called_once_with(
+            'product.jinja2',
+            form=mock_form,
+            product=mock_product,
+            product_components=mock_product.get_components(),
+            skip_components=product.skip_components,
+            priority_components=product.priority_components,
+            general_components=product.general_components,
+            common_components=product.common_components
+        )
+        with self.client.session_transaction() as session:
+            self.assertNotIn('product_ids', session)
+
+    @mock.patch('amber_portal.views.product.build_product_form')
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProdGetReferrerIsMfr(
+            self,
+            mock_api,
+            mock_render_template,
+            mock_build_product_form
+        ):
+        """
+        Tests the prod_get route when the referrer is included in the session and the referrer is 'manufacturer'.
+        """
+        prod_list = [1, 2, 3, 4]
+        with self.client.session_transaction() as session:
+            session['referrer'] = {'name': 'manufacturer'}
+            session['product_ids'] = prod_list
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_client.Product.retrieve = mock.Mock()
+        mock_product = mock.MagicMock()
+
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_render_template.return_value = u''
+
+        mock_form = mock.Mock()
+        mock_build_product_form.return_value = mock_form
+
+        resp = self.client.get(
+            '/products/1234'
+        )
+
+        self.assert200(resp)
+        mock_client.Product.retrieve.assert_called_once_with(PRODUCT_ID)
+        mock_render_template.assert_called_once_with(
+            'product.jinja2',
+            form=mock_form,
+            product=mock_product,
+            product_components=mock_product.get_components(),
+            skip_components=product.skip_components,
+            priority_components=product.priority_components,
+            general_components=product.general_components,
+            common_components=product.common_components
+        )
+        with self.client.session_transaction() as session:
+            self.assertEqual(prod_list, session['product_ids'])
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.NewProductForm')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testAddProductGet(
+        self,
+        mock_api,
+        mock_new_product_form,
+        mock_render_template
+    ):
+        """ Tests the GET method for add_product route without a collection.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_form = mock.Mock()
+        mock_new_product_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u'New product template'
+
+        response = self.client.get('/products/new')
+
+        self.assert200(response)
+        mock_render_template.assert_called_once_with(
+            'new_product.jinja2',
+            form=mock_form,
+            collection=None
+        )
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.NewProductForm')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testAddProductGetWithCollection(
+        self,
+        mock_api,
+        mock_new_product_form,
+        mock_render_template
+    ):
+        """ Tests the GET method for add_product route with a collection.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_form = mock.Mock()
+        mock_new_product_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u'New product template'
+
+        response = self.client.get(
+            '/products/new',
+            query_string='collection=42'
+        )
+
+        self.assert200(response)
+        mock_render_template.assert_called_once_with(
+            'new_product.jinja2',
+            form=mock_form,
+            collection=u'42'
+        )
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.NewProductForm')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testAddProductValidationFail(
+        self,
+        mock_api,
+        mock_new_product_form,
+        mock_render_template
+    ):
+        """ Tests the add_product POST method with a failed form validation.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_form = mock.Mock()
+        mock_new_product_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u'New product template'
+
+        response = self.client.post('/products/new')
+
+        self.assert200(response)
+        mock_render_template.assert_called_once_with(
+            'new_product.jinja2',
+            form=mock_form,
+            collection=None
+        )
+
+    @mock.patch('amber_portal.views.product.url_for')
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.NewProductForm')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testAddProductValidationSuccess(
+        self,
+        mock_api,
+        mock_new_product_form,
+        mock_jsonify,
+        mock_url_for
+    ):
+        """ Tests the add_product POST method with a successful form validation.
+        """
+        mock_product = mock.MagicMock()
+        mock_product['id'] = PRODUCT_ID
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_client.add_product.return_value = mock_product
+        mock_client.SalesChannel.query.return_value = []
+
+        mock_form = mock.Mock()
+        mock_form.data = dict({
+            'manufacturer_sku': MANUFACTURER_ID,
+            'name': 'Test Product',
+            'full_size': None
+        })
+        mock_new_product_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = True
+
+        mock_url_for.return_value = '/product/1234'
+
+        mock_jsonify.return_value = u'Mock JSON'
+
+        response = self.client.post('/products/new')
+
+        expected_product_dict = {
+            'identity': {
+                'manufacturer_sku': MANUFACTURER_ID,
+                'name': 'Test Product'
+            }
+        }
+
+        self.assert200(response)
+        mock_jsonify.assert_called_once_with({
+            'success': True,
+            'url': '/product/1234'
+        })
+        mock_client.Product.from_dict.assert_called_once_with(expected_product_dict)
+
+    @mock.patch('amber_portal.views.product.refresh_collection_cache')
+    @mock.patch('amber_portal.views.product.url_for')
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.NewProductForm')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testAddProductWithCollection(
+        self,
+        mock_api,
+        mock_new_product_form,
+        mock_jsonify,
+        mock_url_for,
+        mock_refresh_collection_cache
+    ):
+        """ Tests the add_product POST method with a successful form validation and a collection.
+        """
+        collection_id = 42
+
+        mock_product = {
+            'id': PRODUCT_ID
+        }
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_client.add_product.return_value = mock_product
+        mock_client.SalesChannel.query.return_value = []
+
+        mock_form = mock.Mock()
+        mock_form.data = dict({
+            'manufacturer_sku': MANUFACTURER_ID,
+            'name': 'Test Product',
+            'full_size': None,
+            'collection': collection_id
+        })
+        mock_new_product_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = True
+
+        mock_url_for.return_value = '/product/1234'
+
+        mock_jsonify.return_value = u'Mock JSON'
+
+        response = self.client.post(
+            '/products/new',
+            query_string='collection=42'
+        )
+
+        self.assert200(response)
+        self.assertItemsEqual(
+            [
+                mock.call.Product.from_dict({
+                    'identity': {
+                        'manufacturer_sku': MANUFACTURER_ID,
+                        'name': 'Test Product'
+                    }
+                }),
+                mock.call.SalesChannel.query(),
+                mock.call.Collection.retrieve(collection_id)
+            ],
+            mock_client.method_calls
+        )
+
+        mock_jsonify.assert_called_once_with({
+            'success': True,
+            'url': '/product/1234'
+        })
+
+    @mock.patch('amber_portal.views.product.url_for')
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.NewProductForm')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    @mock.patch('amber_portal.views.product.get_current_user')
+    def testAddProductWithChannels(
+        self,
+        mock_get_user,
+        mock_api,
+        mock_new_product_form,
+        mock_jsonify,
+        mock_url_for
+    ):
+        """ Tests the add_product POST method with a successful form validation
+            and sales channels.
+        """
+        sales_channel_id = 54135
+        mock_user = mock.Mock()
+        mock_get_user.return_value = mock_user
+        mock_user.manufacturer_id = MANUFACTURER_ID
+
+        mock_product = mock.MagicMock()
+        mock_product['id'] = PRODUCT_ID
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_client.add_product.return_value = mock_product
+
+        mock_channel1 = mock.Mock()
+        mock_channel2 = mock.Mock()
+
+        mock_client.SalesChannel.query.return_value = [
+            mock_channel1,
+            mock_channel2
+        ]
+
+        mock_form = mock.Mock()
+        mock_form.data = dict({
+            'manufacturer_sku': MANUFACTURER_ID,
+            'name': 'Test Product',
+            'full_size': None
+        })
+        mock_new_product_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = True
+
+        mock_url_for.return_value = '/product/1234'
+
+        mock_jsonify.return_value = u'Mock JSON'
+
+        response = self.client.post('/products/new')
+
+        self.assert200(response)
+        self.assertItemsEqual(
+            [
+                mock.call.Product.from_dict({
+                    'identity': {
+                        'manufacturer_sku': MANUFACTURER_ID,
+                        'name': 'Test Product'
+                    }
+                }),
+                mock.call.SalesChannel.query()
+            ],
+            mock_client.method_calls
+        )
+        mock_jsonify.assert_called_once_with({
+            'success': True,
+            'url': '/product/1234'
+        })
+
+    @mock.patch('amber_portal.views.product.render_template')
+    def testTemplateNoResults(self, mock_render_template):
+        """
+        Tests the template_no_results route.
+        """
+        product.template_no_results()
+        mock_render_template.assert_called_once_with(
+            'product/no_results.jinja2'
+        )
+
+    @mock.patch('amber_portal.views.product.get_current_user')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    @mock.patch('amber_portal.views.product.render_template')
+    def testProductList(self, mock_render_template, mock_api, mock_curr_user):
+        """
+        Tests the product_list route.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_categories = {'empty': 'dict'}
+
+        mock_client.Categories.retrieve.return_value.primary = mock_categories
+        mock_products = mock.Mock()
+        mock_client.Product.query.return_value = mock_products
+        mock_products.total = 42
+
+        mock_current_user = mock.Mock()
+        mock_current_user.manufacturer_id = MANUFACTURER_ID
+        product.current_user = mock_current_user
+
+        product.product_list()
+
+        mock_client.Product.query.assert_called_once_with(
+            batch_size=100,
+            fields='identity,visibility,collection,category,audit,images',
+            manufacturer_id=MANUFACTURER_ID
+        )
+
+        mock_render_template.assert_called_once_with(
+            'product/product_list.jinja2',
+            categories=mock_categories,
+            count=mock_client.Product.query().total,
+        )
+
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.get_current_user')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProductSearchNoSort(
+        self,
+        mock_api,
+        mock_curr_user,
+        mock_jsonify
+    ):
+        """
+        Tests the product_search route when no sort_key is provided.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_data = '{"sort_key": "", "offset": 500, "terms": "whatever", "sort_direction": "asc"}'
+
+        mock_current_user = mock.Mock()
+        mock_current_user.manufacturer_id = MANUFACTURER_ID
+
+        mock_search_result = mock.MagicMock()
+        mock_search_result.values.values.return_value = []
+        mock_search_result.__len__ = lambda x: 2
+        mock_client.Product.search.return_value = mock_search_result
+        mock_client.Product.query.return_value = mock_search_result
+        mock_search_result.to_dict.return_value = {}
+
+        mock_jsonify.return_value = ''
+
+        sort_map = {
+            'name': 'IdentityComponent.product_name',
+            'manufacturer_sku': 'IdentityComponent.sku',
+            'date_updated': 'AuditComponent.date_updated',
+            'active': 'VisibilityComponent.active'
+        }
+
+        resp = self.client.put(
+            '/products/list',
+            content_type='application/json',
+            data=mock_data
+        )
+        mock_client.Product.search.called_with(
+            batch_size=100,
+            offset=500,
+            fields='identity,visibility,collection,category,audit,images',
+            filtering=None,
+            terms='whatever',
+            sort_by=sort_map.get('something', 'IdentityComponent.product_name'),
+            sort_dir='asc',
+            manufacturer_id=MANUFACTURER_ID
+        )
+        self.assert200(
+            resp, 'No errors should have occurred for this request.'
+        )
+
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.get_current_user')
+    @mock.patch('amber_portal.views.product.Predicate')
+    @mock.patch('amber_portal.views.product.And')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProductSearchSort(
+        self,
+        mock_api,
+        mock_and,
+        mock_predicate,
+        mock_curr_user,
+        mock_jsonify
+    ):
+        """
+        Tests the product_search route when a sort_key is provided.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_data = '{"sort_key" : "something", "offset": 500, "terms": "whatever", "sort_direction": "asc"}'
+
+        mock_current_user = mock.Mock()
+        mock_current_user.manufacturer_id = MANUFACTURER_ID
+
+        mock_products = mock.MagicMock()
+        mock_products.values.values.return_value = []
+        mock_products.__len__ = lambda x: 2
+        mock_client.Product.search.return_value = mock_products
+        mock_client.Product.query.return_value = mock_products
+        mock_products.to_dict.return_value = {}
+        mock_products.values = []
+        mock_jsonify.return_value = 'ohai'
+
+        sort_map = {
+            'name': 'IdentityComponent.product_name',
+            'manufacturer_sku': 'IdentityComponent.sku',
+            'date_updated': 'AuditComponent.date_updated',
+            'active': 'VisibilityComponent.active'
+        }
+
+        resp = self.client.put(
+            '/products/list',
+            content_type='application/json',
+            data=mock_data
+        )
+        mock_client.Product.search.called_with(
+            batch_size=100,
+            offset=500,
+            fields='identity,visibility,collection,category,audit,images',
+            filtering=None,
+            terms='whatever',
+            sort_by=sort_map.get('something', 'IdentityComponent.product_name'),
+            sort_dir='asc',
+            manufacturer_id=MANUFACTURER_ID
+        )
+        self.assert200(
+            resp, 'No errors should have occurred for this request.'
+        )
+
+    @mock.patch('amber_portal.views.product.flash')
+    @mock.patch('amber_portal.views.product.build_product_form')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProdSave(
+        self,
+        mock_api,
+        mock_build_product_form,
+        mock_flash
+    ):
+        """ Tests prod_save with successful validation.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_product = mock.MagicMock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_form = mock.Mock()
+        mock_build_product_form.return_value = mock_form
+
+        mock_form.validate_on_submit.return_value = True
+
+        response = self.client.post('/products/1234')
+
+        self.assertRedirects(response, '/products/1234')
+        mock_product.update.assert_called_once_with(
+            mock_form.data
+        )
+        mock_client.Product.retrieve.assert_called_once_with(PRODUCT_ID)
+        # TODO: assert mock_flash was called w/ success queue
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.build_product_form')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProdSaveValidationFail(
+        self,
+        mock_api,
+        mock_build_product_form,
+        mock_render_template
+    ):
+        """ Tests prod_save with failed validation.
+        """
+        with self.client.session_transaction() as session:
+            session['panels'] = {}
+            session['panels']['product'] = ['specifications', 'shipping']
+            session['product_ids'] = [1234, 2345, 3456]
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_product = mock.MagicMock()
+        mock_product.get_components.return_value = mock.Mock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_form = mock.Mock()
+        mock_build_product_form.return_value = mock_form
+        mock_form.data = {}
+
+        mock_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u'Some template'
+
+        response = self.client.post('/products/1234')
+
+        self.assert200(response)
+        mock_render_template.assert_called_once_with(
+            'product.jinja2',
+            form=mock_form,
+            product=mock_product,
+            product_components=mock_product.get_components(),
+            skip_components=product.skip_components,
+            priority_components=product.priority_components,
+            general_components=product.general_components,
+            common_components=product.common_components
+        )
+        mock_client.Product.retrieve.assert_called_once_with(PRODUCT_ID)
+        with self.client.session_transaction() as session:
+            self.assertNotIn('product_ids', session)
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.build_product_form')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProdSaveWithOptionSets(
+        self,
+        mock_api,
+        mock_build_product_form,
+        mock_render_template
+    ):
+        """ Tests prod_save with failed validation with option sets.
+        """
+        with self.client.session_transaction() as session:
+            session['panels'] = {}
+            session['panels']['product'] = ['specifications', 'shipping']
+            session['product_ids'] = [1234, 2345, 3456]
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_product = mock.MagicMock()
+        mock_product.get_components.return_value = mock.Mock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        def option_set_side_effect(option_set_id=0):
+            return {
+                'option_set_id': option_set_id,
+                'name': 'Option Set %s' % option_set_id
+            }
+
+        mock_client.get_option_set.side_effect = option_set_side_effect
+
+        mock_form = mock.Mock()
+        mock_build_product_form.return_value = mock_form
+        mock_form.data = {}
+
+        mock_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u'Some template'
+
+        mock_product['option']['option_sets'] = [
+            {
+                'option_set_id': 1,
+                'name': 'Option Set 1'
+            },
+            {
+                'option_set_id': 2,
+                'name': 'Option Set 2'
+            },
+            {
+                'option_set_id': 3,
+                'name': 'Option Set 3'
+            }
+        ]
+
+        response = self.client.post('/products/1234')
+
+        self.assert200(response)
+        mock_render_template.assert_called_once_with(
+            'product.jinja2',
+            form=mock_form,
+            product=mock_product,
+            product_components=mock_product.get_components(),
+            skip_components=product.skip_components,
+            priority_components=product.priority_components,
+            general_components=product.general_components,
+            common_components=product.common_components
+        )
+        mock_client.Product.retrieve.assert_called_once_with(PRODUCT_ID)
+        with self.client.session_transaction() as session:
+            self.assertNotIn('product_ids', session)
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.build_product_form')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProdSaveWithReferrer(
+        self,
+        mock_api,
+        mock_build_product_form,
+        mock_render_template
+    ):
+        """ Tests prod_save with failed validation with referrer.
+        """
+        with self.client.session_transaction() as session:
+            session['panels'] = {}
+            session['panels']['product'] = ['specifications', 'shipping']
+            session['product_ids'] = [1234, 2345, 3456]
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_product = mock.MagicMock()
+        mock_product.get_components.return_value = mock.Mock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_form = mock.Mock()
+        mock_build_product_form.return_value = mock_form
+        mock_form.data = {}
+
+        mock_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u'Some template'
+
+        response = self.client.post(
+            '/products/1234',
+            query_string='referrer=manufacturer&referrer_id=1337'
+        )
+
+        self.assert200(response)
+        mock_render_template.assert_called_once_with(
+            'product.jinja2',
+            form=mock_form,
+            product=mock_product,
+            product_components=mock_product.get_components(),
+            skip_components=product.skip_components,
+            priority_components=product.priority_components,
+            general_components=product.general_components,
+            common_components=product.common_components
+        )
+        mock_client.Product.retrieve.assert_called_once_with(PRODUCT_ID)
+        with self.client.session_transaction() as session:
+            self.assertIn('product_ids', session)
+
+    def testPanelsAdd(self):
+        """ Tests adding a panel to the product panel session list.
+        """
+        with self.client.session_transaction() as session:
+            session.pop('panels', None)
+
+        response = self.client.put(
+            '/products/panels/add',
+            content_type='application/json',
+            data='{"panel": "specifications"}'
+        )
+
+        self.assert200(response)
+        with self.client.session_transaction() as session:
+            self.assertIn('panels', session)
+            self.assertIn('product', session['panels'])
+            self.assertIn('specifications', session['panels']['product'])
+
+    def testPanelsRemove(self):
+        """ Tests removing a panel from the product panel session list.
+        """
+        with self.client.session_transaction() as session:
+            session['panels'] = {}
+            session['panels']['product'] = ['specifications']
+
+        response = self.client.put(
+            '/products/panels/remove',
+            content_type='application/json',
+            data='{"panel": "specifications"}'
+        )
+
+        self.assert200(response)
+        with self.client.session_transaction() as session:
+            self.assertNotIn('specifications', session['panels']['product'])
+
+    def testPanelsRemoveNoSuchPanel(self):
+        """ Tests removing a panel that is not in the product panel session
+            list.
+        """
+        with self.client.session_transaction() as session:
+            session['panels'] = {}
+            session['panels']['product'] = ['specifications']
+
+        response = self.client.put(
+            '/products/panels/remove',
+            content_type='application/json',
+            data='{"panel": "description"}'
+        )
+
+        self.assert200(response)
+        with self.client.session_transaction() as session:
+            self.assertIn('specifications', session['panels']['product'])
+
+    @mock.patch('amber_portal.views.product.render_template')
+    def testProductDeleteModalGET(
+        self,
+        mock_render_template
+    ):
+        """ Tests the product delete modal GET.
+        """
+        mock_render_template.return_value = u'Some template'
+
+        response = self.client.get('/products/1234/delete')
+
+        self.assert200(response)
+        mock_render_template.assert_called_once_with(
+            'product/product_delete_modal.jinja2',
+            prod_id=PRODUCT_ID
+        )
+
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProductDeleteModalPOST(
+        self,
+        mock_api
+    ):
+        """ Tests the product_delete_modal route POST.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_product = mock.Mock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        response = self.client.post('/products/1234/delete')
+
+        mock_client.Product.retrieve.assert_called_once_with(1234)
+
+        mock_product.delete.assert_called_once_with()
+
+        self.assertRedirects(response, '/products')
+
+    @mock.patch('amber_portal.views.product.render_template')
+    def testProductDeleteMultipleModal(
+        self,
+        mock_render_template
+    ):
+        """ Tests the multiple product delete modal.
+        """
+        mock_render_template.return_value = u'Some template'
+
+        response = self.client.get('/products/delete/confirm')
+
+        self.assert200(response)
+        mock_render_template.assert_called_once_with(
+            'product/delete_select_modal.jinja2'
+        )
+
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.query')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProductDeleteMultiple(
+        self,
+        mock_api,
+        mock_query,
+        mock_jsonify
+    ):
+        """ Tests the product_delete route for multiple products.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_jsonify.return_value = 'Some JSON'
+
+        response = self.client.post(
+            '/products/delete',
+            content_type='application/json',
+            data='{"product_ids": ["1234","2345","3456"]}'
+        )
+
+        mock_query.within.assert_called_once_with(
+            *[1234, 2345, 3456]
+        )
+
+        mock_client.Product.query.assert_called_once_with(
+            filtering=mock_query.Predicate.return_value
+        )
+
+        self.assert200(response)
+
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.base64.encodestring')
+    @mock.patch('amber_portal.views.product.pika.BasicProperties')
+    @mock.patch('amber_portal.views.product.pika.ConnectionParameters')
+    @mock.patch('amber_portal.views.product.pika.BlockingConnection')
+    @mock.patch('amber_portal.views.product.json.dumps')
+    @mock.patch('amber_portal.views.product.io.StringIO')
+    @mock.patch('amber_portal.views.product.upload_image')
+    def testFileUpload(
+        self,
+        mock_upload_image,
+        mock_stringio,
+        mock_json_dumps,
+        mock_blocking_connection,
+        mock_connection_parameters,
+        mock_basic_properties,
+        mock_encodestring,
+        mock_jsonify
+    ):
+        """
+        Tests the file_upload route.
+        """
+        mock_connection = mock.Mock()
+        mock_blocking_connection.return_value = mock_connection
+
+        mock_channel = mock.Mock()
+        mock_connection.channel.return_value = mock_channel
+
+        mock_properties = mock.Mock()
+        mock_basic_properties.return_value = mock_properties
+
+        mock_upload_image.return_value = 'fake_image.jpg'
+
+        mock_jsonify.return_value = u'some JSON'
+
+        mock_json_dumped = '{"url": "fake_image.jpg"}'
+        mock_json_dumps.return_value = mock_json_dumped
+
+        response = self.client.post(
+            '/products/image/upload',
+            data={
+                'img': (
+                    io.BytesIO(b'Some file'),
+                    'my_image_file.jpg',
+                    'multipart/form-data'
+                )
+            }
+        )
+
+        self.assert200(response)
+        mock_channel.queue_declare.assert_called_once_with(
+            queue='image_queue',
+            durable=True
+        )
+        mock_channel.basic_publish.assert_called_once_with(
+            exchange='',
+            routing_key='image_queue',
+            body='{"url": "fake_image.jpg"}',
+            properties=mock_properties
+        )
+        mock_json_dumps.assert_called_once_with({
+            'url': mock_upload_image.return_value
+        })
+        mock_jsonify.assert_called_once_with({
+            'success': True,
+            'image_url': 'fake_image.jpg'
+        })
+
+    @mock.patch('amber_portal.views.product.url_for')
+    @mock.patch('amber_portal.views.product.json.loads')
+    @mock.patch('amber_portal.views.product.redirect')
+    def testProductMultiedit(self, mock_redirect, mock_loads, mock_url_for):
+        """
+        Tests the product_multiedit route.
+        """
+        selection = [1234, 1235, 1236]
+        mock_loads.return_value = selection
+        mock_redirect.return_value = u''
+
+        resp = self.client.get(
+            'products/multiedit?selected=%s' % selection
+        )
+        mock_redirect.assert_called_once_with(
+            mock_url_for(
+                '.prod_get',
+                prod_id=PRODUCT_ID
+            )
+        )
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.build_component_form')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testNewSubComponentFormShippingInformation(
+        self,
+        mock_api,
+        mock_build_component_form,
+        mock_render_template
+    ):
+        """
+        Tests the new_sub_component_form route when the component is 'shipping_information'.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        component = 'shipping_information'
+
+        mock_client.add_product_sub_component.return_value = {
+            component: {
+                'boxes': [
+                    {'sub_component_data_id': 1},
+                    {'sub_component_data_id': 2}
+                ]
+            }
+        }
+
+        mock_render_template.return_value = u''
+
+        mock_form = mock.Mock()
+        mock_build_component_form.return_value = mock_form
+
+        product.new_sub_component_form(PRODUCT_ID, component)
+
+        mock_comp = getattr(mock_client.components, component.title())
+
+        mock_build_component_form.assert_called_once_with(
+            mock_comp.form_schema(),
+            mock_comp.to_dict()
+        )
+
+        mock_render_template.assert_called_once_with(
+            'product/sub_components/%s.jinja2' % component,
+            prod_id=PRODUCT_ID,
+            form=mock_form
+        )
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.build_component_form')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testNewSubComponentForm(
+        self,
+        mock_api,
+        mock_build_component_form,
+        mock_render_template
+    ):
+        """
+        Tests the new_sub_component_form route base case.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        component = 'something'
+
+        mock_client.add_product_sub_component.return_value = {
+            component: {
+                'somethings': [
+                    {'sub_component_data_id': 1},
+                    {'sub_component_data_id': 2}
+                ]
+            }
+        }
+
+        mock_render_template.return_value = u''
+
+        mock_form = mock.Mock()
+        mock_build_component_form.return_value = mock_form
+
+        product.new_sub_component_form(PRODUCT_ID, component)
+
+        mock_comp = getattr(mock_client.components, component.title())
+
+        mock_build_component_form.assert_called_once_with(
+            mock_comp.form_schema(),
+            mock_comp.to_dict()
+        )
+
+        mock_render_template.assert_called_once_with(
+            'product/sub_components/%s.jinja2' % component,
+            prod_id=PRODUCT_ID,
+            form=mock_form
+        )
+
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testDeleteProductSubComponentTableLeaf(
+        self,
+        mock_api,
+        mock_jsonify
+    ):
+        """
+        Tests the delete_product_sub_component route when the component is
+        'table_leaf'.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        component = 'table_leaf'
+        sub_component_data_id = '2345'
+
+        mock_jsonify.return_value = ''
+
+        mock_sub_component = mock.Mock()
+        mock_client.components.TableLeaf = mock_sub_component
+
+        product.delete_product_sub_component(
+            PRODUCT_ID,
+            component,
+            sub_component_data_id
+        )
+
+        mock_sub_component.retrieve.assert_called_once_with(
+            sub_component_data_id
+        )
+        mock_sub_component.delete.assert_called_once_with()
+
+        mock_jsonify.assert_called_once_with({'success': True})
+
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testDeleteProductSubComponent(
+        self,
+        mock_api,
+        mock_jsonify
+    ):
+        """
+        Tests the delete_product_sub_component route base case.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        component = 'Something'
+        sub_component_data_id = '2345'
+
+        mock_jsonify.return_value = ''
+
+        mock_sub_component = mock.Mock()
+        mock_client.components.Something = mock_sub_component
+
+        product.delete_product_sub_component(
+            PRODUCT_ID,
+            component,
+            sub_component_data_id
+        )
+
+        mock_sub_component.retrieve.assert_called_once_with(
+            sub_component_data_id
+        )
+        mock_sub_component.delete.assert_called_once_with()
+
+        mock_jsonify.assert_called_once_with({'success': True})
+
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testProductRemoveOption(self, mock_api, mock_jsonify):
+        """
+        Tests the product_remove_option route.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_product = mock.Mock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_option_set = mock.Mock()
+        mock_client.OptionSet.retrieve.return_value = mock_option_set
+
+        product.product_remove_option(PRODUCT_ID, OPTION_SET_ID)
+
+        mock_client.Product.retrieve.assert_called_once_with(PRODUCT_ID)
+        mock_client.OptionSet.retrieve.assert_called_once_with(OPTION_SET_ID)
+        mock_product.unrelate.assert_called_once_with(mock_option_set)
+        mock_jsonify.assert_called_once_with({'success': True})
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.query')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    @mock.patch('amber_portal.views.product.get_current_user')
+    def testProductsAddOptionsGET(
+        self,
+        mock_get_current_user,
+        mock_api,
+        mock_query,
+        mock_render_template
+    ):
+        """ Test products_add_options GET.
+        """
+        mock_user = mock.Mock()
+        mock_get_current_user.return_value = mock_user
+        mock_user.manufacturer_id = MANUFACTURER_ID
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_option_container = mock.Mock()
+        mock_client.OptionSet.query.return_value = mock_option_container
+
+        mock_render_template.return_value = 'Some template'
+
+        response = self.client.get('/products/options/add')
+
+        mock_client.OptionSet.query.assert_called_once_with(
+            filtering=mock_query.Predicate.return_value
+        )
+        mock_query.equal.assert_called_once_with(MANUFACTURER_ID)
+
+        mock_render_template.assert_called_once_with(
+            'product/option_add_modal.jinja2',
+            option_sets=mock_option_container
+        )
+
+        self.assert200(response)
+
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.query')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    @mock.patch('amber_portal.views.product.get_current_user')
+    def testProductsAddOptionsPOSTNoJSON(
+        self,
+        mock_get_current_user,
+        mock_api,
+        mock_query,
+        mock_jsonify
+    ):
+        """ Test products_add_options POST with no JSON.
+        """
+        mock_user = mock.Mock()
+        mock_get_current_user.return_value = mock_user
+        mock_user.manufacturer_id = MANUFACTURER_ID
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_option_container = mock.Mock()
+        mock_client.OptionSet.query.return_value = mock_option_container
+
+        mock_jsonify.return_value = 'some JSON'
+
+        self.client.post(
+            '/products/options/add',
+            content_type='application/json',
+            data='{}'
+        )
+
+        mock_client.OptionSet.query.assert_called_once_with(
+            filtering=mock_query.Predicate.return_value
+        )
+
+        mock_jsonify.assert_called_once_with(
+            {'success': False, 'message': 'Missing data.'}
+        )
+
+    @mock.patch('amber_portal.views.product.flash')
+    @mock.patch('amber_portal.views.product.jsonify')
+    @mock.patch('amber_portal.views.product.query')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    @mock.patch('amber_portal.views.product.get_current_user')
+    def testProductsAddOptionsPOSTWithJSON(
+        self,
+        mock_get_current_user,
+        mock_api,
+        mock_query,
+        mock_jsonify,
+        mock_flash
+    ):
+        """ Test products_add_options POST with JSON.
+        """
+
+        mock_user = mock.Mock()
+        mock_get_current_user.return_value = mock_user
+        mock_user.manufacturer_id = MANUFACTURER_ID
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_option_container = mock.Mock()
+        mock_client.OptionSet.query.return_value = mock_option_container
+
+        mock_product = mock.Mock()
+        mock_product.option_sets.option_set_list = [mock.Mock()]
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_option_set = mock.Mock()
+        mock_client.OptionSet.retrieve.return_value = mock_option_set
+
+        mock_jsonify.return_value = 'some JSON'
+
+        response = self.client.post(
+            '/products/options/add',
+            content_type='application/json',
+            data='{"product_list": [1234], "option_sets": [42]}'
+        )
+
+        mock_client.OptionSet.query.assert_called_once_with(
+            filtering=mock_query.Predicate.return_value
+        )
+        mock_client.OptionSet.retrieve.assert_called_once_with(42)
+        mock_client.Product.retrieve.assert_called_once_with(1234)
+        mock_product.relate.assert_called_once_with(mock_option_set)
+        mock_jsonify.assert_called_once_with(
+            {'success': True}
+        )
+        self.assert200(response)
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    @mock.patch('amber_portal.views.product.get_current_user')
+    def testProductAddOptionGET(
+        self,
+        mock_get_current_user,
+        mock_api,
+        mock_render_template
+    ):
+        """ Test product_add_option GET.
+        """
+        mock_user = mock.Mock()
+        mock_get_current_user.return_value = mock_user
+        mock_user.manufacturer_id = MANUFACTURER_ID
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_option_container = mock.Mock()
+        mock_product = mock.Mock()
+        mock_client.OptionSet.query.return_value = mock_option_container
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_render_template.return_value = 'Some template'
+
+        response = self.client.get('/products/1234/options/add')
+
+        mock_client.OptionSet.query.assert_called_once_with()
+
+        mock_render_template.assert_called_once_with(
+            'product/option_add_modal.jinja2',
+            prod_id=mock_product.id,
+            option_sets=mock_option_container
+        )
+        self.assert200(response)
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    @mock.patch('amber_portal.views.product.get_current_user')
+    def testProductAddOptionPOSTNoJSON(
+        self,
+        mock_get_current_user,
+        mock_api,
+        mock_render_template
+    ):
+        """ Test product_add_option POST with no JSON.
+        """
+        mock_user = mock.Mock()
+        mock_get_current_user.return_value = mock_user
+        mock_user.manufacturer_id = MANUFACTURER_ID
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_product = mock.Mock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_option_container = mock.Mock()
+        mock_client.OptionSet.query.return_value = mock_option_container
+
+        mock_render_template.return_value = ''
+
+        self.client.post(
+            '/products/1234/options/add',
+            content_type='application/json',
+            data='{}'
+        )
+
+        mock_client.OptionSet.query.assert_called_once_with()
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.query')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    @mock.patch('amber_portal.views.product.get_current_user')
+    def testProductAddOptionPOSTWithJSON(
+        self,
+        mock_get_current_user,
+        mock_api,
+        mock_query,
+        mock_render_template
+    ):
+        """ Test product_add_option POST with JSON.
+        """
+        mock_user = mock.Mock()
+        mock_get_current_user.return_value = mock_user
+        mock_user.manufacturer_id = MANUFACTURER_ID
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_option_container = mock.Mock()
+        mock_client.OptionSet.query.return_value = mock_option_container
+
+        mock_product = mock.Mock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_option_set = mock.Mock()
+        mock_client.OptionSet.retrieve.return_value = mock_option_set
+        mock_product.option_sets.option_set_list = [mock.Mock()]
+
+        mock_render_template.return_value = ''
+
+        response = self.client.post(
+            '/products/1234/options/add',
+            content_type='application/json',
+            data='{"sets": [42]}'
+        )
+
+        mock_client.OptionSet.query.assert_called_once_with()
+        mock_client.OptionSet.retrieve.assert_called_once_with(42)
+        mock_client.Product.retrieve.assert_called_once_with(1234)
+        mock_product.relate.assert_called_once_with(mock_option_set)
+        mock_render_template.assert_called_once_with(
+            'product/components/option.jinja2',
+            product=mock_product
+        )
+        self.assert200(response)
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testPreviewDiscover(
+        self, mock_api, mock_render_template
+    ):
+        """
+        Tests the preview_discover route base case.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        product_data = {
+            'assemblage': '',
+            'manufacturer': {'manufacturer_id': MANUFACTURER_ID}
+        }
+        mock_client.Product.retrieve.return_value.to_dict.return_value = product_data
+
+        discover = mock.MagicMock()
+        mock_client.SalesChannel.query.return_value = discover
+
+        mock_client.get_sales_channel_preference.return_value = \
+            mock.MagicMock()
+
+        mock_render_template.return_value = u''
+
+        resp = self.client.post(
+            '/products/%s/preview/discover' % PRODUCT_ID,
+            content_type='application/json',
+            data='{"option": {}}'
+        )
+        self.assert200(
+            resp, 'No errors should have occurred for this request.'
+        )
+
+        mock_render_template.assert_called_once_with(
+            'product/product_preview_modal.jinja2',
+            product=product_data
+        )
+
+    @mock.patch('amber_portal.views.product.render_template')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testPreviewDiscoverAmberError(
+        self, mock_api, mock_render_template
+    ):
+        """
+        Tests the preview_discover route when the API call to get the sales channel fails.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        empty_option = {}
+
+        mock_prod_data = {
+            'assemblage': '',
+            'manufacturer': {'manufacturer_id': MANUFACTURER_ID},
+            'id': PRODUCT_ID
+        }
+        mock_client.Product.retrieve.return_value.to_dict.return_value = mock_prod_data
+
+        discover = mock.MagicMock()
+        mock_client.SalesChannel.query.return_value = discover
+
+        mock_client.get_sales_channel_preference.return_value = \
+            mock.MagicMock()
+
+        mock_render_template.return_value = u''
+
+        mock_prod_data['option'] = empty_option
+        mock_prod_data['preference'] = {}
+        mock_prod_data['preference']['active'] = False
+        mock_prod_data['preference']['description_description'] = 'description'
+        mock_prod_data['preference']['pricing_dealer_price'] = True
+        mock_prod_data['preference']['identity_name'] = 'name'
+        mock_prod_data['preference']['pricing_wholesale'] = True
+        mock_prod_data['preference']['pricing_minimum_internet_price'] = True
+        mock_prod_data['preference']['pricing_trade_price'] = True
+        mock_prod_data['preference']['pricing_msrp'] = True
+
+        def sc_pref_side_effect(manu_id, discover_id):
+            raise Exception(404, 'No such fake sales channel preference!')
+        mock_client.SalesChannelPreference.query.side_effect =\
+            sc_pref_side_effect
+
+        resp = self.client.post(
+            '/products/%s/preview/discover' % PRODUCT_ID,
+            content_type='application/json',
+            data='{"option": %s}' % empty_option
+        )
+        self.assert200(
+            resp, 'No errors should have occurred for this request.'
+        )
+
+        mock_render_template.assert_called_once_with(
+            'product/product_preview_modal.jinja2',
+            product=mock_prod_data
+        )
+
+    @mock.patch('amber_portal.views.product.Response')
+    @mock.patch('amber_portal.views.product.tearsheet')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testDownloadTearsheetWithSku(
+        self,
+        mock_api,
+        mock_tearsheet,
+        mock_resp
+    ):
+        """
+        Tests the product_get_tearsheet route with sku.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_product = mock.Mock()
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_tearsheet.Tearsheet.return_value.to_stream.return_value.getvalue.\
+            return_value = ''
+
+        product.product_get_tearsheet(
+            PRODUCT_ID,
+        )
+
+        file_name = mock_product.identity.manufacturer_sku
+
+        mock_resp.assert_called_once_with(
+            '',
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': ('attachment;filename=%s.pdf' % file_name).encode('utf8')
+            }
+        )
+
+    @mock.patch('amber_portal.views.product.Response')
+    @mock.patch('amber_portal.views.product.hashlib.md5')
+    @mock.patch('amber_portal.views.product.tearsheet')
+    @mock.patch('amber_portal.views.product.amber_api_connection')
+    def testDownloadTearsheetNoSku(
+        self,
+        mock_api,
+        mock_tearsheet,
+        mock_hash,
+        mock_resp
+    ):
+        """
+        Tests the product_get_tearsheet route without sku.
+        """
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_product = mock.Mock()
+        mock_product.identity.manufacturer_sku = None
+        mock_client.Product.retrieve.return_value = mock_product
+
+        mock_id_hash = mock.Mock()
+        mock_hash.return_value = mock_id_hash
+
+        mock_id_hash.hexdigest.return_value = '12345678'
+
+        mock_tearsheet.Tearsheet.return_value.to_stream.return_value.getvalue.\
+            return_value = ''
+
+        product.product_get_tearsheet(
+            PRODUCT_ID,
+        )
+
+        mock_resp.assert_called_once_with(
+            '',
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': b'attachment;filename=12345678.pdf'
+            }
+        )
+
+
+if __name__ == '__main__':
+    unittest.main()

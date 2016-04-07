@@ -1,0 +1,1327 @@
+package models
+
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"reflect"
+	"strconv"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+)
+
+var productCategories []string
+
+var fiberConstructionTypes []string
+
+var imageCategoryTypes []string
+
+var orderingUnitTypes []string
+
+var orderingLeadTimeUnitTypes []string
+
+// init initializes the package global all []string used for enums with the possible options.
+func init() {
+
+	productCategories = []string{"none", "accessory", "casegood", "lighting", "outdoor", "textiles", "upholstery", "youth"}
+
+	fiberConstructionTypes = []string{"none", "hand_crafted", "hand_hooked", "hand_tufted", "hand_knotted", "hand_loomed", "hand_woven", "machine_made"}
+
+	imageCategoryTypes = []string{"setting", "isolated", "other"}
+
+	orderingUnitTypes = []string{"each", "yard", "sq_ft", "sq_yard", "pair", "set", "foot", "single_roll", "double_roll"} // TODO: No love for metric?
+
+	orderingLeadTimeUnitTypes = []string{"day", "week", "month"}
+}
+
+func CreateComponent(ctx *app.Context, componentName string, componentData json.RawMessage, productID *int64) (Component, oops.Error) {
+	updateData := func(newComp Component) oops.Error {
+		if componentData != nil {
+			err := json.Unmarshal(componentData, newComp)
+			if err != nil {
+				return oops.ServerError("", "Failed to unmarshal data into new component.", err)
+			}
+		}
+		return nil
+	}
+
+	switch componentName {
+	case "ArmComponent":
+		newComp := new(ArmComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "AuditComponent":
+		newComp := new(AuditComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "BaseComponent":
+		newComp := new(BaseComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "BoxComponent":
+		newComp := new(BoxComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "BulbComponent":
+		newComp := new(BulbComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "CategoryComponent":
+		newComp := new(CategoryComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		newComp.Primary.AcceptedTerms = productCategories
+		return newComp, nil
+	case "CollectionComponent":
+		newComp := new(CollectionComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "COMCOLComponent":
+		newComp := new(COMCOLComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "ConstructionInformationComponent":
+		newComp := new(ConstructionInformationComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "CushionComponent":
+		newComp := new(CushionComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "CushionsComponent":
+		newComp := new(CushionsComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "DescriptionComponent":
+		newComp := new(DescriptionComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "DoorComponent":
+		newComp := new(DoorComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "DoorsComponent":
+		newComp := new(DoorsComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "DrawerComponent":
+		newComp := new(DrawerComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "DrawersComponent":
+		newComp := new(DrawersComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "DurabilityComponent":
+		newComp := new(DurabilityComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "ElectricalComponent":
+		newComp := new(ElectricalComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "FeatureComponent":
+		newComp := new(FeatureComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "FiberComponent":
+		newComp := new(FiberComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		newComp.Construction.AcceptedTerms = fiberConstructionTypes
+		return newComp, nil
+	case "FlameComponent":
+		newComp := new(FlameComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "FootboardComponent":
+		newComp := new(FootboardComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "FootrestComponent":
+		newComp := new(FootrestComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "FrameComponent":
+		newComp := new(FrameComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "GlassComponent":
+		newComp := new(GlassComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "HeadboardComponent":
+		newComp := new(HeadboardComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "IdentityComponent":
+		newComp := new(IdentityComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "ImageComponent":
+		newComp := new(ImageComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		newComp.Category.AcceptedTerms = imageCategoryTypes
+		return newComp, nil
+	case "ImagesComponent":
+		newComp := new(ImagesComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "InstructionComponent":
+		newComp := new(InstructionComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "InteriorDimensionComponent":
+		newComp := new(InteriorDimensionComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "KeywordComponent":
+		newComp := new(KeywordComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "LeatherComponent":
+		newComp := new(LeatherComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "ManufacturerComponent":
+		newComp := new(ManufacturerComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "OptionSetComponent":
+		newComp := new(OptionSetComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "OptionSetsComponent":
+		newComp := new(OptionSetsComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "OrderingInformationComponent":
+		newComp := new(OrderingInformationComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		newComp.Unit.AcceptedTerms = orderingUnitTypes
+		newComp.LeadTimeUnit.AcceptedTerms = orderingLeadTimeUnitTypes
+		return newComp, nil
+	case "OverallDimensionComponent":
+		newComp := new(OverallDimensionComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "PatternComponent":
+		newComp := new(PatternComponent)
+		colors, e := RetrieveMultiValues(ctx, newComp.CompName(), "color", 0)
+		if e != nil {
+			return nil, e
+		}
+		designTypes, e := RetrieveMultiValues(ctx, newComp.CompName(), "design_type", 0)
+		if e != nil {
+			return nil, e
+		}
+		newComp.Color.AcceptedValues = colors
+		newComp.DesignType.AcceptedValues = designTypes
+
+		e = updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+
+		return newComp, nil
+	case "PedestalComponent":
+		newComp := new(PedestalComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "PillowComponent":
+		newComp := new(PillowComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "PillowsComponent":
+		newComp := new(PillowsComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "PricingComponent":
+		newComp := new(PricingComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "PromotionalTagComponent":
+		newComp := new(PromotionalTagComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "SeatComponent":
+		newComp := new(SeatComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "ShadeComponent":
+		newComp := new(ShadeComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "ShelfComponent":
+		newComp := new(ShelfComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "ShelvesComponent":
+		newComp := new(ShelvesComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "ShippingInformationComponent":
+		newComp := new(ShippingInformationComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "SideRailComponent":
+		newComp := new(SideRailComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "SuspensionPointComponent":
+		newComp := new(SuspensionPointComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "TableLeafComponent":
+		newComp := new(TableLeafComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "TableLeavesComponent":
+		newComp := new(TableLeavesComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "TextileComponent":
+		newComp := new(TextileComponent)
+		usages, e := RetrieveMultiValues(ctx, newComp.CompName(), "usage", 0)
+		if e != nil {
+			return nil, e
+		}
+		weaveTypes, e := RetrieveMultiValues(ctx, newComp.CompName(), "weave_type", 0)
+		if e != nil {
+			return nil, e
+		}
+		newComp.Usage.AcceptedValues = usages
+		newComp.WeaveType.AcceptedValues = weaveTypes
+
+		e = updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+
+		return newComp, nil
+	case "VisibilityComponent":
+		newComp := new(VisibilityComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+	case "WeightComponent":
+		newComp := new(WeightComponent)
+		e := updateData(newComp)
+		if e != nil {
+			return nil, e
+		}
+		if productID != nil {
+			newComp.ProductID.Set(*productID)
+		}
+		return newComp, nil
+
+	default:
+		return nil, oops.BadRequest("", "Invalid component type.", componentName)
+	}
+}
+
+// GetFieldByTag returns a field from an object based on the tag name supplied.
+func GetFieldByTag(structValue reflect.Value, tag string, name string) (reflect.Value, oops.Error) {
+	var structFieldValue reflect.Value
+
+	for i := 0; i < structValue.NumField(); i++ {
+		fieldType := structValue.Type().Field(i)
+		if fieldType.Anonymous {
+			fieldValue := structValue.FieldByName(fieldType.Name)
+			return GetFieldByTag(fieldValue, tag, name)
+		} else {
+			if structValue.Type().Field(i).Tag.Get("json") == name {
+				structFieldValue = structValue.Field(i)
+				return structFieldValue, nil
+			}
+		}
+	}
+	if !structFieldValue.IsValid() {
+		return reflect.Value{}, oops.ServerError("", "Field not present in object.", name)
+	}
+	return structFieldValue, nil
+}
+
+type Component interface {
+	MarshalJSON() ([]byte, error)
+	CompName() string
+	CompID() int64
+	IDClauses() []pqdb.Predicate
+	ColumnNames() []string
+	FormSchema() *form.Schema
+	CompBase() ComponentBase
+	TableName() string
+}
+
+type Relation interface {
+	FetchRelation(ctx *app.Context, primaryID driver.Value) (interface{}, oops.Error)
+	TableName() string
+}
+
+type ListRelation interface {
+	FetchListRelation(ctx *app.Context, jsonTag string, assemblageComponent AssemblageComponent, sliceField interface{}, primaryID driver.Value) (interface{}, oops.Error)
+	NewChildComponent() interface{}
+}
+
+func RetrieveMultiValueChoices(ctx *app.Context, compName string, valueType string) ([]string, []string, oops.Error) {
+	mvQuery, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, nil, e
+	}
+	mvTable := pqdb.NewTable("multi_value")
+	mvQuery.AddColumn(mvTable.Column("id"))
+	mvQuery.AddColumn(mvTable.Column("label"))
+	where := pqdb.MakeWhereItem("", pqdb.Predicate{"value_type", "=", valueType})
+	compWhere := pqdb.MakeWhereItem("AND", pqdb.Predicate{"component", "=", compName})
+	where.Items = []pqdb.WhereItem{compWhere}
+	mvQuery.SetWhere(where)
+	mvQuery.AddTable(mvTable)
+	mvRes, e := mvQuery.Run()
+	if e != nil {
+		return nil, nil, e
+	}
+	defer mvRes.Close()
+
+	var keys, values []string
+	for mvRes.Next() {
+		var id, value string
+		err := mvRes.Scan(&id, &value)
+		if err != nil {
+			return nil, nil, oops.ServerError("", "Unable to scan value", err)
+		}
+		keys = append(keys, id)
+		values = append(values, value)
+	}
+	if err := mvRes.Err(); err != nil {
+		return nil, nil, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	return keys, values, nil
+}
+
+func RetrieveMultiValues(ctx *app.Context, compName string, jsonTag string, productID int64) ([]lib.MultiValue, oops.Error) {
+	var ids []int
+	if productID > 0 {
+		query, e := pqdb.NewSelectQuery(ctx)
+		if e != nil {
+			return nil, e
+		}
+		table := pqdb.NewTable("multi_values")
+		query.AddColumn(table.Column("multi_value_id"))
+		where := pqdb.MakeWhereItem("", pqdb.Predicate{"product_id", "=", productID})
+		query.SetWhere(where)
+		query.AddTable(table)
+		res, e := query.Run()
+		if e != nil {
+			return nil, e
+		}
+		defer res.Close()
+		for res.Next() {
+			var id int
+			err := res.Scan(&id)
+			if err != nil {
+				return nil, oops.ServerError("", "Unable to scan value", err)
+			}
+			ids = append(ids, id)
+		}
+		if err := res.Err(); err != nil {
+			return nil, oops.ServerError("", "Rows has an internal error.", err)
+		}
+	}
+
+	mvQuery, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, e
+	}
+	mvTable := pqdb.NewTable("multi_value")
+	mvQuery.AddColumn(mvTable.Column("id"))
+	mvQuery.AddColumn(mvTable.Column("value_type"))
+	mvQuery.AddColumn(mvTable.Column("label"))
+	mvQuery.AddColumn(mvTable.Column("component"))
+	mvWhere := pqdb.MakeWhereItem("", pqdb.Predicate{"component", "=", compName})
+	typeWhere := pqdb.MakeWhereItem("AND", pqdb.Predicate{"value_type", "=", jsonTag})
+	mvWhere.Items = []pqdb.WhereItem{typeWhere}
+	if productID > 0 {
+		idWhere := pqdb.MakeWhereItem("AND", pqdb.Predicate{"id", "IN", ids})
+		mvWhere.Items = append(mvWhere.Items, idWhere)
+	}
+	mvQuery.SetWhere(mvWhere)
+	mvQuery.AddTable(mvTable)
+	mvRes, e := mvQuery.Run()
+	if e != nil {
+		return nil, e
+	}
+	defer mvRes.Close()
+	var vals []lib.MultiValue
+	for mvRes.Next() {
+		var d lib.MultiValue
+		err := mvRes.Scan(&d.ID, &d.ValueType, &d.Label, &d.Component)
+		if err != nil {
+			return nil, oops.ServerError("", "Unable to scan value", err)
+		}
+		vals = append(vals, d)
+	}
+	if err := mvRes.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	return vals, nil
+}
+
+func RetrieveChildComponents(ctx *app.Context, target interface{}, assemblageComponent AssemblageComponent, sliceField interface{}, productID int) (interface{}, oops.Error) {
+	query, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, e
+	}
+
+	tableName := assemblageComponent.SubTableName()
+	table := pqdb.NewTable(tableName)
+
+	for _, col := range pqdb.Columns(target.(ListRelation).NewChildComponent().(lib.Iterable), nil) {
+		query.AddColumn(table.Column(string(col)))
+	}
+
+	query.Where = pqdb.MakeWhereItem("", pqdb.Predicate{"product_id", "=", productID})
+	query.OrderBy.Add(*table.Column("component_data_id"), true, false)
+
+	rows, e := query.Run()
+	if e != nil {
+		return nil, e
+	}
+
+	subs := reflect.MakeSlice(reflect.TypeOf(sliceField), 0, 0)
+	defer rows.Close()
+	for rows.Next() {
+		subField := target.(ListRelation).NewChildComponent()
+		e = pqdb.Scan(subField, rows)
+		if e != nil {
+			return nil, e
+		}
+		subs = reflect.Append(subs, reflect.ValueOf(subField).Elem())
+	}
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	return subs, nil
+}
+
+type ComponentBase struct {
+	ComponentDataID lib.IntField    `json:"component_data_id" primary:"true"`
+	ProductID       lib.IntField    `json:"product_id"`
+	ParentID        lib.IntField    `json:"parent_id"`
+	ParentName      lib.StringField `json:"parent_name"`
+}
+
+func (comp *ComponentBase) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(comp).Elem(), DataType: reflect.TypeOf(*comp), Current: -1}
+}
+
+func (comp *ComponentBase) ColumnNames() []string {
+	return lib.ColumnNames(comp.NewIterator())
+}
+
+func (comp *ComponentBase) Map() map[string]lib.IteratorItem {
+	return lib.Map(comp.NewIterator())
+}
+
+func (comp *ComponentBase) SetValue(newComp interface{}) {
+}
+
+func QueryDB(ctx *app.Context, target interface{}, assemblageComponent AssemblageComponent, clauses pqdb.WhereItem) (Component, oops.Error) {
+	targetIter := target.(lib.Iterable)
+
+	query, e := pqdb.NewSelectQuery(ctx)
+	table := pqdb.NewTable(assemblageComponent.GetTableName())
+	for _, col := range target.(Component).ColumnNames() {
+		query.AddColumn(table.Column(col))
+	}
+	query.AddTable(table)
+	if ctx.Role != nil && assemblageComponent.GetTableName() != "manufacturer_component" && ctx.Role["ProductComponent"]&permissions.ProductComponentRetrieveOwn != 0 {
+		mfrTable := pqdb.NewTable("manufacturer_component")
+		query.LeftJoin(mfrTable, pqdb.Predicate{mfrTable.Column("product_id"), "=", table.Column("product_id")})
+		clauses.Items = append(clauses.Items, pqdb.MakeWhereItem("AND", pqdb.Predicate{mfrTable.Column("manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}))
+	}
+	query.SetWhere(clauses)
+	rows, e := query.Run()
+	if e != nil {
+		return nil, e
+	}
+
+	component, e := pqdb.ScanRows(target, rows)
+	if e != nil {
+		return nil, e
+	}
+
+	for it := targetIter.NewIterator(); it.Next(); {
+		field := it.Item()
+		if field.Tag().Get("relation") != "" {
+			idField := field.Tag().Get("rel_field")
+			idVal, _ := lib.ValueByName(targetIter.NewIterator(), idField).Value()
+			if idVal != nil && reflect.Indirect(field.Data).IsValid() == true {
+				relation, e := field.Value().(Relation).FetchRelation(ctx, idVal)
+				if e != nil {
+
+					return nil, e
+				}
+				field.Data.Set(reflect.ValueOf(relation).Elem())
+			}
+		} else if field.Tag().Get("relation_list") != "" {
+			idField := field.Tag().Get("rel_field")
+			tableName := field.Tag().Get("rel_table")
+			returnCol := field.Tag().Get("rel_col")
+			why := field.Tag().Get("rel_why")
+			instName := field.Tag().Get("inst_name")
+			idVal, _ := lib.ValueByName(targetIter.NewIterator(), idField).Value()
+			// get option_set_component by product_id
+			selQuery, e := pqdb.NewSelectQuery(ctx)
+			if e != nil {
+				return nil, e
+			}
+			selTable := pqdb.NewTable(tableName)
+			selQuery.AddTable(selTable)
+			selQuery.AddColumn(selTable.Column(returnCol))
+			selQuery.SetWhere(pqdb.WhereItem{"", pqdb.Predicate{why, "=", idVal}, nil})
+			res, e := selQuery.Run()
+			if e != nil {
+				return nil, e
+			}
+			defer res.Close()
+			var ids []int64
+			for res.Next() {
+				var id int64
+				err := res.Scan(&id)
+				if err != nil {
+					return nil, oops.ServerError("", "Could not scan in component data.", err)
+				}
+				ids = append(ids, id)
+			}
+
+			if err := res.Err(); err != nil {
+				return nil, oops.ServerError("", "Rows has an internal error.", err)
+			}
+
+			// setRel = select option_set_id from option_set_component where product_id = ours
+			// optSets = select * from option_set where id IN (id for in in setRel)
+
+			relSlice := reflect.MakeSlice(reflect.TypeOf(field.Value()), 0, 0)
+			for _, id := range ids {
+				inst, e := Factory(instName)
+				if e != nil {
+					return nil, e
+				}
+
+				relation, e := inst.(Relation).FetchRelation(ctx, id)
+				if e != nil {
+					return nil, e
+				}
+				relSlice = reflect.Append(relSlice, reflect.ValueOf(relation).Elem())
+			}
+			//set slice into field
+			field.Data.Set(relSlice)
+		} else if field.Tag().Get("list_sub_field") != "" {
+			idVal, _ := lib.ValueByName(targetIter.NewIterator(), "ProductID").Value()
+			if idVal != nil {
+				jsonTag := field.Tag().Get("json")
+				relation, e := target.(ListRelation).FetchListRelation(ctx, jsonTag, assemblageComponent, field.Value(), idVal)
+				if e != nil {
+					return nil, e
+				}
+				field.Data.Set(relation.(reflect.Value))
+			}
+		} else if field.Tag().Get("multi_value") == "true" {
+			acc, e := RetrieveMultiValues(
+				ctx,
+				component.(Component).CompName(),
+				field.Tag().Get("json"),
+				0,
+			)
+			if e != nil {
+				return nil, e
+			}
+			vals, e := RetrieveMultiValues(
+				ctx,
+				component.(Component).CompName(),
+				field.Tag().Get("json"),
+				component.(Component).CompBase().ProductID.Int64,
+			)
+			mvf := field.Addr().(*lib.MultiValueField)
+			mvf.Scan(vals)
+			mvf.AcceptedValues = acc
+			mvf.Valid = true
+		}
+	}
+	return component.(Component), e
+}
+
+func UpdateDB(ctx *app.Context, exists bool, productID int64, targetComponent interface{}, assemblageComponent AssemblageComponent, clauses ...pqdb.Predicate) oops.Error {
+	var parentID int64
+	queryParams, e := pqdb.NewQueryParams(0, 0, clauses...)
+	if e != nil {
+		return e
+	}
+
+	if exists {
+		// Update the component
+		e = pqdb.UpdateQuery(ctx.DBConn, targetComponent.(lib.Iterable), assemblageComponent.GetTableName(), queryParams)
+		if e != nil {
+			return e
+		}
+
+		pID := lib.ValueByName(targetComponent.(lib.Iterable).NewIterator(), "ComponentDataID")
+		pIDVal, err := pID.(lib.Field).Value()
+		if err != nil {
+			return oops.ServerError("", "Unable to access field value", err, pID)
+		}
+
+		parentID = pIDVal.(int64)
+	} else {
+		// Only upsert subcomponents
+		pkID, e := pqdb.InsertQuery(ctx.DBConn, targetComponent.(lib.Iterable), assemblageComponent.GetTableName())
+		if e != nil {
+			return e
+		}
+
+		parentID = pkID.(int64)
+	}
+
+	// Iterate through fields of component
+	for iter := targetComponent.(lib.Iterable).NewIterator(); iter.Next(); {
+		field := iter.Item()
+
+		// If field is a list of sub-components let's update those too
+		if field.Tag().Get("list_sub_field") != "" {
+			fieldValue := field.Value()
+
+			// Get the slice value of the field and iterate through it
+			fieldSlice := reflect.ValueOf(fieldValue)
+			for i := 0; i < fieldSlice.Len(); i++ {
+				var compID int64
+				// Get the interface from the slice index and update its parent_id
+				subInterface := fieldSlice.Index(i).Addr().Interface()
+				for subIter := subInterface.(lib.Iterable).NewIterator(); subIter.Next(); {
+					subField := subIter.Item()
+					if subField.Tag().Get("json") == "product_id" {
+						subField.Set(productID)
+					}
+					if subField.Tag().Get("json") == "component_data_id" {
+						subVal := subField.Value()
+						compID = subVal.(lib.IntField).Int64
+					}
+					if subField.Tag().Get("json") == "parent_id" {
+						subField.Set(parentID)
+					}
+				}
+				// Get the component from the slice index and update it
+				subComponent := subInterface.(lib.Iterable)
+				clauses := []pqdb.Predicate{
+					pqdb.Predicate{"product_id", "=", productID},
+					pqdb.Predicate{"component_data_id", "=", compID},
+					pqdb.Predicate{"parent_id", "=", parentID}}
+
+				qParams, e := pqdb.NewQueryParams(0, 0, clauses...)
+				if e != nil {
+					return e
+				}
+
+				e = pqdb.Upsert(ctx.DBConn, compID > 0, subComponent, assemblageComponent.ChildComponent.GetTableName(), qParams)
+				if e != nil {
+					return e
+				}
+			}
+		} else if field.Tag().Get("multi_value") == "true" {
+			var ids []int
+			mvQuery, e := pqdb.NewSelectQuery(ctx)
+			if e != nil {
+				return e
+			}
+			compName := targetComponent.(Component).CompName()
+			jsonTag := field.Tag().Get("json")
+
+			mvTable := pqdb.NewTable("multi_value")
+			mvQuery.AddColumn(mvTable.Column("id"))
+			mvWhere := pqdb.MakeWhereItem("", pqdb.Predicate{"component", "=", compName})
+			typeWhere := pqdb.MakeWhereItem("AND", pqdb.Predicate{"value_type", "=", jsonTag})
+			mvWhere.Items = []pqdb.WhereItem{typeWhere}
+			mvQuery.SetWhere(mvWhere)
+			mvQuery.AddTable(mvTable)
+			mvRes, e := mvQuery.Run()
+			if e != nil {
+				return e
+			}
+			defer mvRes.Close()
+			for mvRes.Next() {
+				var id int
+				err := mvRes.Scan(&id)
+				if err != nil {
+					return oops.ServerError("", "Could not scan the thing", err)
+				}
+				ids = append(ids, id)
+			}
+			if err := mvRes.Err(); err != nil {
+				return oops.ServerError("", "Rows has an internal error.", err)
+			}
+
+			dQuery, e := pqdb.NewDeleteQuery(ctx)
+			if e != nil {
+				return e
+			}
+			mvsTable := pqdb.NewTable("multi_values")
+			dQuery.Table = mvsTable
+			dWhere := pqdb.MakeWhereItem("", pqdb.Predicate{"multi_value_id", "IN", ids})
+			dpWhere := pqdb.MakeWhereItem("AND", pqdb.Predicate{"product_id", "=", productID})
+			dWhere.Items = []pqdb.WhereItem{dpWhere}
+			dQuery.SetWhere(dWhere)
+			_, e = dQuery.Run()
+			if e != nil {
+				return e
+			}
+
+			iQuery, e := pqdb.NewInsertQuery(ctx)
+			if e != nil {
+				return e
+			}
+
+			fieldVals := field.Value().(lib.MultiValueField).MultiValues
+			if len(fieldVals) > 0 {
+				iTable := pqdb.NewTable("multi_values")
+				iQuery.Table = iTable
+				iQuery.Columns = append(iQuery.Columns, *pqdb.NewColumn("product_id"))
+				iQuery.Columns = append(iQuery.Columns, *pqdb.NewColumn("multi_value_id"))
+				var vals [][]interface{}
+				for _, idVal := range fieldVals {
+					inner := []interface{}{productID, idVal}
+					vals = append(vals, inner)
+				}
+				iQuery.Values = vals
+
+				_, e = iQuery.Run()
+				if e != nil {
+					return e
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// DeleteDB removes a component and any sub-components thereof from the database.
+func DeleteDB(ctx *app.Context, exists bool, targetComponent interface{}, assemblageComponent AssemblageComponent, clauses ...pqdb.Predicate) oops.Error {
+	queryParams, e := pqdb.NewQueryParams(0, 0, clauses...)
+	if e != nil {
+		return e
+	}
+
+	if exists {
+		e = pqdb.DeleteQuery(ctx.DBConn, assemblageComponent.GetTableName(), queryParams)
+	}
+	return nil
+}
+
+type AssemblageComponent struct {
+	ID             lib.IntField         `json:"id"`
+	Name           lib.StringField      `db:"component_name" json:"name"`
+	Description    lib.StringField      `json:"description"`
+	TableName      lib.StringField      `json:"table_name"`
+	ClassName      lib.StringField      `json:"class_name"`
+	ParentName     lib.StringField      `json:"parent_name"`
+	ChildComponent *AssemblageComponent `json:"child_component"`
+}
+
+func (comp AssemblageComponent) CompName() string {
+	return "assemblage"
+}
+
+func (comp AssemblageComponent) CompID() int64 {
+	return comp.ID.Int64
+}
+
+func (comp *AssemblageComponent) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(comp).Elem(), DataType: reflect.TypeOf(*comp), Current: -1}
+}
+
+func (comp *AssemblageComponent) ColumnNames() []string {
+	return lib.ColumnNames(comp.NewIterator())
+}
+
+func (comp *AssemblageComponent) Map() map[string]lib.IteratorItem {
+	return lib.Map(comp.NewIterator())
+}
+
+func (comp *AssemblageComponent) SetValue(newComp interface{}) {
+}
+
+func (comp AssemblageComponent) GetTableName() string {
+	return comp.TableName.String
+}
+
+func (comp AssemblageComponent) SubTableName() string {
+	return comp.ChildComponent.TableName.String
+}
+
+func (comp AssemblageComponent) SubClassName() string {
+	return comp.ChildComponent.ClassName.String
+}
+
+func (comp AssemblageComponent) MarshalJSON() ([]byte, error) {
+	jsonResponse, e := MarshalAssemblageFields(&comp)
+	return jsonResponse, e
+}
+
+func (comp AssemblageComponent) RetrieveData(db *app.DB, assemblageComponent AssemblageComponent, productID int) (AssemblageComponent, oops.Error) {
+	cols := pqdb.Columns(&comp, nil)
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"product_id", "=", productID})
+	if e != nil {
+		return AssemblageComponent{}, e
+	}
+
+	rows, e := pqdb.SelectQuery(db, cols, assemblageComponent.GetTableName(), queryParams)
+	if e != nil {
+		return AssemblageComponent{}, e
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		e = pqdb.Scan(&comp, rows)
+		if e != nil {
+			return AssemblageComponent{}, e
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return AssemblageComponent{}, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	return comp, nil
+}
+
+func (comp AssemblageComponent) Set(newComp AssemblageComponent) (AssemblageComponent, oops.Error) {
+	newCompValue := reflect.ValueOf(newComp)
+	reflect.ValueOf(&comp).Elem().Set(newCompValue)
+	return comp, nil
+}
+
+func RetrieveAssemblageComponentByName(ctx *app.Context, componentName string) (*AssemblageComponent, oops.Error) {
+	assComp := new(AssemblageComponent)
+	childComp := new(AssemblageComponent)
+
+	// TODO: Use pqdb to perform SQL query.
+	rows, err := ctx.DBConn.Query("SELECT id, component_name, description, table_name, class_name, parent_name FROM component WHERE component_name = $1 or parent_name = $2 ORDER BY parent_name NULLS FIRST", componentName, componentName)
+	if err != nil {
+		return nil, oops.ServerError("", "Component data query failed.", err, componentName)
+	}
+	defer rows.Close()
+
+	comp := assComp
+	i := 0
+	for rows.Next() {
+		i++
+		err = rows.Scan(&comp.ID, &comp.Name, &comp.Description, &comp.TableName, &comp.ClassName, &comp.ParentName)
+		if err != nil {
+			return nil, oops.ServerError("", "Could not scan in component data.", err)
+		}
+		comp = childComp
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	if i == 0 {
+		return nil, oops.NotFound("", "Could not locate component by name", componentName)
+	}
+
+	if childComp.Name.Valid {
+		assComp.ChildComponent = childComp
+	}
+
+	return assComp, nil
+}
+
+func RetrieveComponent(ctx *app.Context, assComp *AssemblageComponent, componentID int) (Component, oops.Error) {
+	className := assComp.ClassName.String
+	newComp, e := CreateComponent(ctx, className, nil, nil)
+	if e != nil {
+		return nil, e
+	}
+
+	table := pqdb.NewTable(assComp.GetTableName())
+	result, e := QueryDB(ctx, newComp, *assComp, pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("component_data_id"), "=", componentID}))
+	if e != nil {
+		return nil, e
+	}
+
+	return result, nil
+}
+
+func DeleteComponent(ctx *app.Context, assComp *AssemblageComponent, componentID int) oops.Error {
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"component_data_id", "=", componentID})
+	if e != nil {
+		return e
+	}
+
+	return pqdb.DeleteQuery(ctx.DBConn, assComp.GetTableName(), queryParams)
+}
+
+// MarshalFields returns a json response assembled from each of the components fields
+func MarshalAssemblageFields(comp interface{}) ([]byte, oops.Error) {
+	fields := make(map[string]interface{})
+	for iter := comp.(lib.Iterable).NewIterator(); iter.Next(); {
+		val := iter.Item()
+		fields[val.Tag().Get("json")] = val.Value()
+	}
+	jsonResponse, err := json.Marshal(fields)
+	if err != nil {
+		return nil, oops.ServerError("Could not marshal AssemblageFields", "Failed to marshal fields.", err, fields)
+	}
+	return jsonResponse, nil
+}
+
+// MarshalFields returns a json response assembled from each of the components fields
+func MarshalFields(comp interface{}) ([]byte, oops.Error) {
+	if comp == nil {
+		return nil, oops.ServerError("Componente does not exist", "Component cannot be nil.")
+	}
+
+	fields := make(map[string]interface{})
+	fields["_links"] = lib.HALLink{&lib.HALHref{Endpoint: "components/" + comp.(Component).CompName() + "/" + strconv.Itoa(int(comp.(Component).CompID()))}, nil, nil, nil, nil}
+	for iter := comp.(lib.Iterable).NewIterator(); iter.Next(); {
+		val := iter.Item()
+		jsonTag := val.Tag().Get("json")
+		if len(jsonTag) == 0 {
+			return nil, oops.ServerError("", "Missing the JSON tag for the current component:", comp.(Component).CompName())
+		}
+		fields[val.Tag().Get("json")] = val.Value()
+	}
+	jsonResponse, err := json.Marshal(fields)
+	if err != nil {
+		return nil, oops.ServerError("Could not marshal component fields", "Failed to marshal component fields.", err, fields)
+	}
+
+	return jsonResponse, nil
+}

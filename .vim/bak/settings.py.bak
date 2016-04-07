@@ -1,0 +1,16 @@
+import os
+
+
+class Paths:
+    BASE = os.path.realpath(os.getcwd())
+    RES = os.path.join(BASE, "res")
+    FONTS = os.path.join(RES, "fonts")
+    IMAGES = os.path.join(RES, "images")
+
+
+DEFAULT_FONT = os.path.join(Paths.FONTS, "cousine", "Cousine-Regular.ttf")
+
+TILE_SIZE = 32
+
+SCREEN_RESOLUTION = (640, 480)
+FPS = 30

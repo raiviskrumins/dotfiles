@@ -1,0 +1,95 @@
+import game.settings as settings
+import game.tiling as tiling
+
+
+class Atlas:
+    def __init__(self, size):
+        self.size = size
+        self.entities = [None] * (size[0] * size[1])
+
+        (rows, columns) = size
+        map_size = (rows * settings.TILE_SIZE, columns * settings.TILE_SIZE)
+        self.tile_map = tiling.TileMap(map_size)
+
+    def at(self, position):
+        (row, column) = position
+        if row < self.size[0] and column < self.size[1]:
+            return self.entities[column + (row * self.size[0])]
+        else:
+            raise Exception("Row or column out of bounds!")
+
+    def place(self, position, entity):
+        (row, column) = position
+        if row < self.size[0] and column < self.size[1]:
+            self.entities[column + (row * self.size[0])] = entity
+            if hasattr(entity, "view"):
+                self.tile_map.tiles.append(entity.view)
+        else:
+            raise Exception("Row or column out of bounds!")
+
+    def remove(self, position):
+        (row, column) = position
+        if row < self.size[0] and column < self.size[1]:
+            entity = self.at(position)
+            self.entities[column + (row * self.size[0])] = None
+            if hasattr(entity, "view"):
+                self.tile_map.tiles = list(filter(entity.view.__ne__, self.tile_map.tiles))
+        else:
+            raise Exception("Row or column out of bounds!")
+
+
+def from_string(text_map, mapping):
+    rows = 0
+    columns = 0
+
+    entity_data = []
+
+    lines = text_map.split("\n")
+    rows = len(lines)
+
+    for row, line in enumerate(lines):
+        if len(line) > columns:
+            columns = len(line)
+
+        for column, character in enumerate(line):
+            mapped = mapping.get(character, None)
+            if mapped is None:
+                continue
+            class_ = mapped
+            entity = class_()
+            entity.position.move(row, column)
+           
+            entity_data.append(entity)
+
+    atlas = Atlas((rows, columns))
+
+    for entity in entity_data:
+        atlas.place(entity.position.get(), entity)
+
+    return atlas
+
+
+class Zone:
+    def __init__(self):
+        self.atlases = []
+        self.manager = None
+
+    def update(self, dt):
+        pass
+
+    def render(self):
+        pass
+
+
+
+
+"""
+{
+    "inerts": [
+        {"type": "wall", "pos": [0, 0]}
+    ],
+    "actors": [
+        {"controller": "Player", "pos": [1, 1]}
+    ]
+}
+"""

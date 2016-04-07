@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% block head %}
+    <title>{% block title %}Charleen's Daycare and Learning Center{% endblock %}</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width; initial-scale=1.0">
+	<link rel="stylesheet" href="static/css/reset.css" type="text/css" media="screen">
+	<link rel="stylesheet" href="static/css/skeleton.css" type="text/css" media="screen">
+	<link rel="stylesheet" href="static/css/superfish.css" type="text/css" media="screen">
+	<link rel="stylesheet" href="static/css/style.css" type="text/css" media="screen">
+	<link rel="stylesheet" href="static/css/slider.css" type="text/css" media="screen">
+	<link rel="stylesheet" href="static/css/forms.css" type="text/css" media="screen">
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:800' rel='stylesheet' type='text/css'>
+	<link rel="icon" href="static/img/favicon.ico" type="image/x-icon">
+	<link rel="shortcut icon" href="static/img/favicon.ico" type="image/x-icon">
+	<script src="js/jquery-1.7.1.min.js"></script>
+	<script src="js/script.js"></script>
+	<script src="js/jquery.hoverIntent.js"></script>
+	<script src="js/superfish.js"></script>
+	<script src="js/jquery.mobilemenu.js"></script>
+	<script src="js/jquery.easing.1.3.js"></script>
+	<script src="js/jquery.ui.totop.js"></script>
+	<script src="js/slides.min.jquery.js"></script>
+	<script src="js/jquery.equalheights.js"></script> 
+	<!--[if lt IE 8]>
+		<div style='clear: both; text-align:center; position: relative;'>
+			<a href="http://windows.microsoft.com/en-US/internet-explorer/products/ie/home?ocid=ie6_countdown_bannercode">
+				<img src="http://storage.ie6countdown.com/assets/100/static/img/banners/warning_bar_0000_us.jpg" border="0" height="42" width="820" alt="You are using an outdated browser. For a faster, safer browsing experience, upgrade for free today.">
+			</a>
+		</div>
+	<![endif]-->
+	<!--[if lt IE 9]>
+		<script src="js/html5.js"></script>
+		<link rel="stylesheet" href="static/css/ie.css"> 
+    <![endif]-->
+    {% endblock %}
+</head>
+<body id="page1">
+    {% block body %}
+	<div class="main">
+		<!--======================== header ============================-->
+		<header>
+			<div class="wrapper">
+				<ul class="social-icons">
+					<li><a href="#" class="icon-1"></a></li>
+					<li><a href="#" class="icon-2"></a></li>
+					<li class="last-item"><a href="#" class="icon-3"></a></li>
+				</ul>
+			</div>
+			<div>
+				<!--======================== logo ============================-->
+				<h1><a href="index.html">Daycare</a></h1>
+				<!--======================== menu ============================-->
+				<nav>
+					<ul class="menu responsive-menu">
+						<li class="current"><a href="index.html" class="bg-color1">Home</a></li>
+						<li><a href="index-1.html" class="bg-color2">About</a>
+							<ul>
+								<li><a href="#">Lorem ipsum </a></li>
+								<li><a href="#">Dolor sit</a></li>
+								<li><a href="#">Amet conse </a></li>
+								<li><a href="#">Ctetur </a></li>
+								<li class="last-item"><a href="#">Adipisicing </a></li>
+							</ul>
+						</li>
+						<li><a href="index-2.html" class="bg-color3">Gallery</a></li>
+						<li><a href="index-3.html" class="bg-color4">Features</a></li>
+						<li><a href="index-4.html" class="bg-color5">News</a></li>
+						<li class="last-item"><a href="index-5.html" class="bg-color6">Contacts</a></li>
+					</ul>
+				</nav>
+				<div class="clear"></div>
+			</div>
+			<div class="bg">
+				<div class="container_12">
+					<div class="wrapper">
+						<div class="grid_12">
+							<!--=================== slider ==================-->
+							<div id="slides">
+								<div class="slides_container">
+									<div class="slide">
+										<img src="static/img/slide1.jpg" alt="">
+										<div class="caption"></div>
+									</div>
+									<div class="slide">
+										<img src="static/img/slide2.jpg" alt="">
+										<div class="caption"></div>
+									</div>
+									<div class="slide">
+										<img src="static/img/slide3.jpg" alt="">
+										<div class="caption"></div>
+									</div>
+									<div class="slide">
+										<img src="static/img/slide4.jpg" alt="">
+										<div class="caption"></div>
+									</div>
+								</div>
+								<ul class="pagination">
+									<li class="current"><a href="#" class="bg-color1"></a></li>
+									<li><a href="#" class="bg-color2"></a></li>
+									<li><a href="#" class="bg-color3"></a></li>
+									<li><a href="#" class="bg-color4"></a></li>
+								</ul>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</header>
+		<!--======================== content ===========================-->
+		<section id="content">
+			<div class="bg">
+				<div class="container_12">
+					<div class="wrapper indent-bottom4">
+						<div class="grid_6">
+							<div class="bg-color1 maxheight">
+								<div class="indents">
+									<h3 class="icon-1 p1">Hello!</h3>
+									Lorem ipsum dolor sit amet conse ctetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea&nbsp;commodo consequat. Duis aute irure dolor in rep&shy;rehenderit in voluptate velit esse cillum.
+								</div>
+							</div>
+						</div>
+						<div class="grid_6 last-col">
+							<div class="bg-color3 maxheight">
+								<div class="indents">
+									<h3 class="icon-2 p1">About us</h3>
+									Lorem ipsum dolor sit amet conse ctetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea&nbsp;commodo consequat. Duis aute irure dolor in rep&shy;rehenderit in voluptate velit esse cillum.
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="wrapper indent-bottom4">
+						<div class="grid_4">
+							<figure>
+								<img src="static/img/page1-img1.jpg" alt="">
+							</figure>
+							<div class="bg-color2">
+								<div class="indents1">
+									<h3 class="p3">Why Us?</h3>
+									<p class="p2">Lorem ipsum dolor sit amet conse ctetur adipisicing elit, sed do eiusmod tempor incidi&shy;dunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nos&shy;trud exercitation ullamco laboris nisi ut aliqu.</p>
+									Dolor sit amet conse ctetur ad&shy;ipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud ex&shy;ercitation ullamco laboris.
+								</div>
+							</div>
+							<a href="#" class="button bg-color1">More</a>
+						</div>
+						<div class="grid_4">
+							<h3 class="box-title bg-color4">Our Events</h3>
+							<ul class="list-1">
+								<li>
+									<a href="#" class="bg-color5">
+										<div class="num">1</div>
+										Lorem ipsum dolor sit amet conse ctetur adipi&shy;sicing elit, sed do <br class="hide-tp">eiusmod tem&shy;por incididunt ut labore et dolore magna aliq&shy;ua. Ut enim ad minim veniam.
+									</a>
+								</li>
+								<li>
+									<a href="#" class="bg-color0">
+										<div class="num">2</div>
+										Ipsum dolor sit amet conse ctetur adipisicing elit, sed do lorem set eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.
+									</a>
+								</li>
+								<li>
+									<a href="#" class="bg-color1">
+										<div class="num">3</div>
+										Lorem ipsum dolor sit amet conse ctetur adipi&shy;sicing elit, sed do eiusmod tem&shy;por incididunt ut labore et dolore magna aliqua. Ut enim ad minim.
+									</a>
+								</li>
+							</ul>
+							<a href="#" class="button bg-color3">More</a>
+						</div>
+						<div class="grid_4 last-col">
+							<h3 class="box-title bg-color5">News</h3>
+							<ul class="list-2">
+								<li>
+									<figure class="img-indent">
+										<img src="static/img/page1-img2.jpg" alt="">
+									</figure>
+									<div class="extra-wrap">
+										<time datetime="2012-01-01" class="date1 bg-color1"><span>15</span>Sep</time>
+										<a href="#" class="bg-color6">Lorem ipsum dolor sit amet conse ctetur ad&shy;ipisicing</a>
+									</div>
+								</li>
+								<li>
+									<figure class="img-indent">
+										<img src="static/img/page1-img3.jpg" alt="">
+									</figure>
+									<div class="extra-wrap">
+										<time datetime="2012-01-01" class="date1 bg-color1"><span>11</span>Sep</time>
+										<a href="#" class="bg-color6">Ipsum dolor sit amet conse ctetur <br class="hide-tp">adipisicing</a>
+									</div>
+								</li>
+								<li>
+									<figure class="img-indent">
+										<img src="static/img/page1-img4.jpg" alt="">
+									</figure>
+									<div class="extra-wrap">
+										<time datetime="2012-01-01" class="date1 bg-color1"><span>09</span>Sep</time>
+										<a href="#" class="bg-color6">Dolor sit amet conse ctetur ad&shy;ipisicing</a>
+									</div>
+								</li>
+							</ul>
+							<a href="#" class="button bg-color4">See all</a>
+						</div>
+					</div>
+					<div class="wrapper">
+						<div class="grid_12">
+							<!--===================== subscribe form ====================-->
+							<form id="subs-form">
+								<fieldset>
+									<h3>Newsletter</h3>
+									<label class="email">
+										<input type="text">
+									</label>
+									<a onClick="document.getElementById('subs-form').submit()" class="button bg-color2">Go!</a>
+								</fieldset>
+							</form>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+		<!--======================== footer ============================-->
+        <footer class="wrapper">
+            {% block footer %}
+			<div class="footer-text">Charleen's Daycare and Learning Center &copy; 2015&nbsp; &nbsp; &nbsp; <a href="/privacy">Privacy Policy</a></div>
+            {% endblock %}
+        </footer>
+    </div>
+    {% endblock %}
+</body>
+</html>

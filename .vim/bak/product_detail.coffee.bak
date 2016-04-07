@@ -1,0 +1,575 @@
+primary_options = []
+secondary_options = []
+
+primary_elements = []
+secondary_elements = []
+
+plural =
+  'cushion': 'cushions'
+  'door': 'doors'
+  'drawer': 'drawers'
+  'pillow': 'pillow_list'
+  'shelf': 'shelves'
+  'table_leaf': 'table_leaves'
+  'shipping_information': 'box_list'
+
+$(document).ready ->
+
+  # load the result from the server to the selected component
+  generalSuccess = (component, result) ->
+    $("##{component} .panel-body").html result
+    default_image = $('.default-image').attr 'src'
+    $('.product-default-image img').attr 'src', default_image
+
+  # updates the category options based on what is currently selected
+  categoryUpdate = (e) ->
+    $category = $('#category-primary')
+    $primary = $('#category-secondary')
+    $secondary = $('#category-tertiary')
+
+    # this sets global vars for the category choices and elements, if they
+    # currently do not exist
+    if primary_options.length <= 0
+      primary_options = _.pluck $primary.find('option'), 'value'
+      primary_elements = $primary.find 'option'
+    if secondary_options <= 0
+      secondary_options = _.pluck $secondary.find('option'), 'value'
+      secondary_elements = $secondary.find 'option'
+
+    # get the values to filter on
+    category = $category.val()
+    primary = $primary.val()
+
+    # if top-level change, clear primary category
+    if e and $(e.currentTarget).attr('id') is 'category-primary'
+      primary = ''
+
+    # filter the primary and secondary category lists
+    filterOptions category, primary_options, primary_elements, $primary
+    filterOptions primary, secondary_options, secondary_elements, $secondary
+
+  # filters the master list of category options by the selected value
+  filterOptions = (category_name, option_list, elements, destination) ->
+    # filter the option_list by category_name
+    if not category_name
+      new_list = []
+    else
+      regex = new RegExp "^#{category_name}", 'i'
+      new_list = _.filter option_list, (option) ->
+        return regex.test option
+
+    new_list.push '' # need to include no selection
+
+    new_elements = []
+
+    # add option to new_elements if it's in our filtered new_list
+    for option in elements
+      if $(option).val() in new_list
+        new_elements.push option
+
+    selected = destination.val() # save selected because dumb js
+
+    if selected not in new_list
+      selected = ''
+
+    # reset select with the new options
+    destination.empty()
+    for elem in new_elements
+      destination.append elem
+
+    destination.val selected # reselect the selected option because dumb js
+
+  getModal = (e) ->
+    e.preventDefault()
+    url = $(e.currentTarget).attr 'href'
+
+    $.ajax url,
+      type: 'GET',
+      success: (result) ->
+        loadModal result
+
+  loadModal = (result) ->
+    if $('.modal').length > 0
+      $('.modal').html $(result).find '.modal-dialog'
+    else
+      modal = $(result).appendTo 'body'
+      modal.modal 'show'
+
+    $('.js-popover').popover() if $('.js-popover').length > 0
+    categoryUpdate() if $('#category-category').length > 0
+
+  deleteListComponent = (e) ->
+    e.preventDefault()
+    url = $(e.currentTarget).attr 'href'
+    component = $(e.currentTarget).parents('.panel-collapse').attr 'id'
+    targetSection = $(e.currentTarget).parents '.subcomponent-section'
+    $.ajax url,
+      type: 'POST',
+      success: (result) ->
+        if result.success
+          targetSection.remove()
+          updateNumbering component
+
+  updateNumbering = (component) ->
+    digit = /\d/
+    for subcomponent, i in $("##{component} .subcomponent-section")
+      for input in $(subcomponent).find('input')
+        new_name = $(input).attr('name').replace digit, i
+        $(input).attr 'name', new_name
+        $(input).attr 'id', new_name
+
+      $(subcomponent).find('.component-count').text i + 1
+
+  getNewSubComponentForm = (e) ->
+    e.preventDefault()
+    btn = $(@)
+    btn.addClass 'disabled'
+    url = btn.attr 'href'
+    component = btn.data 'target'
+    parentComp = btn.data 'parent'
+    data = {}
+
+    additional_data_field = $("[data-component=#{component}]")[0]
+
+    if additional_data_field
+      label = $(additional_data_field).data 'attribute'
+      value = $(additional_data_field).val()
+      data[label] = value
+
+      if not value
+        btn.blur()
+        btn.removeClass 'disabled'
+        return
+
+    $.ajax url,
+      type: 'GET'
+      data: data
+      success: (result) ->
+        num = $("##{parentComp} .subcomponent-section").length
+        prepend = "#{parentComp}-#{component}_list-#{num}-"
+
+        if component is 'feature'
+          new_component = $(result).appendTo "##{component}"
+          prepend = "description-feature-#{num}-"
+          $("[data-component=feature]").val ''
+        else
+          new_component = $(result).insertBefore "##{parentComp} .js-add-subcomponent"
+
+        $(new_component).find('.component-count').text num + 1
+        for input in $(new_component).find('input')
+          new_name = "#{ prepend }#{ $(input).attr('name') }"
+          $(input).attr 'name', new_name
+          $(input).attr 'id', new_name
+
+        btn.blur()
+        btn.removeClass 'disabled'
+
+  # toggles the visibility of product
+  visibilityToggle = (e) ->
+    $(@).toggleClass 'off on'
+    html = if $(@).hasClass 'on' then 'ON' else 'OFF'
+    $(@).html html
+
+    set_to = not $('#visibility-active').prop 'checked'
+    $('#visibility-active').prop 'checked', set_to
+
+    shallNotPass()
+
+  fileTrigger = (e) ->
+    e.preventDefault()
+    target = $(@).data 'target'
+    $(target).click()
+
+  # handles the image upload for logo images
+  fileUpload = (e) ->
+    files = e.currentTarget.files
+    data = new FormData
+    data.append 'img', files[0]
+
+    $.ajax
+      url: '/products/image/upload'
+      type: 'POST'
+      data: data
+      cache: false
+      contentType: false
+      processData: false
+      beforeSend: () ->
+        $('input:submit', $('input:submit').closest('form')).addClass 'disabled'
+        $('div.placeholder-image').hide()
+        $('span.loading').show()
+      success: (result) ->
+        if result.success
+          $('#rotation_angle').val 0
+          updateImages result.image_url
+          $('.upload-btn').text 'Update Image'
+          if $('.js-rotate').length > 0 and $('.js-rotate').hasClass 'disabled'
+            $('.js-rotate').removeClass 'disabled'
+      complete: () ->
+        if $('input:submit').hasClass('disabled')
+          $('input:submit', $('input:submit').closest('form')).removeClass 'disabled'
+
+  updateImages = (url) ->
+    $('.js-image-holder').html "<img src=\"#{url}\">"
+    $('input#full_size').val url
+
+    urls = _.map [150, 300, 640], (size) ->
+      sections = url.split '.'
+      sections[3] = sections[3] + "_#{size}"
+      return sections.join '.'
+
+    $('input#thumbnail_size').val urls[0]
+    $('input#medium_size').val urls[1]
+    $('input#large_size').val urls[2]
+
+  imageEditSave = (e) ->
+    e.preventDefault()
+    e.stopPropagation()
+    full_size_url = $('input#full_size').val()
+    rotation_angle = $('input#rotation_angle').val()
+    if rotation_angle > 0
+      data = JSON.stringify
+        'full_size': full_size_url,
+        'rotation_angle': rotation_angle
+
+      $.ajax
+        url: '/products/image/process'
+        type: 'POST',
+        contentType: 'application/json',
+        data: data,
+        beforeSend: () ->
+          $(e.currentTarget).addClass 'btn-loader disabled'
+        success: (result) ->
+          if result.success
+            $('#rotation_angle').val 0
+            updateImages(result.image_url)
+            $(e.currentTarget.form).submit()
+    else if not full_size_url
+      # Add an error here
+    else
+      $(e.currentTarget.form).submit()
+
+  formSubmit = (e) ->
+    cm.setConfirmUnload null
+    e.preventDefault()
+
+    component = $(e.currentTarget).data 'component'
+    raw_data = $(@).serializeArray()
+    form_data = {}
+
+    _.map raw_data, (key_value) ->
+      form_data[key_value.name] = key_value.value
+
+    url = $(@).attr 'action'
+    type = $(@).attr 'method'
+
+    $.ajax url,
+      type: type,
+      contentType: 'application/json',
+      data: JSON.stringify(form_data),
+      success: (result) ->
+        if result.success
+          window.location.reload()
+        else if result.message
+          $('.duplicate-warning').removeClass 'hidden'
+        else if result
+          if $(result).find('.has-error').length > 0
+            loadModal result
+          else
+            $('.modal').modal 'hide'
+            # Sorry future dev! If we update an image, we really need to
+            # update the "images" panel, so we append an "s". Good luck!
+            if component == 'image'
+              component += 's'
+            generalSuccess component, result
+
+  deleteImage = (e) ->
+    e.preventDefault()
+    sub_component_data_id = $(e.currentTarget).attr 'id'
+    url = "#{window.location.pathname}/sub_component/image/#{sub_component_data_id}/delete"
+    image_class = $(e.currentTarget).next('img').attr('class')
+
+    parent = $('.image-wrapper[data-id="'+sub_component_data_id+'"]')
+    image_class = $('img', parent).attr('class')
+    $.ajax url,
+      type: 'POST',
+      success: (result) ->
+        if result.success
+          $('.modal').modal 'hide'
+          $(".image-wrapper[data-id=\"#{sub_component_data_id}\"]").remove()
+          if image_class is 'default-image'
+            $('.product-default-image').remove()
+
+  showOptions = (e) ->
+    $('.options').hide()
+    id = $(@).data 'set'
+    $("#optionset_#{id}").show()
+
+  preselect = (e) ->
+    ids = _.map $('.optionset-container'), (set) ->
+      return $(set).data 'id'
+
+    _.each ids, (id) ->
+      $(".optionset-list input[value=\"#{id}\"]").attr
+        checked: 'checked'
+        disabled: 'disabled'
+
+  addOptions = (e) ->
+    $(e.currentTarget).addClass 'disabled'
+    e.stopPropagation()
+    e.preventDefault()
+    url = $(@).attr 'href'
+
+    optionsets = _.pluck $('.modal input:checked'), 'value'
+
+    $.ajax url,
+      type: 'POST'
+      data: JSON.stringify
+        sets: optionsets
+      contentType: 'application/json'
+      success: (result) ->
+        generalSuccess 'option', result
+        $('.modal').modal 'hide'
+
+  removeOptions = (e) ->
+    e.preventDefault()
+    url = $(@).attr 'href'
+    $box = $(@).parents '.optionset-container'
+
+    $.ajax url,
+      type: 'POST'
+      success: (result) ->
+        if result.success
+          $box.fadeOut 'fast', () ->
+            @remove()
+
+  # show/hide edit button on panel open/close
+  toggleButtons = (e) ->
+    $(e.currentTarget).find('> .panel-heading .component-edit').toggle()
+
+  ensureTearsheetPrompt = ->
+    el = $('.print-tearsheet a')
+
+    el.unbind 'click'
+    el.on 'click', ->
+      msgText = 'You have unsaved changes.
+      To proceed without changes, click ok.
+      Otherwise, click cancel and save your changes.'
+
+      confirm msgText
+
+
+  shallNotPass = ->
+    cm.setConfirmUnload 'You have unsaved changes.'
+    ensureTearsheetPrompt()
+
+  okayPass = ->
+    cm.setConfirmUnload false
+
+  addTooltips = ->
+    $('[data-toggle="tooltip"]').tooltip() if $('[data-toggle="tooltip"]').length > 0
+
+  # tracks which panels to keep open on page refresh
+  savePanel = (e) ->
+    url = if e.type is 'show' then '/products/panels/add' else '/products/panels/remove'
+
+    panel = $(e.currentTarget).attr 'id'
+    data = JSON.stringify
+      panel: panel
+
+    $.ajax url,
+      type: 'PUT'
+      data: data
+      contentType: 'application/json'
+
+  showPanel = (e) ->
+    e.preventDefault()
+    panel = $(@).attr 'href'
+    $("#{panel}").collapse 'show'
+    top = $(panel).position().top
+    window.scrollTo 0, top
+
+  categoryWarning = (e) ->
+    categories =
+      category: $('.category-select').data 'category'
+      primary: $('.category-select').data 'primary'
+      secondary: $('.category-select').data 'secondary'
+
+    new_categories =
+      category: $('#category-category').val()
+      primary: $('#category-secondary').val()
+      secondary: $('#category-tertiary').val()
+
+    if _.isEqual categories, new_categories
+      $('.category-warning').addClass 'hidden'
+    else
+      $('.category-warning').removeClass 'hidden'
+
+  #product Discover preview with the most current form updates
+  previewDiscover = (e) ->
+    e.preventDefault()
+    data = _.object _.map $('input[type=text], textarea, select', '#product-form'), (row) ->
+        return [$(row).attr('id'), $(row).val()]
+    checkboxes = _.object _.map $('input[type=checkbox]', '#product-form'), (row) ->
+        return [$(row).attr('id'), $(row).prop('checked') ]
+    $.extend data, checkboxes
+
+    # how many shipping boxes have been created for this product
+    data['shipping_boxes'] = $('.subcomponent-section', '#shipping_information').length
+
+    # put the names of the shipping methods that have been marked 'checked' into an array
+    data['shipping_methods'] = []
+    _.each $('.checkbox label', '#shipping_information'), (elem) ->
+      if $('input[type=checkbox]', elem).prop('checked')
+        return data['shipping_methods'].push($(elem).text().trim())
+
+    url = $(e.currentTarget).attr 'href'
+    $.ajax url,
+      type: 'POST'
+      contentType: 'application/json'
+      data: JSON.stringify data
+      success: (result) ->
+        cm.loadModal result
+
+  # updating the preview element for the product Discover preview
+  thumbPreview = (e) ->
+    $('.product-thumb').each ()->
+      $(@).removeClass 'current'
+    thumbSRC = $(e.target).data 'url'
+    $(e.currentTarget).parent().addClass 'current'
+    $('.product-main-image').css 'background-image', "url(#{thumbSRC})"
+
+  defaultFirst = (e) ->
+    if $('.image-frame img').length <= 0
+      $('.modal #default').attr 'checked', 'checked'
+
+  enterSubmit = (e) ->
+    if e.which is 13 and $(@).val().length > 0
+      e.preventDefault()
+      component = $(@).data 'component'
+      $("[data-target=#{component}]").click()
+      $(@).val ''
+
+  enterSubmit = (e) ->
+    if e.which is 13 and $(@).val().length > 0
+      e.preventDefault()
+      component = $(@).data 'component'
+      $("[data-target=#{component}]").click()
+      $(@).val ''
+
+  enterPressed = (e) ->
+    if e.keyCode == 13
+      e.preventDefault()
+
+  updateCollection = () ->
+    collection_name = $('option:selected', '.js-collection-select').text()
+    $('#collection-name').val collection_name
+
+  # Keywords
+  # append an array of keywords to the keyword bucket
+  appendKeywords = (array) ->
+    added_keywords = []
+    _.each array, (keyword) ->
+      if keyword and (keyword != ' ')
+        $('.js-keyword-list').append "<span class=\"label label-default\">#{keyword} <a href=\"#\" class=\"js-remove-keyword icon-x\"></a></span>"
+        added_keywords.push keyword
+
+    return added_keywords
+
+  # display the keywords on page load
+  loadKeywords = () ->
+    keywords = $('#keyword-keywords').val().split ','
+    clean_keywords = _.without keywords, ''
+    $('#keyword-keywords').val clean_keywords.join ','
+    if clean_keywords[0]
+      appendKeywords clean_keywords
+
+  # add keyword(s) and update hidden field
+  addKeyword = (e) ->
+    e.preventDefault()
+    # clean up our keyword a whole lot
+    value = $('#keyword-proxy').val().trim().toLowerCase().replace /\s+/g, ' '
+    if value
+      keywords = value.split ','
+      clean_keywords = appendKeywords keywords
+
+      old_value = $('#keyword-keywords').val()
+      new_value = "#{old_value},#{clean_keywords.join(',')}"
+
+      $('#keyword-keywords').val new_value
+      $('#keyword-proxy').val ''
+
+  # listing for enter to add keyword
+  addOnEnter = (e) ->
+    if e.which == 13
+      addKeyword e
+
+  # remove keyword label and update hidden field
+  removeKeyword = (e) ->
+    e.preventDefault()
+    label = $(e.currentTarget).parent '.label'
+    keyword = label.text().trim()
+    label.remove()
+
+    keywords = $('#keyword-keywords').val().split ','
+    new_keywords = _.without keywords, keyword
+
+    $('#keyword-keywords').val new_keywords.join ','
+
+  if $().combobox?
+    $('select.combobox').combobox()
+
+  $('body').on 'change', '#category-primary', categoryUpdate
+  $('body').on 'change', '#category-secondary', categoryUpdate
+  $('body').on 'click', '.js-add-subcomponent', getNewSubComponentForm
+  $('body').on 'click', '.js-remove-subcomponent', deleteListComponent
+  $('.js-component-data').on 'keydown', enterSubmit
+  $('body').on 'keydown', 'form', enterPressed
+
+  $('body').on 'click', '.js-product-edit', getModal
+  $('body').on 'click', '.js-product-delete', cm.getModal
+  $('body').on 'click', '.js-view-option', cm.getModal
+  $('body').on 'click', '.js-product-preview', previewDiscover
+  $('body').on 'submit', 'form.js-submit', formSubmit
+  $('body').on 'click', '.js-product-toggle', visibilityToggle
+  $('body').on 'change', '#product-form input, #product-form textarea, .keyword-keywords', shallNotPass
+  $('body').on 'click', '.js-remove-keyword icon-x', shallNotPass
+  $('body').on 'change', '.category-select select', categoryWarning
+  $('body').on 'submit', 'form', okayPass
+  $('.js-show-panel').on 'click', showPanel
+  $('body').on 'click', '.js-thumb-preview', thumbPreview
+
+  # image bs
+  $('body').on 'change', '#image_file', fileUpload
+  $('body').on 'click', '.js-new-image', cm.getModal
+  $('body').on 'click', '.js-image-edit', cm.getModal
+  $('body').on 'click', '.js-image-delete-modal', cm.getModal
+  $('body').on 'click', '.js-file-trigger', fileTrigger
+  $('body').on 'click', '.js-image-delete', deleteImage
+  $('body').on 'click', '.js-image-edit-save', imageEditSave
+  $('body').on 'shown.bs.modal', '#addOption', preselect
+
+  # option bs
+  $('body').on 'mouseover', '.optionset-list li', showOptions
+  $('body').on 'click', '.js-optionset-modal', cm.getModal
+  $('body').on 'click', '.js-add-optionsets', addOptions
+  $('body').on 'click', '.js-remove-optionset', removeOptions
+
+  $('body').on 'shown.bs.modal', addTooltips
+  $('body').on 'shown.bs.modal', '#imageEdit', defaultFirst
+
+  $('body').on 'change', '.js-collection-select', updateCollection
+
+  $('#components .panel').on 'shown.bs.collapse hide.bs.collapse', toggleButtons
+  $('.panel-collapse').on 'show.bs.collapse hide.bs.collapse', savePanel
+
+  # keyword bindings
+  $('#keyword-proxy').on 'keydown', addOnEnter
+  $('body').on 'click', '.js-add-keyword', addKeyword
+  $('body').on 'click', '.js-remove-keyword', removeKeyword
+
+  updateCollection()
+  categoryUpdate()
+  if $('#keyword-keywords').length > 0
+    loadKeywords()
+
+  $('.js-popover').popover()

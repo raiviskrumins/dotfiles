@@ -1,0 +1,14 @@
+from game.tiling import Tile
+
+class Default:
+    def __init__(self):
+        self.tile = Tile({"character": "•"})
+        self._dirty = True
+
+    def update(self, dt):
+        pass
+
+    def render(self):
+        if self._dirty:
+            
+            self._dirty = False

@@ -1,0 +1,15 @@
+package main
+
+import (
+	"fmt"
+	"regexp"
+)
+
+func main() {
+
+	var validID = regexp.MustCompile(`^[a-zA-Z]+\[[0-9]+\]$`)
+
+	fmt.Println(validID.MatchString("adam[31]"))
+
+	fmt.Printf("Hello, world!\n")
+}

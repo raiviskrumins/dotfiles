@@ -1,0 +1,94 @@
+{% from 'macros.jinja2' import with_errors, expiration_field %}
+
+{% extends 'offsite/signup/signup_nav.jinja2' %}
+
+{% block content_main %}
+<div class="row">
+  <div class="col-md-12">
+    <div class="signup-header">
+      <h3 class="registration-header">Authentication</h3>
+      <hr>
+      <p class="registration-subheader">The information below will only be used to verify your identity and will not be saved. Your account will not be charged.</p>
+    </div>
+  </div>
+</div>
+
+<form class="registration-form" method="POST" action="">
+  <div class="row">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="col-md-12">
+          <ul class="errors">
+            {% for message in messages %}
+              <li>{{ message }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+    {% endwith %}
+  </div>
+  <div class="row">
+    <div class="col-md-6">
+      {{ with_errors(form.country) }}
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-6">
+        {{ with_errors(form.creditcard, autocomplete="off", size="16", **{'data-stripe':'number'}) }}
+    </div>
+    <div class="col-md-3 credit-card-wrapper">
+        <div class="credit-cards">
+            <img src="/static/img/social_icons/visa_logo.gif" class="visa">
+            <img src="/static/img/social_icons/mastercard_logo.gif" class="mastercard">
+            <img src="/static/img/social_icons/discover_logo.gif" class="discover">
+            <img src="/static/img/social_icons/american_express_logo.gif" class="amex">
+        </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-4">
+        {{ expiration_field(form.expiration_month, form.expiration_year, 'Expiration') }}
+    </div>
+
+    <div class="col-md-2">
+        <a href="#" class="pull-right csc" tabindex="-1" data-toggle="popover" data-trigger="click" title="CSC Information" data-content="The CSC Number on your credit card or debit card is a 3 digit number on VISA®, MasterCard® and Discover® branded credit and debit cards. On your American Express® branded credit or debit card it is a 4 digit numeric code. Your CSC number can be located by looking on your credit or debit card.">What's this?</a>
+        {{ with_errors(form.csc, autocomplete="off", size="4", **{'data-stripe':'cvc'}) }}
+    </div>
+  </div>
+
+    <div class="registration-separator"></div>
+  <div class="row">
+    <div class="col-md-6">
+      {{ with_errors(form.name) }}
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-6">
+      {{ with_errors(form.address) }}
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-6">
+      {{ with_errors(form.city) }}
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-3">
+      {{ with_errors(form.state) }}
+    </div>
+    <div class="col-md-3">
+      {{ with_errors(form.zipcode) }}
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-3">
+        <p><sup>*</sup>Required</p>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block signup_footer %}
+  <button class="btn btn-primary pull-right js-form-submit">Continue</button>
+    {{ super() }}
+{% endblock %}

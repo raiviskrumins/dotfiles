@@ -1,0 +1,265 @@
+import json
+import hmac
+import os
+import random
+import sha
+import string
+
+from bottle import abort, app, get, post, redirect, request, route, run, static_file, template
+from beaker.middleware import SessionMiddleware
+from pygithub3 import Github
+from github import GitHub
+from rq import Queue
+import requests
+
+import dbconn
+import status
+from tasks import task
+from worker import conn
+
+
+session_opts = {
+    'session.type': 'file',
+    'session.cookie_expires': 300,
+    'session.data_dir': '/tmp',
+    'session.auto': True
+}
+app = SessionMiddleware(app(), session_opts)
+
+CLIENT_ID = os.environ.get("CLIENT_ID", None)
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET", None)
+
+@get('/github/begin')
+def github_begin():
+    scope = ",".join(["user:email", "repo:status", "admin:repo_hook", "notifications", "read:org"])
+    url = "https://github.com/login/oauth/authorize?scope=%s&client_id=%s" % (
+        scope,
+        CLIENT_ID
+    )
+
+    redirect(url)
+
+@get('/github/callback')
+def github_callback():
+    url = "https://github.com/login/oauth/access_token"
+    payload = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "code": request.query.get('code'),
+        "accept": "json"
+    }
+
+    headers = {
+        "Accept": "application/json"
+    }
+
+    result = requests.post(url, data=payload, headers=headers)
+    access_token = result.json().get('access_token', None)
+
+    s = request.environ.get('beaker.session')
+    s['access_token'] = access_token
+    s.save()
+
+    redirect("/github")
+
+@get('/github')
+def github_select():
+    s = request.environ.get('beaker.session')
+    token = s.get("access_token", None)
+
+    repos = [r['full_name'] for r in GitHub(access_token=token).user().repos.get()]
+
+    if not token:
+        redirect("/")
+
+    dbconn.cur.execute("SELECT full_name FROM repo WHERE access_token = %s", (token,))
+    active_repos = [r[0] for r in dbconn.cur.fetchall()]
+
+    return template(
+        'app/static/html/github/select.html',
+        active_repos=active_repos,
+        repos=repos
+    )
+
+@post('/github')
+def github_post():
+    full_name = request.forms.get("repo")
+    status = request.forms.get("status") == "1"
+    s = request.environ.get('beaker.session')
+    access_token = s.get("access_token", None)
+
+    if status:
+        # Delete hooks
+
+        web_hooks = GitHub(access_token=access_token).repos(
+            full_name.split("/")[0]
+        )(
+            "/".join(full_name.split("/")[1:]),
+        ).hooks().get()
+
+        print("full name: %s" % full_name)
+        for hook_ in web_hooks:
+            import pprint
+            pprint.pprint(hook_)
+            if 'config' not in hook_ or 'url' not in hook_['config']:
+                continue
+            if hook_['config']['url'] == 'http://www.rebase.space/github/hook':
+                GitHub(access_token=access_token).repos(
+                    full_name.split("/")[0]
+                )(
+                    "/".join(full_name.split("/")[1:])
+                ).hooks(hook_['id']).delete()
+
+        sql = "DELETE FROM repo WHERE full_name = %s AND access_token = %s"
+        dbconn.cur.execute(sql, (full_name, access_token))
+    else:
+        # Create hooks
+        secret = ''.join(
+            random.SystemRandom().choice(
+                string.ascii_uppercase + string.digits
+            ) for _ in range(25)
+        )
+
+        repo = GitHub(access_token=access_token).repos(
+            full_name.split("/")[0]
+        )(
+            "/".join(full_name.split("/")[1:]),
+        ).get()
+
+        owner_name = repo['owner']['login']
+        repo_name = repo['name']
+        clone_url = repo['clone_url']
+
+
+        s = GitHub(
+            access_token=access_token
+        ).repos(owner_name)(repo_name).hooks().post(
+            name="web",
+            events=["push", "pull_request"],
+            config={
+                "url": "http://www.rebase.space/github/hook",
+                "content_type": "json",
+                "secret": secret,
+                "insecure_ssl": "0",
+            },
+            active=True
+        )
+
+        sql = "INSERT INTO repo (full_name, owner_name, repo_name, clone_url, access_token, secret) VALUES (%s, %s, %s, %s, %s, %s)"
+        dbconn.cur.execute(
+            sql,
+            (
+                full_name,
+                owner_name,
+                repo_name,
+                clone_url,
+                access_token,
+                secret
+            )
+        )
+        dbconn.conn.commit()
+    redirect("/github")
+
+
+@post('/github/hook')
+def hook():
+    event = request.headers.get('X-GitHub-Event', '')
+    print(event)
+    if event == "ping":
+        return {"success": True}
+
+    repo_full_name = request.json['repository']['full_name']
+    dbconn.cur.execute(
+        "SELECT owner_name, repo_name, access_token, secret FROM repo WHERE full_name = %s LIMIT 1",
+        (repo_full_name,)
+    )
+    result = dbconn.cur.fetchone()
+
+    if result:
+        owner_name = result[0]
+        repo_name = result[1]
+        access_token = result[2]
+        secret = result[3]
+    else:
+        abort(401, "Sorry, access denied.")
+
+    header_signature = request.headers.get("X-Hub-Signature")
+    determined_signature = "sha1=%s" % hmac.new(secret, request.body.read(), sha).hexdigest()
+    if header_signature != determined_signature:
+        print("header sig: %s" % header_signature)
+        print("determined sig: %s" % determined_signature)
+        abort(403, "Bad secret")
+
+    client = Github(
+        user=owner_name,
+        repo=repo_name,
+        access_token=access_token
+    )
+
+
+    if event == 'pull_request':
+        action = request.json['action']
+        number = request.json['number']
+        pr = request.json['pull_request']
+
+
+        full_repo_name = pr['base']['repo']['full_name']
+        pr_sha = pr['head']['sha']
+
+        status.pending(owner_name, repo_name, access_token, pr_sha)
+        q.enqueue(task, access_token, pr)
+
+        return {'success': True}
+    elif event == 'push':
+        prs = GitHub(
+            access_token=access_token
+        ).repos(owner_name)(repo_name).pulls.get()
+
+        ref = request.json['ref']
+        ref = ref.replace("refs/heads/", "")
+
+        for pr in prs:
+            if pr['base']['ref'] == ref:
+                pr_sha = pr['head']['sha']
+
+                status.pending(owner_name, repo_name, access_token, pr_sha)
+                q.enqueue(task, access_token, pr)
+
+@get("/")
+def index():
+    return template('app/static/html/index.html')
+
+
+
+@route('/css/<filename:path>')
+def server_static_css(filename):
+    root_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'static',
+        'css',
+    )
+    return static_file(filename, root=root_path)
+
+@route('/img/<filename:path>')
+def server_static_images(filename):
+    root_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'static',
+        'img',
+    )
+    return static_file(filename, root=root_path)
+
+
+@route('/js/<filename:path>')
+def server_static_js(filename):
+    root_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'static',
+        'js',
+    )
+    return static_file(filename, root=root_path)
+
+
+
+q = Queue(connection=conn)
+run(app=app, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))

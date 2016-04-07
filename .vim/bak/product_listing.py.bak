@@ -1,0 +1,139 @@
+import json
+from flask import Blueprint, request
+
+from amber_api.auth import auth_required
+from amber_api.lib.decor import resource, errors
+from amber_api.autodoc import uri_parameter, body_parameter
+from amber_api.auth.permissions import permissions
+from amber_api.models.product import ProductEntity
+from amber_api.models.sales_channel import sales_channel_product
+from amber_api.models.component_types import ManufacturerComponent
+from amber_api.models.manufacturer import Manufacturer
+from amber_api.models.collection import Collection
+from amber_api.models.api_key import APIKey
+from amber_api.models import db
+from sqlalchemy.sql import select, and_
+
+from amber_api.resource_schemas import product_listing_resource
+product_listing_view = Blueprint('product_listing_view', __name__)
+
+
+@product_listing_view.route(
+    '/api/<string:version>/product_listing', methods=['GET']
+)
+@resource(
+    resource=product_listing_resource,
+    description='Retrieves a Product Listing.',
+    log_message='Get Product Listing',
+    uri_parameters={
+        'version': uri_parameter.version,
+    },
+    body_parameters={
+    }
+)
+@auth_required(view_permission=permissions.product.retrieve)
+@errors()
+def retrieve_product_listing(version):
+    """ Retrieves a Product Listing.
+    """
+    if type(request.data) is str:
+        data = json.loads(request.data)
+        request.data = data
+    data = json.loads(request.data['data'])
+    offset = data.pop('offset', None)
+    limit = data.pop('limit', None)
+    api_key = APIKey.query.filter_by(
+        public=request.data['public_key']
+    ).first()
+
+    manufacturer_id = api_key.manufacturer_id
+    sales_channel_id = api_key.sales_channel_id
+    result = []
+    # todo query db for all products active or not for mfr assigned to api_key
+    # or passed in body params if api_key has admin privileges
+
+    #if api_key.has_role('channel_manager_admin'):
+    if data.get('manufacturer_id'):
+        manufacturer_id = data.get('manufacturer_id')
+    if data.get('sales_channel_id'):
+        sales_channel_id = data.get('sales_channel_id')
+
+    query = select(
+        [ProductEntity.json_cache]
+    )
+
+    join_clause = ProductEntity.__table__
+    where_clauses = []
+    if manufacturer_id:
+        join_clause = join_clause.outerjoin(
+            ManufacturerComponent,
+            ProductEntity.id == ManufacturerComponent.product_id
+        )
+        where_clauses.append(
+            ManufacturerComponent.manufacturer_id == manufacturer_id
+        )
+    if sales_channel_id:
+        join_clause = join_clause.outerjoin(
+            sales_channel_product,
+            ProductEntity.id == sales_channel_product.c.product_id
+        )
+        where_clauses.append(
+            sales_channel_product.c.sales_channel_id == sales_channel_id
+        )
+    if join_clause != ProductEntity.__table__:
+        query = query.select_from(join_clause)
+    if where_clauses:
+        query = query.where(and_(*where_clauses))
+    if limit:
+        query = query.limit(limit)
+    if offset:
+        query = query.offset(offset)
+    query = query.order_by(ProductEntity.id.asc())
+
+    result = db.session.execute(query).fetchall()
+    products = []
+    manufacturers = {}
+    collections = {}
+    for product in result:
+        product_dict = json.loads(product['json_cache'])
+        listing_dict = {
+            'id': product_dict['id'],
+            'image': product_dict['image'],
+            'identity': product_dict['identity'],
+            'collection': product_dict['collection'],
+            'audit': product_dict['audit'],
+            'visibility': product_dict['visibility'],
+            'category': product_dict['category'],
+            'pricing': product_dict['pricing'],
+            'manufacturer': product_dict['manufacturer'],
+            'promotional_tags': product_dict['promotional_tags'],
+        }
+
+        prod_mfr_id = product_dict['manufacturer'].get('manufacturer_id')
+        if prod_mfr_id:
+            if prod_mfr_id not in manufacturers:
+                manufacturers[prod_mfr_id] = db.session.execute(select(
+                    [Manufacturer.name]
+                ).where(Manufacturer.id == prod_mfr_id)).first()
+            if manufacturers[prod_mfr_id]:
+                listing_dict['manufacturer']['manufacturer'] = {
+                    'name': manufacturers[prod_mfr_id]['name']
+                }
+
+        prod_collection_id = product_dict['collection'].get('collection_id')
+        if prod_collection_id:
+            if prod_collection_id not in collections:
+                collections[prod_collection_id] = db.session.execute(select(
+                    [Collection.name]
+                ).where(Collection.id == prod_collection_id)).first()
+            if collections[prod_collection_id]:
+                listing_dict['collection']['collection'] = {
+                    'name': collections[prod_collection_id]['name']
+                }
+        products.append(listing_dict)
+
+    product_listing = {
+        'products': products,
+        'count': len(products)
+    }
+    return product_listing

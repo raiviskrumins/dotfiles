@@ -1,0 +1,103 @@
+package models
+
+import (
+	"database/sql"
+	"reflect"
+	"testing"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/stretchr/testify/assert"
+)
+
+// TODO: Add docstring comments!
+
+func createAssComp(compName, tableName, className string) *AssemblageComponent {
+	return &AssemblageComponent{
+		lib.IntField{sql.NullInt64{1, true}},
+		lib.StringField{sql.NullString{compName, true}},
+		lib.StringField{sql.NullString{"", false}},
+		lib.StringField{sql.NullString{tableName, true}},
+		lib.StringField{sql.NullString{className, true}},
+		lib.StringField{sql.NullString{"", false}},
+		nil}
+}
+
+func TestGetFieldByTag(t *testing.T) {
+	input := AEProduct{}
+
+	// Test for existant tag.
+	output, err := GetFieldByTag(reflect.ValueOf(input), "json", "id")
+	assert.NoError(t, err)
+	assert.IsType(t, reflect.Value{}, output)
+	assert.IsType(t, lib.IntField{}, output.Interface())
+
+	// Testing for non-existant tag.
+	errOutput, err := GetFieldByTag(reflect.ValueOf(input), "json", "gargle-blaster")
+	assert.Error(t, err)
+	assert.IsType(t, reflect.Value{}, errOutput)
+}
+
+func TestSet(t *testing.T) {
+	assComp := createAssComp("visibility", "visibility_component", "VisibilityComponent")
+
+	output, err := assComp.Set(AssemblageComponent{})
+	if assert.NoError(t, err) {
+		assert.IsType(t, AssemblageComponent{}, output)
+	}
+}
+
+func TestRetrieveAssemblageComponentByName(t *testing.T) {
+	// Test retrieving via an actual name.
+	output, e := RetrieveAssemblageComponentByName(TestCtx, "visibility")
+	assert.NoError(t, e)
+	assert.IsType(t, &AssemblageComponent{}, output)
+
+	// Test retrieving via a non-existant name.
+	nilOutput, e := RetrieveAssemblageComponentByName(TestCtx, "WhyUDoThis")
+	assert.Error(t, e)
+	assert.Nil(t, nilOutput)
+}
+
+func TestRetrieveComponent(t *testing.T) {
+	assComp := createAssComp("visibility", "visibility_component", "VisibilityComponent")
+	output, e := RetrieveComponent(TestCtx, assComp, 29)
+	if assert.NoError(t, e) && assert.NotNil(t, output) {
+		assert.Implements(t, (*Component)(nil), output)
+	}
+
+	nilOutput, e := RetrieveComponent(TestCtx, assComp, 0)
+	assert.Error(t, e)
+	assert.Nil(t, nilOutput)
+}
+
+func TestDeleteComponent(t *testing.T) {
+	componentID := 399
+	assComp := createAssComp("visibility", "visibility_component", "VisibilityComponent")
+
+	output, e := RetrieveComponent(TestCtx, assComp, componentID)
+	if assert.NotNil(t, output) && assert.NoError(t, e) {
+		e = DeleteComponent(TestCtx, assComp, componentID)
+		if assert.NoError(t, e) {
+			output, e = RetrieveComponent(TestCtx, assComp, componentID)
+			assert.Nil(t, output)
+			assert.Error(t, e)
+		}
+
+		e = DeleteComponent(TestCtx, assComp, 0)
+		assert.Error(t, e)
+	}
+
+}
+
+func TestMarshalFields(t *testing.T) {
+	assComp := createAssComp("audit", "audit_component", "AuditComponent")
+
+	input, e := RetrieveComponent(TestCtx, assComp, 29)
+	if assert.NoError(t, e) {
+		output, e := MarshalFields(input)
+		if assert.NoError(t, e) {
+			assert.True(t, len(string(output)) > 2)
+		}
+	}
+
+}

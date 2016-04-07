@@ -1,0 +1,21 @@
+##
+# Host Database
+#
+# localhost is used to configure the loopback interface
+# when the system is booting.  Do not change this entry.
+##
+127.0.0.1	localhost
+255.255.255.255	broadcasthost
+::1             localhost
+
+## vagrant-hostmanager-start id: 5a7a99f0-8745-48d8-ac7c-ca1e9a8c44ed
+192.168.33.11	api api.local.amberengine.com
+192.168.33.10	apidb 
+192.168.33.13	cm channel-manager.local.amberengine.com
+192.168.33.12	cmdb 
+192.168.33.15	discover discover.local.amberengine.com
+192.168.33.14	discoverdb 
+192.168.33.18	elastic elasticsearch.local.amberengine.com
+192.168.33.20	kibana kibana.local.amberengine.com
+## vagrant-hostmanager-end
+

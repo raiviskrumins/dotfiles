@@ -1,0 +1,90 @@
+{% from 'macros.jinja2' import select_field, basic_field %}
+{% extends 'index.jinja2' %}
+
+{% block javascript %}
+{{ super() }}
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/manufacturers.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/folder.min.js') }}"></script>
+{% endblock %}
+
+{% block content_main %}
+<div class="row">
+    <div class="col-md-12">
+        <h1>{{ manufacturer.name }} Products</h1>
+    </div>
+</div>
+<div class="row toolbar collapse in js-collapsable-filters" id="toolBar">
+    <form action="{{ url_for('manufacturer_view.manufacturer_products', mfr_id=manufacturer.id) }}" method="POST" id="queryForm">
+        <div class="col-md-4">
+            {{ basic_field(form.terms, hide_label=true, placeholder="Search Products")}}
+            <a href="#" class="js-clear-search clear-search"><span class="icon-x"></span></a>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group">
+            {{ select_field(form.category, hide_label=true) }}
+          </div>
+        </div>
+        <div class="col-md-3 col-xs-12">
+          <div class="input-group form-group">
+            <span class="input-group-addon">Sort by</span>
+            {{ select_field(form.sort, hide_label=true) }}
+            <div class="input-group-btn">
+              <span class="caret pull-right"></span>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-2 reset-container">
+          <a class="btn btn-reset js-reset-all">Reset All</a>
+        </div>
+    </form>
+</div>
+<div class="row hidden-md hidden-lg toggle-toolbar">
+  <div class="col-xs-6 col-xs-offset-3 text-center">
+    <a data-toggle="collapse" href="#toolBar" aria-expanded="false" aria-controls="collapseExample">Hide Filters</a>
+  </div>
+  <div class="clearfix"></div>
+  <hr>
+</div>
+
+{% if products %}
+<div class="row product-grid">
+    {% for prod in products %}
+        <div class="col-lg-3 col-md-4 col-sm-6 col-xs-12 product-container">
+          <button class="js-show-add-product-to-folder btn btn-primary add-to-folder-btn hidden-xs hidden-sm" data-product-id="{{ prod.id }}" data-ref="/folder/product">Add To Folder</button>
+            {% if prod.full_size_image %}
+              <a href="{{ url_for('product_view.prod_get', prod_id=prod.id) }}"><div class="product-image" style="background-image:url('{{ prod.full_size_image }}')"></div></a>
+            {% endif %}
+            <div class="product-header">
+              <h3>{{ prod.name }}</h3>
+              <p>{{ prod.manufacturer_name }}</p>
+              <a class="js-show-add-product-to-folder add-to-folder-btn hidden-md hidden-lg" data-product-id="{{ prod.id }}" data-ref="/folder/product">Add To Folder</a>
+            </div>
+        </div>
+        {% if loop.index % 4 == 0 %}
+            <div class="clearfix visible-lg-block"></div>
+        {% endif %}
+        {% if loop.index % 3 == 0 %}
+            <div class="clearfix visible-md-block"></div>
+        {% endif %}
+    {% endfor %}
+{% else %}
+    <div class="row">
+      <div class="col-md-12">
+        {% if search_terms %}
+          <h4 class="no-results-message">No results were found for <em>"{{ search_terms }}"</em>
+          {%- if search_category -%}
+            in <em>{{ search_category }}</em>
+          {%- endif -%}.
+          {% if suggestion %}
+            Would you like to search for <a href="#" class="search-suggestion">{{ suggestion }}</a>?</h4>
+          {% else %}
+            Please try a different search.</h4>
+          {% endif %}
+        {% else %}
+          <h4 class="no-results-message">No results were found. Please try a different search.</h4>
+        {% endif %}
+      </div>
+    </div>
+{% endif %}
+</div>
+{% endblock content_main %}

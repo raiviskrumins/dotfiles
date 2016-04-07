@@ -1,0 +1,271 @@
+package models
+
+import (
+	"database/sql/driver"
+	"io"
+	"reflect"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+)
+
+type SalesChannel struct {
+	ID             lib.IntField    `json:"id" primary:"true"`
+	APIKeyID       lib.IntField    `json:"api_key_id"`
+	Visible        lib.BoolField   `json:"visible"`
+	Name           lib.StringField `db:"sales_channel_name" json:"name"`
+	Bio            lib.StringField `json:"bio"`
+	URL            lib.StringField `json:"url"`
+	LogoURL        lib.StringField `json:"logo_url"`
+	Phone          lib.StringField `json:"phone"`
+	Extension      lib.StringField `json:"phone_extension"`
+	Email          lib.StringField `json:"email"`
+	StreetAddress  lib.StringField `json:"street_address_1"`
+	StreetAddress2 lib.StringField `json:"street_address_2"`
+	City           lib.StringField `json:"city"`
+	State          lib.StringField `db:"address_state" json:"state"`
+	ZipCode        lib.StringField `json:"zipcode"`
+	FacebookURL    lib.StringField `json:"facebook_url"`
+	GooglePlusURL  lib.StringField `json:"google_plus_url"`
+	LinkedInURL    lib.StringField `json:"linkedin_url"`
+	PinterestURL   lib.StringField `json:"pinterest_url"`
+	TwitterURL     lib.StringField `json:"twitter_url"`
+	SettingImage   lib.BoolField   `json:"setting_image"`
+	IsolatedImage  lib.BoolField   `json:"isolated_image"`
+	OtherImage     lib.BoolField   `json:"other_image"`
+}
+
+func (sc SalesChannel) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("visible", form.ClassBool, form.Render("Visibile", form.ElementCheckbox)),
+		form.NewField("name", form.ClassStr, form.Render("Name", form.ElementText)),
+		form.NewField("bio", form.ClassStr, form.Render("Biography", form.ElementText)),
+		form.NewField("url", form.ClassURL, form.Render("URL", form.ElementText)),
+		form.NewField("logo_url", form.ClassURL, form.Render("Logo URL", form.ElementText)),
+		form.NewField("phone", form.ClassPhone, form.Render("Phone", form.ElementText)),
+		form.NewField("extension", form.ClassStr, form.Render("Phone Extension", form.ElementText)),
+		form.NewField("email", form.ClassEmail, form.Render("Email", form.ElementText)),
+		form.NewField("street_address_1", form.ClassStr, form.Render("Street Address", form.ElementText)),
+		form.NewField("street_address_2", form.ClassStr, form.Render("Street Address 2", form.ElementText)),
+		form.NewField("city", form.ClassStr, form.Render("City", form.ElementText)),
+		form.NewField("state", form.ClassStr, form.Render("State", form.ElementText)),
+		form.NewField("zip_code", form.ClassStr, form.Render("Zip Code", form.ElementText)),
+		form.NewField("facebook_url", form.ClassURL, form.Render("Facebook URL", form.ElementText)),
+		form.NewField("google_plus_url", form.ClassURL, form.Render("Google Plus URL", form.ElementText)),
+		form.NewField("linked_in_url", form.ClassURL, form.Render("LinkedIn URL", form.ElementText)),
+		form.NewField("pinterest_url", form.ClassURL, form.Render("Pinterest URL", form.ElementText)),
+		form.NewField("twitter_url", form.ClassURL, form.Render("Twitter URL", form.ElementText)),
+		form.NewField("setting_image", form.ClassBool, form.Render("Setting Image", form.ElementCheckbox)),
+		form.NewField("isolated_image", form.ClassBool, form.Render("Isolated Image", form.ElementCheckbox)),
+		form.NewField("other_image", form.ClassBool, form.Render("Other Image", form.ElementCheckbox)),
+	)
+}
+
+// NewIterator constructs a new lib.Iterator object using the calling SalesChannel object's value and type.
+func (comp *SalesChannel) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(comp).Elem(), DataType: reflect.TypeOf(*comp), Current: -1}
+}
+
+// ColumnNames returns the names of the columns in the calling SalesChannel object as a slice of strings.
+func (comp *SalesChannel) ColumnNames() []string {
+	return lib.ColumnNames(comp.NewIterator())
+}
+
+// Map returns the calling SalesChannel object as a map of strings to lib.IteratorItem objects.
+func (comp *SalesChannel) Map() map[string]lib.IteratorItem {
+	return lib.Map(comp.NewIterator())
+}
+
+// SetValue takes in an interface and sets the fields of the calling SalesChannel
+// object with the values in the provided interface.
+func (comp *SalesChannel) SetValue(newComp interface{}) {
+	lib.SetFields(comp, newComp)
+}
+
+// TableName returns the name of the table for the model.
+func (sc SalesChannel) TableName() string {
+	return "sales_channel"
+}
+
+// FetchRelation acts as a wrapper for RetriveSalesChannel and returns a
+// SalesChannel that corresponds to the ID provided.
+func (sc SalesChannel) FetchRelation(ctx *app.Context, primaryID driver.Value) (interface{}, oops.Error) {
+	return RetrieveSalesChannel(ctx, int(primaryID.(int64)))
+}
+
+// CreateSalesChannel creates a new SalesChannel instance using the provided JSON data,
+// and inserts the instance into the database. The created SalesChannel (and error, if applicable) is returned.
+func CreateSalesChannel(ctx *app.Context, body io.ReadCloser) (*SalesChannel, oops.Error) {
+	ptr, e := Factory("sales_channel")
+	if e != nil {
+		return nil, e
+	}
+	sc := ptr.(*SalesChannel)
+
+	e = lib.DecodeJSON(body, sc)
+	if e != nil {
+		return nil, e
+	}
+
+	if ctx.Role != nil && ctx.Role["SalesChannel"]&permissions.SalesChannelCreateAll == 0 {
+		return nil, oops.Forbidden("User does not have permissions to create a sales channel.")
+	}
+	pkid, e := pqdb.InsertQuery(ctx.DBConn, sc, sc.TableName())
+	if e != nil {
+		return nil, e
+	}
+
+	sc.ID.Set(pkid.(int64))
+
+	return sc, nil
+}
+
+// RetrieveSalesChannel returns a collection of SalesChannel pointers, based on
+// the provided limit, offset and clauses.
+func RetrieveSalesChannels(ctx *app.Context, params *pqdb.QueryParams) ([]*SalesChannel, int, oops.Error) {
+	if params == nil {
+		return nil, 0, oops.BadRequest("Must provide query parameters.", "QueryParams pointer must not be nil.")
+	}
+
+	var collection []*SalesChannel
+	ptr, e := Factory("sales_channel")
+	if e != nil {
+		return nil, 0, e
+	}
+	sc := ptr.(*SalesChannel)
+
+	columns := sc.ColumnNames()
+
+	if ctx.Role != nil && ctx.Role["SalesChannel"]&permissions.SalesChannelRetrieveAll == 0 {
+		if ctx.Role["SalesChannel"]&permissions.SalesChannelRetrieveActive != 0 {
+			params.Preds = append(params.Preds, pqdb.Predicate{"visible", "=", true})
+		} else {
+			params.Preds = append(params.Preds, pqdb.Predicate{"id", "=", ctx.APIKey.(*APIKey).SalesChannelID.Int64})
+		}
+	}
+
+	total, e := pqdb.CountQuery(ctx.DBConn, sc.TableName(), params)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	rows, e := pqdb.SelectQuery(ctx.DBConn, lib.Join(",", columns...), sc.TableName(), params)
+	if e != nil {
+		return nil, 0, e
+	}
+	defer rows.Close()
+
+	var ptr2 Model
+	for rows.Next() {
+		ptr2, e = Factory("sales_channel")
+		if e != nil {
+			return nil, 0, e
+		}
+		salesChannel := ptr2.(*SalesChannel)
+
+		e = pqdb.Scan(salesChannel, rows)
+		if e != nil {
+			return nil, 0, e
+		}
+		collection = append(collection, salesChannel)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, oops.ServerError("", "Rows has an internal error.", err)
+	}
+	return collection, total, nil
+}
+
+// RetrieveSalesChannel provides a SalesChannel instance with data from an entry
+// within the database which matches the specified ID number.
+func RetrieveSalesChannel(ctx *app.Context, id int) (*SalesChannel, oops.Error) {
+	ptr, e := Factory("sales_channel")
+	if e != nil {
+		return nil, e
+	}
+	sc := ptr.(*SalesChannel)
+
+	columns := sc.ColumnNames()
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"id", "=", id})
+	if e != nil {
+		return nil, e
+	}
+
+	if ctx.Role != nil && ctx.Role["SalesChannel"]&permissions.SalesChannelRetrieveAll == 0 {
+		if ctx.Role["SalesChannel"]&permissions.SalesChannelRetrieveActive != 0 {
+			queryParams.Preds = append(queryParams.Preds, pqdb.Predicate{"visible", "=", true})
+		} else {
+			queryParams.Preds = append(queryParams.Preds, pqdb.Predicate{"id", "=", ctx.APIKey.(*APIKey).SalesChannelID.Int64})
+		}
+	}
+	rows, e := pqdb.SelectQuery(ctx.DBConn, lib.Join(",", columns...), sc.TableName(), queryParams)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+
+	resultCount := 0
+	for rows.Next() {
+		e = pqdb.Scan(sc, rows)
+		if e != nil {
+			return nil, e
+		}
+		resultCount++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows hasn an internal error.", err)
+	}
+
+	if resultCount == 0 {
+		return nil, oops.NotFound("Could not find requested Sales Channel", "No results were found for the requested sales channel.", id)
+	}
+	return sc, nil
+}
+
+// UpdateSalesChannel updates the SalesChannel as specified by ID, using the provided
+// JSON data. An updated SalesChannel instance is returned.
+func UpdateSalesChannel(ctx *app.Context, id int, body io.ReadCloser) (*SalesChannel, oops.Error) {
+	sc, e := RetrieveSalesChannel(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+
+	e = lib.DecodeJSON(body, sc)
+	if e != nil {
+		return nil, e
+	}
+
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"id", "=", id})
+	if e != nil {
+		return nil, e
+	}
+
+	if ctx.Role != nil && ctx.Role["SalesChannel"]&permissions.SalesChannelUpdateAll == 0 {
+		queryParams.Preds = append(queryParams.Preds, pqdb.Predicate{"id", "=", ctx.APIKey.(*APIKey).SalesChannelID.Int64})
+	}
+	e = pqdb.UpdateQuery(ctx.DBConn, sc, sc.TableName(), queryParams)
+	return sc, e
+}
+
+// DeleteSalesChannel will delete an existing database entry with a matching
+// ID number as the provided SalesChannel ID.
+func DeleteSalesChannel(ctx *app.Context, id int) oops.Error {
+	ptr, e := Factory("sales_channel")
+	if e != nil {
+		return e
+	}
+	sc := ptr.(*SalesChannel)
+
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"id", "=", id})
+	if e != nil {
+		return e
+	}
+
+	if ctx.Role != nil && ctx.Role["SalesChannel"]&permissions.SalesChannelDeleteAll == 0 {
+		queryParams.Preds = append(queryParams.Preds, pqdb.Predicate{"id", "=", ctx.APIKey.(*APIKey).SalesChannelID.Int64})
+	}
+	return pqdb.DeleteQuery(ctx.DBConn, sc.TableName(), queryParams)
+}

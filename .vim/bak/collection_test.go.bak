@@ -1,0 +1,61 @@
+package models
+
+import (
+	"database/sql"
+	"testing"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/pqdb"
+	"github.com/stretchr/testify/assert"
+)
+
+// CreateMockCollection creates mock Collection objects for testing.
+func CreateMockCollection(name string, manufacturerID int, description string, designer string) *Collection {
+	return &Collection{
+		ID:             lib.IntField{sql.NullInt64{0, true}},
+		ManufacturerID: lib.IntField{sql.NullInt64{int64(manufacturerID), true}},
+		Name:           lib.StringField{sql.NullString{name, false}},
+		Description:    lib.StringField{sql.NullString{description, false}},
+		DesignedBy:     lib.StringField{sql.NullString{designer, true}}}
+}
+
+// TestRetrieveCollection_ExistingCollection tests that RetrieveCollection correctly returns the identified collection
+// when passed a collection ID for an existing collection.
+func TestRetrieveCollection_ExistingCollection(t *testing.T) {
+	expected := Collection{
+		ID:             lib.IntField{sql.NullInt64{1, true}},
+		ManufacturerID: lib.IntField{sql.NullInt64{3, true}},
+		Name:           lib.StringField{sql.NullString{"", false}},
+		Description:    lib.StringField{sql.NullString{"", false}},
+		DesignedBy:     lib.StringField{sql.NullString{"Andrea Lewin Wendel", true}}}
+	actual, e := RetrieveCollection(TestCtx, 1)
+	assert.NoError(t, e)
+	assert.Equal(t, expected, *actual)
+}
+
+// TestRetrieveCollection_NonexistentCollection tests that RetrieveCollection correctly returns nil and an error if you
+// try to retrieve an non-existent collection.
+func TestRetrieveCollection_NonexistentCollection(t *testing.T) {
+	actual, e := RetrieveCollection(TestCtx, 1337)
+	assert.Error(t, e, "RetrieveCollection should return an error alerting that no Collection exists for this ID")
+	assert.Nil(t, actual, "The Collection object should be nil since no Collection exists for this ID")
+}
+
+// TestRetrieveCollections will retrieve a limited list of all available
+// collections, with an offset, and ensures that the proper number is returned.
+func TestRetrieveCollections(t *testing.T) {
+	limit := 3
+	offset := 0
+
+	queryParams, e := pqdb.NewQueryParams(limit, offset)
+	if e != nil {
+		assert.Fail(t, e.Error())
+	}
+
+	collections, max, e := RetrieveCollections(TestCtx, queryParams)
+
+	assert.NoError(t, e)
+	assert.Len(t, collections, limit)
+	assert.True(t, len(collections) <= max)
+	assert.True(t, max > 0)
+}

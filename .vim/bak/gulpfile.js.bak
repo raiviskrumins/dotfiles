@@ -1,0 +1,83 @@
+var gulp = require('gulp');
+var coffee = require('gulp-coffee');
+var del = require('del');
+var uglify = require('gulp-uglify');
+var rename = require('gulp-rename');
+var run_sequence = require('run-sequence');
+var stylus = require('gulp-stylus');
+var shell = require('gulp-shell')
+var sort = require('gulp-sort')
+var watch = require('gulp-watch');
+
+
+gulp.task('clean', function() {
+      return del(['./build/'])
+})
+
+gulp.task('coffee', function() {
+    return gulp.src('./src/coffee/**/*.coffee')
+        .pipe(coffee({bare: true}))
+        .pipe(gulp.dest('./build/js/'))
+})
+
+gulp.task('compile', ['clean'], function() {
+    run_sequence('vendors', 'coffee', 'uglify', 'stylus');
+    return gulp.src('./src/html/**.html')
+        .pipe(gulp.dest('./build/html/'))
+})
+
+gulp.task('db-down', function() {
+    return gulp.src('./sql/down/*.sql')
+        .pipe(sort({asc: false}))
+        .pipe(shell(['sqlite3 data.sqlite3 < <%= file.path %>']))
+})
+
+
+gulp.task('db-up', function() {
+    return gulp.src('./sql/up/*.sql')
+        .pipe(sort())
+        .pipe(shell(['sqlite3 data.sqlite3 < <%= file.path %>']))
+})
+
+gulp.task('db-mig', function() {
+    var now = new Date().getTime();
+    return gulp.src('.')
+        .pipe(shell([
+            'mkdir -p ./sql/up/',
+            'mkdir -p ./sql/down/',
+            'touch ./sql/up/' + now + '_.sql',
+            'touch ./sql/down/' + now + '_.sql',
+            'echo "./sql/up/' + now + '_.sql"',
+            'echo "./sql/down/' + now + '_.sql"',
+        ])
+    )
+})
+
+gulp.task('electron', shell.task([
+    './node_modules/.bin/electron .'
+]))
+
+gulp.task('uglify', function() {
+    return gulp.src('./build/js/**.js')
+        .pipe(uglify())
+        .pipe(gulp.dest('./build/js/'));
+})
+
+gulp.task('stylus', function() {
+    return gulp.src('./src/stylus/**.styl')
+        .pipe(stylus({compress: true}))
+        .pipe(gulp.dest('./build/css/'));
+})
+
+gulp.task('vendors', function() {
+    gulp.src('./vendors/balalaika/balalaika.js')
+        .pipe(gulp.dest('./build/js/vendors/balalaika/'))
+})
+
+gulp.task('watch', function() {
+    gulp.watch('./src/**/*.*', ['compile'])
+})
+
+gulp.task('default', function() {
+    gulp.start('compile');
+});

@@ -1,0 +1,187 @@
+# functions serving manufacturer view in Discover
+
+$(document).ready ->
+  featuredImage = () ->
+    $('.featured-manufacturer .featured-image').height($('.featured-image').width()*0.6)
+
+  featuredImage()
+
+  showButtons = (e) ->
+    $('.manufacturer-buttons',e.currentTarget).show()
+
+  hideButtons = (e) ->
+    $('.manufacturer-buttons',e.currentTarget).hide()
+
+  updateToggleText = (e)->
+    if $(e.currentTarget).hasClass('in')
+      $('a', '.toggle-toolbar').text('Hide Filters')
+    else
+      $('a', '.toggle-toolbar').text('Show Filters')
+
+  addToFolderModal = (e) ->
+    e.preventDefault()
+
+  contactManufacturerModal = (e) ->
+    e.preventDefault()
+
+    $('.js-contact-manufacturer').addClass 'disabled dark-purple'
+    url = $(e.currentTarget).data 'ref'
+
+    $.ajax url,
+      type: 'GET'
+      success: (result) ->
+        modal = $(result).appendTo 'body'
+        modal.modal(
+          {
+            backdrop: 'static',
+            keyboard: false  # to prevent closing with Esc
+          },
+          'show'
+        )
+        modal.on "hide.bs.modal", ->
+          $('.js-contact-manufacturer').removeClass 'disabled'
+      error: ->
+        $('.js-contact-manufacturer').removeClass 'disabled'
+
+  sendMessage = (e) ->
+    e.preventDefault()
+    url = $('#contactForm').data 'action'
+    data = {}
+
+    $('#contactForm input:text').each (index, element) ->
+      data[$(element).attr 'name' ] = $(element).val()
+
+    $('#contactForm input:checkbox').each (index, element) ->
+      data[$(element).attr 'name' ] = $(element).prop 'checked'
+
+    $('#contactForm textarea').each (index, element) ->
+      data[$(element).attr 'name' ] = $(element).val()
+
+    $.ajax url,
+      type: 'POST'
+      data: JSON.stringify(data)
+      contentType: 'application/json'
+      success: (result) ->
+        if $('body').has '.modal'
+          $('.modal').html $(result).find '.modal-dialog'
+        else
+          modal = $(result).appendTo 'body'
+          modal.modal('show')
+
+  # update search term with a suggested term
+  updateSearch = (e)->
+    e.preventDefault()
+    $('input#terms').val($(e.currentTarget).text())
+    queryFromSubmit(e)
+
+  # opens a modal to view a sales channel image
+  viewImage = (e) ->
+    e.preventDefault()
+    start = $(@).data 'image'
+    id = $(@).data 'id'
+
+    $.ajax "/manufacturers/#{id}/image",
+      type: 'GET'
+      success: (result) ->
+        modal = $(result).appendTo 'body'
+        image = $(".js-modal-image[data-id=#{start}]").data 'image'
+
+        $(".js-modal-image[data-id=#{start}]").addClass 'active'
+        $('.js-main-image').attr 'src', image
+        checkForImages()
+        modal.modal('show')
+
+  updateImage = (e) ->
+    e.preventDefault()
+
+    $('.js-modal-image').removeClass 'active'
+    $(@).addClass 'active'
+
+    image = $(@).data 'image'
+    $('.js-main-image').attr 'src', image
+    checkForImages()
+
+  checkForImages = (e) ->
+    next = $('.active').next()
+    if next.length == 0
+      $('.next').css 'display', 'none'
+    else
+      $('.next').css 'display', 'block'
+
+    prev = $('.active').prev()
+    if prev.length == 0
+      $('.prev').css 'display', 'none'
+    else
+      $('.prev').css 'display', 'block'
+
+  next = (e) ->
+    e.preventDefault()
+    next = $('.active').next()
+    $(next).click() if next.length > 0
+
+  prev = (e) ->
+    e.preventDefault()
+    prev = $('.active').prev()
+    $(prev).click() if prev.length > 0
+
+  #search, filtering and sorting
+  queryFromSubmit = (e) ->
+    e.preventDefault()
+    $('form#queryForm').submit()
+
+  enterPressed = (e) ->
+    if e.which == 13
+      e.preventDefault()
+      $('form#queryForm').submit()
+
+  resetAll = (e) ->
+    $('.toolbar .form-control').val('')
+    $('.toolbar .form-control#sort').val('date')
+    $('#queryForm').submit()
+
+  valueSearch = (value) ->
+    if value?
+      if value.length > 0
+        $('.js-clear-search').fadeIn()
+      else
+        $('.js-clear-search').fadeOut 100
+
+  clearSearch = (e) ->
+    e.preventDefault()
+    $('.form-control#terms').val ''
+    $('.js-clear-search').fadeOut 100
+    $('form#queryForm').submit()
+
+  valueSearch($('.form-control#terms').val())
+
+  $('.manufacturer-description').on 'mouseenter', showButtons
+  $('.manufacturer-description').on 'mouseleave', hideButtons
+  $('.featured-manufacturer').on 'mouseenter', showButtons
+  $('.featured-manufacturer').on 'mouseleave', hideButtons
+
+  $('.toolbar').on 'hidden.bs.collapse', updateToggleText
+  $('.toolbar').on 'shown.bs.collapse', updateToggleText
+
+  $('.form-control#terms').on 'keyup', enterPressed
+  $('.form-control#terms').on 'focus', enterPressed
+  $('.form-control#category').on 'change', queryFromSubmit
+  $('.form-control#sort').on 'change', queryFromSubmit
+  $('.js-clear-search').on 'click', clearSearch
+
+  $('.js-reset-all').on 'click', resetAll
+
+  $('.js-add-manufacturer-to-folder').on 'click', addToFolderModal
+  $('.js-contact-manufacturer').on 'click', contactManufacturerModal
+  $('body').on 'click', '.js-send-message', sendMessage
+
+  $('.js-view-image').on 'click', viewImage
+  $('body').on 'click', '.js-modal-image', updateImage
+  $('body').on 'click', '.js-next', next
+  $('body').on 'click', '.js-prev', prev
+
+  $('body').on 'click', '.search-suggestion', updateSearch
+
+  $(window).resize ()->
+    featuredImage()
+
+  return

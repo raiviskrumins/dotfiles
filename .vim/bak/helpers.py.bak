@@ -1,0 +1,22 @@
+from amber_discover.lib.utils import amber_api
+from webhelpers.constants import us_states
+
+
+def GetListOfCategories():
+    categories = amber_api().get_categories()
+    if 'none' in categories:
+        categories.remove('none')
+    choices = [('', 'All Categories')]
+    for category in categories:
+        if category is not None:
+            choice = (category, category[:1].upper() + category[1:])
+            choices.append(choice)
+
+    return choices
+
+
+def GetListOfUSStates():
+    choices = [('', 'Select One')]
+    choices += us_states()
+
+    return choices

@@ -1,0 +1,24 @@
+import jsonify.classes
+
+class Category(jsonify.classes.Full):
+    def __init__(self, name):
+        self.name = name
+        self.subs = []
+
+    def sub_category(self, *args):
+        for arg in args:
+            self.subs.append(Category(arg))
+
+def main():
+    entertainment = Category('entertainment')
+    entertainment.sub_category('music', 'tv', 'radio')
+
+    entertainment.subs[0].sub_category('rock', 'country', 'rap')
+    entertainment.subs[1].sub_category('reality', 'drama', 'cartoons', 'punk')
+    entertainment.subs[2].sub_category('AM', 'FM')
+
+
+    print(entertainment.json)
+
+if __name__ == "__main__":
+    main()

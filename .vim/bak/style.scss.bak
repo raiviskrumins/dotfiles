@@ -1,0 +1,514 @@
+@import "typography";
+@import "elements";
+@import "overrides";
+
+html, body {
+    height: 100%;
+}
+
+/*----------------STUCTURAL-------------------*/
+.wrapper {
+    min-height: 100%;
+    margin: 0px auto (-$footer-height);
+}
+
+.push {
+    height: $footer-height;
+}
+
+.logo {
+    background: url('../img/rebrand/amber/amberengine-white.svg') center center no-repeat;
+    background-size: contain;
+    width: 201px;
+    height: 40px;
+    margin-top: 5px;
+}
+
+.dark .logo {
+    background-image: url('../img/rebrand/amber/amberengine-gray.svg');
+    width: 201px;
+}
+
+.img-circle {
+    width: 100px;
+}
+
+#frontPageCarousel .item {
+    height: 800px;
+    overflow: hidden;
+
+    .btn {
+        margin: 20px 0 40px;
+    }
+}
+
+#channelManagerCarousel, #discoverCarousel {
+    margin-bottom: -50px;
+
+    p {
+        margin: 10px 0 40px;
+    }
+}
+
+#productOverview {
+    p {
+        padding-top: 15px;
+    }
+    h5 {
+        margin-bottom: 40px;
+    }
+}
+
+#screenShot .row {
+    margin-bottom: 50px;
+}
+
+#product_overview h6 {
+    margin-bottom: 0;
+}
+
+.feature {
+    padding: 20px 50px;
+
+    .feature-icon {
+        width: 50px;
+        text-align: center;
+        float: left;
+    }
+
+    p {
+        margin-left: 70px;
+    }
+}
+
+#termsPage, #privacyPage {
+    padding-bottom: 40px;
+}
+
+.toc {
+    li {
+        padding-left: 15px;
+        line-height: 1.8em;
+
+        a {
+            color: $extra-light-orange;
+        }
+    }
+
+    &.fixed {
+        position: fixed;
+        top: 10px;
+    }
+
+    &.absolute {
+        position: absolute;
+        top: 9312px;
+    }
+}
+
+#updated {
+    margin-bottom: 30px;
+}
+
+#careers .btn {
+    margin: 20px 0 50px;
+}
+
+.current-openings h2 {
+    margin-top: -9px;
+}
+
+.openings li {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 10px;
+
+    a {
+        border: 1px solid $dark-grey;
+        display: inline-block;
+        color: $dark-grey;
+        width: 100%;
+        padding: 10px 20px;
+        border-radius: 3px;
+        @include btn-style();
+
+        &:hover, &:active, &:focus {
+            text-decoration: none;
+            outline: none;
+            color: $extra-light-orange;
+            border-color: $extra-light-orange;
+        }
+
+        .icon-rightarrow {
+            font-size: 20px;
+            margin-top: 2px;
+            margin-right: -10px;
+        }
+    }
+}
+
+#application_form form {
+    margin-top: 20px;
+
+    input[type="submit"] {
+        margin-top: 15px;
+    }
+}
+
+.file {
+    margin: 10px 0 30px;
+
+    p {
+        margin-top: -10px;
+    }
+}
+
+.leslie-img {
+    background: url('../img/rebrand/leslie.jpg') top center no-repeat;
+    background-size: cover;
+    height: 150px;
+    width: 150px;
+    margin: 3px 0 15px -2px;
+}
+
+.address {
+    margin-top: 25px;
+
+    > p:first-child {
+        margin-bottom: 0;
+    }
+
+    .street-address {
+        margin-bottom: 15px;
+    }
+
+    .social-icons {
+        margin-top: 20px;
+    }
+}
+
+.social-icons a {
+    color: $dark-grey;
+    margin-right: 8px;
+
+    &:hover, &:active, &:focus {
+        color: $extra-light-orange;
+        text-decoration: none;
+    }
+}
+
+#subscribeForm {
+    .checkbox input {
+        margin-top: 7px;
+    }
+
+    .checkbox:first-child {
+        margin-top: 0
+    }
+
+    .checkbox:last-child {
+        margin-bottom: 20px;
+    }
+}
+
+/*--------------FOOTER------------------*/
+
+footer {
+    height: $footer-height;
+    background-color: $light-grey;
+    text-align: left;
+    overflow: hidden;
+
+    .container {
+        padding-top: 50px;
+        background-color: $light-grey;
+    }
+
+    &.white .container {
+        background-color: $white;
+    }
+
+    ul {
+        list-style-type: none;
+        padding: 0px;
+        margin-right: 50px;
+        float: left;
+
+        li:first-child {
+            @include btn-style();
+        }
+
+        li {
+            line-height: 1.7em;
+        }
+
+        &:last-child {
+            margin-right: 0;
+        }
+    }
+
+    a, a:hover {
+        color: $dark-grey;
+    }
+
+    .footer-tag {
+        text-align: right;
+    }
+}
+
+/* Media query-based styles */
+@media (min-width: 992px) {
+  .navbar li.active {
+    text-decoration: underline;
+    color: $white;
+  }
+}
+
+@media (max-width: 1199px) {
+    .feature {
+        padding: 20px 30px;
+    }
+}
+
+@media (max-width: 991px) {
+    .navbar {
+        padding: 0;
+
+        .container {
+            padding: 0;
+        }
+
+        .navbar-header {
+            padding-left: 5px;
+            margin: 0;
+        }
+
+        button {
+            color: $white;
+            font-size: 22px;
+            margin-right: 10px;
+        }
+
+        .logo {
+            margin-top: 8px;
+            margin-left: 10px;
+        }
+
+        .navbar-collapse {
+            width: 100%;
+            margin: 0;
+            background-color: $white;
+        }
+
+        .nav > li {
+            border-bottom: 1px solid $medium-grey;
+
+            &:last-child {
+                border-bottom: none;
+            }
+        }
+
+        .nav > li > a {
+            color: $dark-grey;
+            padding: 15px 0;
+            text-align: center;
+        }
+    }
+
+    .navbar.dark {
+        button {
+            color: $dark-grey;
+        }
+
+        .nav > li:last-child {
+            border-bottom: 1px solid $medium-grey;
+        }
+    }
+
+    .navbar.hide-links {
+        button {
+            display: none;
+        }
+    }
+
+    .splash-image {
+        padding-top: 120px;
+
+        h1 {
+            font-size: 70px;
+        }
+    }
+
+    .product-overview {
+        margin-top: 50px;
+
+        &:first-child {
+            margin-top: 0;
+        }
+    }
+
+    .feature {
+        height: 100px;
+    }
+
+    #channelManagerCarousel {
+        .item {
+            height: 590px;
+            overflow: hidden;
+        }
+    }
+
+    .carousel-control {
+        display: none;
+    }
+
+    .carousel-indicators li {
+        border-color: $dark-grey;
+
+        &.active {
+            background-color: $dark-grey;
+        }
+    }
+
+    #discoverCarousel {
+        p {
+            height: 80px;
+        }
+
+        .carousel-indicators {
+            bottom: -40px;
+        }
+    }
+
+    .feature-image {
+        height: 310px;
+    }
+
+    .address {
+        margin-top: 45px;
+    }
+
+    .openings {
+        padding: 0;
+        margin-top: 20px;
+    }
+}
+
+@media (max-width: 991px) and (min-width: 768px) {
+    .address hr {
+        width: 25%;
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 767px) {
+    .splash-image {
+        h1 {
+            font-size: 60px;
+        }
+
+        h4 {
+            line-height: 1.6em;
+        }
+    }
+
+    h5 {
+        line-height: 1.4em;
+    }
+
+    .btn {
+        padding: 10px 25px;
+    }
+
+    .center-buttons {
+        margin-top: 30px;
+
+        .btn {
+            margin-top: 10px;
+        }
+    }
+
+    #frontPageCarousel {
+        padding: 0 5px;
+
+        .item {
+            height: 605px;
+        }
+    }
+
+    #discoverCarousel {
+        padding: 0 5px;
+    }
+
+    #channelManagerCarousel {
+        padding: 0 5px;
+
+        .item {
+            height: 420px;
+            overflow: hidden;
+        }
+
+        .carousel-indicators {
+            bottom: -50px;
+        }
+    }
+
+    #subscribeForm {
+        input[type="submit"] {
+            margin: 20px 0 15px;
+        }
+    }
+
+    #contactForm input[type="submit"] {
+        width: 100%;
+    }
+
+    .address {
+        text-align: center;
+        margin-top: 60px;
+
+        .leslie-img {
+            margin: 0 auto 15px;
+        }
+    }
+
+    .modal[id^=team] .modal-header {
+        padding-bottom: 20px;
+    }
+
+    .feature-image {
+        height: 200px;
+    }
+
+    .social-icons {
+        font-size: 20px;
+    }
+
+    .openings li a {
+        text-align: center;
+    }
+
+    footer {
+        overflow: visible;
+        text-align: center;
+        height: inherit;
+
+        ul {
+            float: none;
+            margin: 20px 0 0 0;
+
+            &:last-child {
+                margin-bottom: 50px;
+            }
+        }
+
+        .footer-tag {
+            text-align: center;
+            background-color: $light-grey;
+        }
+
+        &.white .footer-tag {
+            background-color: $white;
+        }
+    }
+}

@@ -1,0 +1,174 @@
+package models
+
+import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+	"testing"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/stretchr/testify/assert"
+)
+
+// TestDeleteOptionSet_InvalidKey asserts that it is not possible to delete a
+// key from the database using a OptionSet ID that is non-existant.
+func TestDeleteOptionSet_InvalidKey(t *testing.T) {
+	// This key does not exist in the database.
+	id := 101010
+
+	e := DeleteOptionSet(TestCtx, id)
+
+	assert.Error(t, e)
+}
+
+// TestDeleteOptionSet_Valid asserts that it is possible to delete a OptionSet
+// from the database using a existing OptionSet ID.
+func TestDeleteOptionSet_Valid(t *testing.T) {
+	id := 107
+	e := DeleteOptionSet(TestCtx, id)
+
+	if !assert.NoError(t, e) {
+		return
+	}
+
+	// Check to make sure the OptionSet was actually removed.
+	set, e := RetrieveOptionSet(TestCtx, id)
+	assert.Nil(t, set)
+	assert.Error(t, e)
+}
+
+// TestCreateOptionSet attempts to assert that a new OptionSet will be
+// inserted into the database, and returned as a OptionSet instance.
+func TestCreateOptionSet(t *testing.T) {
+	stringData := `{"name": "My Option Set", "manufacturer_id": 38, "type": "textile"}`
+	jsonData := ioutil.NopCloser(bytes.NewBufferString(stringData))
+
+	set, e := CreateOptionSet(TestCtx, jsonData)
+	if assert.NotNil(t, set) && assert.NoError(t, e) {
+		assert.True(t, set.ID.Int64 > 0, "The Primary-key ID must be greater than 0.")
+		set, e = RetrieveOptionSet(TestCtx, int(set.ID.Int64))
+		if assert.NotNil(t, set) && assert.NoError(t, e) {
+			assert.True(t, set.ID.Valid)
+			assert.True(t, set.ID.Int64 > 0, "The Primary-key ID must be greater than 0.")
+		}
+	}
+}
+
+// TestListOptionSets_InvalidPublicKey tests that an error is raised and nil is
+// returned when attempting to list OptionSets for a non-existant manufacturer.
+func TestListOptionSets_InvalidPublicKey(t *testing.T) {
+	publicKey := "000000000000000000"
+	var field lib.StringField
+	field.Set(publicKey)
+
+	var mfrField lib.IntField
+	mfrField.Set(100000000000000000)
+	apiKey := APIKey{Public: field, ManufacturerID: mfrField}
+
+	collection, e := ListOptionSets(TestCtx, publicKey, &apiKey)
+
+	assert.Empty(t, collection)
+	assert.NoError(t, e)
+}
+
+// TestListOptionSets_NoneAvaiable tests that an error is raised and nil is
+// returned when attempting to list OptionSets for a manufacturer which has none.
+func TestListOptionSets_NoneAvailable(t *testing.T) {
+	// This public-key has no OptionSets associated with its referring Manufacturer.
+	publicKey := "a954_44_test_public_test_public_test_public_test_public_test_pub"
+
+	var publicField lib.StringField
+	publicField.Set(publicKey)
+
+	var mfrField lib.IntField
+	mfrField.Set(22)
+	apiKey := APIKey{Public: publicField, ManufacturerID: mfrField}
+
+	collection, e := ListOptionSets(TestCtx, publicKey, &apiKey)
+
+	assert.Empty(t, collection)
+	assert.NoError(t, e)
+}
+
+// TestListOptionSets_Valid tests that a valid collection of OptionSet instances
+// is returned for the manufacturer specified via a valid Public Key.
+func TestListOptionSets_Valid(t *testing.T) {
+	publicKey := "4dc5_40_test_public_test_public_test_public_test_public_test_pub"
+	apiKey := APIKey{}
+
+	collection, e := ListOptionSets(TestCtx, publicKey, &apiKey)
+
+	if !assert.NotNil(t, collection) || !assert.NoError(t, e) {
+		assert.Fail(t, "Invalid collection or an error is present.")
+		return
+	}
+
+	assert.True(t, len(collection) >= 1)
+}
+
+// TestRetrieveOptionSet_MissingID tests that the non-existant OptionSet id
+// number result in being returned a nil OptionSet and an error.
+func TestRetrieveOptionSet_MissingID(t *testing.T) {
+	id := 101010
+
+	set, e := RetrieveOptionSet(TestCtx, id)
+
+	assert.Nil(t, set)
+	assert.Error(t, e)
+}
+
+// TestRetrieveOptionSet_ValidID tests that the valid, specified OptionSet
+// id number result in being returned a valid OptionSet instance.
+func TestRetrieveOptionSet_ValidID(t *testing.T) {
+	id := 5
+
+	set, e := RetrieveOptionSet(TestCtx, id)
+
+	if assert.NotNil(t, set) && assert.NoError(t, e) && assert.True(t, set.ID.Valid) {
+		assert.EqualValues(t, set.ID.Int64, id)
+	}
+}
+
+// TestUpdateOptionSet_Updated asserts that attempting to update a existing
+// OptionSet using valid data results in a successful update within the database.
+func TestUpdateOptionSet_Updated(t *testing.T) {
+	id := 50
+	ptr, e := Factory("option_set")
+
+	if !assert.NoError(t, e) || assert.NotNil(t, ptr) {
+		return
+	}
+	expected := ptr.(*OptionSet)
+
+	expected.ID.Set(id)
+	expected.ManufacturerID.Set(666)
+	expected.Name.Set("Expected OptionSet")
+	expected.Kind.Set("leather")
+
+	if !assert.NotNil(t, expected) {
+		return
+	}
+
+	actual, e := RetrieveOptionSet(TestCtx, id)
+
+	if !assert.NotNil(t, actual) || !assert.NoError(t, e) {
+		return
+	}
+
+	jsonBytes, err := json.Marshal(expected)
+
+	if assert.NotEmpty(t, jsonBytes) && assert.NoError(t, err) {
+		jsonReadCloser := ioutil.NopCloser(bytes.NewBuffer(jsonBytes))
+
+		set, e := UpdateOptionSet(TestCtx, id, jsonReadCloser)
+		if !assert.NoError(t, e) && assert.NotNil(t, set) && assert.Equal(t, expected, set) {
+			return
+		}
+
+		set, e = RetrieveOptionSet(TestCtx, id)
+
+		if assert.NotNil(t, set) && assert.NoError(t, e) {
+			assert.Equal(t, expected, set)
+		}
+	}
+}

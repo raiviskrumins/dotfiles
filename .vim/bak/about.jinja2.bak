@@ -1,0 +1,118 @@
+{% extends "base.jinja2" %}
+
+{% block content %}
+<div class="container_12">
+  <div class="wrapper indent-bottom4">
+    <div class="grid_6">
+      <figure>
+      <img src="static/img/page2-img1.jpg" alt="">
+      </figure>
+      <div class="bg-color1">
+        <div class="indents">
+          <h3 class="icon-1 p1">About Us</h3>
+          Charleen’s Day care Center started out as a warm, friendly day care 
+          home 26 years ago, with a maximum of 6 children. Charleen began to 
+          receive repeated requests from more families to join her day care 
+          home, and be a part of her warm, but loving family. The home was 
+          soon licensed for twelve children.  Charleen quickly learned that 
+          her hard work and love to care for and educate children was in high 
+          demand.
+        </div>
+      </div>
+    </div>
+    <div class="grid_6 last-col">
+      <h3 class="bg-color4 box-title">Our Mission</h3>
+      <div class="bg-color5">
+        <div class="indents2">
+          <div class="wrapper">
+            <figure class="img-indent1-1 indent-top1-1">
+            <img src="static/img/page2-icon1.png" alt="">
+            </figure>
+            The mission of Charleen’s Day Care is to provide quality childcare 
+            for all families.  The service is given in a safe, healthy, and 
+            developmentally appropriate environment where trained and loving 
+            teachers provide educational opportunities for the well-rounded 
+            growth and development of each child.
+          </div>
+        </div>
+      </div>
+      <div class="bg-color0">
+        <div class="indents3">
+          <div class="wrapper">
+            <figure class="img-indent1-1 indent-top1-1">
+            <img src="static/img/page2-icon2.png" alt="">
+            </figure>
+            Charleen Webster is proud to provide this licensed Child Care 
+            Center for 60 children, ranging from infants to preschool age and 
+            before & after school.  In the summer months, children up to 12 
+            years of age are welcomed to attend full time.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="wrapper indent-bottom4">
+    <div class="grid_12 bg-color3">
+      <div class="indents4">
+        <h3 class="p4">Staff</h3>
+        <div class="wrapper">
+          <div class="col-4">
+            <div class="wrapper">
+              <div class="col-2">
+                <figure class="p1-1">
+                <img class="staff" src="static/img/staff/charleen.jpg" alt="">
+                </figure>
+                <a href="#" class="link-1">Charleen Webster</a>
+              </div>
+              <div class="col-2 last-item">
+                <figure class="p1-1">
+                <img class="staff" src="static/img/staff/claudia.jpg" alt="">
+                </figure>
+                <a href="#" class="link-1">Claudia Perez</a>
+              </div>
+            </div>
+          </div>
+          <div class="col-4 last-item">
+            <div class="wrapper">
+              <div class="col-2">
+                <figure class="p1-1">
+                <img class="staff" src="static/img/staff/unknown.png" alt="">
+                </figure>
+                <a href="#" class="link-1">Nancy VanQue</a>
+              </div>
+              <div class="col-2 last-item">
+                <figure class="p1-1">
+                <img class="staff" src="static/img/staff/unknown.png" alt="">
+                </figure>
+                <a href="#" class="link-1">Larisaa Hines</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="wrapper">
+    <div class="grid_6 maxheight bg-color6">
+      <div class="indents">
+        <h3 class="icon-3 p1">Testimonials</h3>
+        <blockquote class="quote1">
+          <div class="quote-content">Lorem ipsum dolor sit amet conse ctetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua ercitation ullam&shy;co laboris nisi ut aliquip ex ea commodo consequat...</div>
+          <div class="quote-caption">- Adam Tomson</div>
+        </blockquote>
+      </div>
+    </div>
+    <div class="grid_6 maxheight bg-color2 last-col">
+      <div class="indents5">
+        <h3 class="icon-4 p1">Clients</h3>
+        <ul class="banners">
+          <li><a href="#"><img src="static/img/banner1.jpg" alt=""></a></li>
+          <li><a href="#"><img src="static/img/banner2.jpg" alt=""></a></li>
+          <li><a href="#"><img src="static/img/banner3.jpg" alt=""></a></li>
+          <li><a href="#"><img src="static/img/banner4.jpg" alt=""></a></li>
+          <li class="last-item"><a href="#"><img src="static/img/banner5.jpg" alt=""></a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  {% endblock %}

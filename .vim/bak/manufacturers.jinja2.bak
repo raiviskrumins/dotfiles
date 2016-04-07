@@ -1,0 +1,25 @@
+{% extends "index.jinja2" %}
+
+{% block content_main %}
+<div class="col-md-12">
+    <a href="{{url_for('manufacturer_view.manufacturer_add')}}" class="btn btn-primary pull-right">+ Add New Manufacturer</a>
+    <h1>Manufacturers</h1>
+    <table class="table striped">
+        <tr>
+            <th>Manufacturer Name</th>
+            <th>Contact Email</th>
+            <th>Date Updated</th>
+            <th>Channel Manager Acct.</th>
+        </tr>
+        {% for mfr in manufacturers %}
+        <tr>
+            <td><a href="{{ url_for('admin_view.manufacturer_get', mfr_id=mfr.id) }}">{{ mfr.name }}</a> {% if mfr.active %}<span class="label label-info pull-right">Visible</span>{% else %}<span class="label label-default pull-right">Hidden</span>{% endif %}</td>
+            <td><a href="{{ url_for('admin_view.manufacturer_get', mfr_id=mfr.id) }}">{{mfr.email}}</a></td>
+            <td><a href="{{ url_for('admin_view.manufacturer_get', mfr_id=mfr.id) }}">{{mfr.date_updated|string_date_format('%m-%d-%Y %I:%M %p', localize=True)}}</a></td>
+            <td>{% if mfr.cm_account %}<span class="label label-primary">Active</span> {{mfr.cm_account.email}}{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+{% endblock content_main %}

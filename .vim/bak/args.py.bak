@@ -1,0 +1,37 @@
+import argparse
+import fileinput
+from subprocess import call
+import sys
+import time
+
+
+def main():
+    lines = readInputLines()
+
+    if len(sys.argv) == 1:
+        return
+
+
+    if len(lines) == 0:
+        return
+
+
+    args = sys.argv[1:]
+    cmdTemplate = " ".join(args)
+
+    for line in lines:
+        cmd = cmdTemplate.replace("$", line)
+        call(cmd.split(" "))
+
+
+
+def readInputLines():
+    lines = []
+    for line in fileinput.input():
+        lines.append(line.replace("\n", ""))
+
+    return lines
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,385 @@
+package routes
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/models"
+	"github.com/AmberEngine/api/oops"
+	perm "github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+	"github.com/gorilla/context"
+	"github.com/julienschmidt/httprouter"
+	"github.com/justinas/alice"
+)
+
+func DefineComponentRoutes(router *lib.Router, appC *RouteContext, commonHandlers alice.Chain) {
+	router.Get("/components/:component_name/:component_id", appC.RetrieveComponent(commonHandlers))
+	router.Put("/components/:component_name/:component_id", appC.UpdateComponent(commonHandlers))
+	router.Delete("/components/:component_name/:component_id", appC.DeleteComponent(commonHandlers))
+	router.Post("/components/:component_name", appC.CreateComponent(commonHandlers))
+}
+
+func (c *RouteContext) CreateComponent(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("ProductComponent", perm.ProductComponentCreateAll|perm.ProductComponentCreateGroup|perm.ProductComponentCreateOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		reqPayload, e := lib.RequestData(r)
+		if e != nil {
+			panic(e)
+		}
+
+		params := context.Get(r, "params").(httprouter.Params)
+		compName := params.ByName("component_name")
+
+		assComp, e := models.RetrieveAssemblageComponentByName(c.Context, compName)
+		if e != nil {
+			panic(e)
+		}
+
+		if assComp.ParentName.Valid {
+			className := assComp.ClassName.String
+			newComp, e := models.CreateComponent(c.Context, className, nil, nil)
+			if e != nil {
+				panic(e)
+			}
+
+			var prodID struct {
+				ProductID int64 `json:"product_id"`
+			}
+
+			err := json.Unmarshal(reqPayload.Data, &prodID)
+			if err != nil {
+				panic(oops.BadJSON(string(reqPayload.Data), err))
+			}
+
+			if prodID.ProductID <= 0 {
+				panic(oops.BadRequest("Invalid Product ID", "A valid product ID was not provided."))
+			}
+
+			err = json.Unmarshal(reqPayload.Data, newComp)
+			if err != nil {
+				panic(oops.BadJSON(string(reqPayload.Data), err))
+			}
+
+			if compName == "image" {
+				if newComp.(*models.ImageComponent).Default.Bool {
+					e = ResetImagesDefaults(c.Context, prodID.ProductID)
+					if e != nil {
+						panic(e)
+					}
+				}
+			}
+
+			query, e := pqdb.NewInsertQuery(c.Context)
+			if e != nil {
+				panic(e)
+			}
+
+			table := pqdb.NewTable(assComp.GetTableName())
+			query.Returning = table.Column("component_data_id")
+			query.Table = table
+
+			cols, vals, e := lib.ColumnsValues(newComp.(lib.Iterable), false)
+			if e != nil {
+				panic(e)
+			}
+
+			for _, col := range cols {
+				query.Columns = append(query.Columns, *pqdb.NewColumn(col))
+			}
+
+			query.Values = vals
+
+			_, e = query.Run()
+			if e == nil {
+				pkid := query.Returned.(int64)
+				for iter := newComp.(lib.Iterable).NewIterator(); iter.Next(); {
+					field := iter.Item()
+					tag := field.Tag()
+					if tag.Get("primary") == "true" {
+						field.Set(pkid)
+					}
+				}
+			}
+
+			// Remove the old Mongo cache for this product
+			e = pqdb.MongoRemoveProduct(c.Context, prodID.ProductID)
+			if e != nil {
+				panic(e)
+			}
+
+			res, e := lib.NewResource(newComp)
+			if e != nil {
+				panic(e)
+			}
+
+			selfLink := new(lib.HALHref)
+			selfLink.FromURI(r.RequestURI)
+			res.AddLink("self", *selfLink)
+
+			jsonResponse, err := json.Marshal(res)
+			if err != nil {
+				panic(oops.ServerError("", "Could not marshal Component.", err))
+			}
+
+			w.Header().Set("Content-Type", "application/hal+json")
+			fmt.Fprint(w, string(jsonResponse))
+		} else {
+			w.Header().Set("Content-Type", "application/hal+json")
+			panic(oops.ServerError("Failed to create new component", ""))
+		}
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func (c *RouteContext) RetrieveComponent(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("ProductComponent", perm.ProductComponentRetrieveAll|perm.ProductComponentRetrieveGroup|perm.ProductComponentRetrieveOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		params := context.Get(r, "params").(httprouter.Params)
+		compName := params.ByName("component_name")
+		compID, err := strconv.Atoi(params.ByName("component_id"))
+		if err != nil {
+			panic(err)
+		}
+
+		assComp, e := models.RetrieveAssemblageComponentByName(c.Context, compName)
+		if e != nil {
+			panic(e)
+		}
+
+		comp, e := models.RetrieveComponent(c.Context, assComp, compID)
+		if e != nil {
+			panic(e)
+		}
+
+		res, e := lib.NewResource(comp)
+		if e != nil {
+			panic(e)
+		}
+
+		selfLink := new(lib.HALHref)
+		selfLink.FromURI(r.RequestURI)
+		res.AddLink("self", *selfLink)
+
+		jsonResponse, err := json.Marshal(res)
+		if err != nil {
+			panic(err)
+		}
+
+		w.Header().Set("Content-Type", "application/hal+json")
+		fmt.Fprint(w, string(jsonResponse))
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func (c *RouteContext) UpdateComponent(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("ProductComponent", perm.ProductComponentUpdateAll|perm.ProductComponentUpdateGroup|perm.ProductComponentUpdateOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		reqPayload, e := lib.RequestData(r)
+		if e != nil {
+			panic(e)
+		}
+
+		params := context.Get(r, "params").(httprouter.Params)
+		compName := params.ByName("component_name")
+		compID, err := strconv.Atoi(params.ByName("component_id"))
+		if err != nil {
+			panic(err)
+		}
+
+		assComp, e := models.RetrieveAssemblageComponentByName(c.Context, compName)
+		if e != nil {
+			panic(e)
+		}
+
+		comp, e := models.RetrieveComponent(c.Context, assComp, compID)
+		if e != nil {
+			panic(e)
+		}
+
+		err = json.Unmarshal(reqPayload.Data, comp)
+		if err != nil {
+			panic(err)
+		}
+
+		var productID int64
+		for compIter := comp.(lib.Iterable).NewIterator(); compIter.Next(); {
+			subField := compIter.Item()
+			if subField.Tag().Get("json") == "product_id" {
+				subVal := subField.Value()
+				productID = subVal.(lib.IntField).Int64
+				break
+			}
+		}
+
+		if compName == "image" {
+			if comp.(*models.ImageComponent).Default.Bool {
+				e = ResetImagesDefaults(c.Context, productID)
+				if e != nil {
+					panic(e)
+				}
+			}
+		}
+
+		if compName == "category" {
+			// TODO: set the product's assemblage ID based on the new category.
+		}
+
+		query, e := pqdb.NewUpdateQuery(c.Context)
+		if e != nil {
+			panic(e)
+		}
+
+		table := pqdb.NewTable(assComp.GetTableName())
+		query.Table = table
+
+		cols, vals, e := lib.ColumnsValues(comp.(lib.Iterable), true)
+		if e != nil {
+			panic(e)
+		}
+
+		for i, col := range cols {
+			exp := pqdb.SetExpression{pqdb.NewColumn(col), vals[i]}
+			query.Set.Expressions = append(query.Set.Expressions, exp)
+		}
+		where := pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("component_data_id"), "=", compID})
+		where.Items = append(
+			where.Items,
+			pqdb.MakeWhereItem("AND", pqdb.Predicate{table.Column("product_id"), "=", productID}))
+
+		query.SetWhere(where)
+
+		_, e = query.Run()
+
+		e = pqdb.UpdateModel(c.Context, comp.(pqdb.Model), nil)
+
+		// Remove the old Mongo cache for this product
+		e = pqdb.MongoRemoveProduct(c.Context, productID)
+		if e != nil {
+			panic(e)
+		}
+
+		// Even if we error here, we still want to build the cache for the product.
+		res, e := lib.NewResource(comp)
+		if e != nil {
+			panic(e)
+		}
+		selfLink := new(lib.HALHref)
+		selfLink.FromURI(r.RequestURI)
+		res.AddLink("self", *selfLink)
+
+		jsonResponse, err := json.Marshal(res)
+		if err != nil {
+			panic(err)
+		}
+		w.Header().Set("Content-Type", "application/hal+json")
+		fmt.Fprint(w, string(jsonResponse))
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func (c *RouteContext) DeleteComponent(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("ProductComponent", perm.ProductComponentDeleteAll|perm.ProductComponentDeleteGroup|perm.ProductComponentDeleteOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		params := context.Get(r, "params").(httprouter.Params)
+		compName := params.ByName("component_name")
+		compID, err := strconv.Atoi(params.ByName("component_id"))
+		if err != nil {
+			panic(err)
+		}
+
+		assComp, e := models.RetrieveAssemblageComponentByName(c.Context, compName)
+		if e != nil {
+			panic(e)
+		}
+
+		query, e := pqdb.NewSelectQuery(c.Context)
+		if e != nil {
+			panic(e)
+		}
+
+		table := pqdb.NewTable(assComp.TableName.String)
+		query.AddColumn(table.Column("product_id"))
+		query.AddTable(table)
+
+		where := pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("component_data_id"), "=", compID})
+		if c.Role != nil && assComp.GetTableName() != "manufacturer_component" && c.Role["ProductComponent"]&perm.ProductComponentDeleteOwn != 0 {
+			mfrTable := pqdb.NewTable("manufacturer_component")
+			query.LeftJoin(mfrTable, pqdb.Predicate{mfrTable.Column("product_id"), "=", table.Column("product_id")})
+			where.Items = append(where.Items, pqdb.MakeWhereItem("AND", pqdb.Predicate{mfrTable.Column("manufacturer_id"), "=", c.APIKey.(*models.APIKey).ManufacturerID.Int64}))
+		}
+		query.SetWhere(where)
+
+		rows, e := query.Run()
+		if e != nil {
+			panic(e)
+		}
+		defer rows.Close()
+
+		var id int64
+		for rows.Next() {
+			err = rows.Scan(&id)
+		}
+
+		if err := rows.Err(); err != nil {
+			panic(oops.ServerError("", "Rows has an internal error.", err))
+		}
+
+		if id <= 0 {
+			panic(oops.ServerError("", "ID must be valid"))
+		}
+
+		if assComp.ParentName.Valid {
+			dQuery, e := pqdb.NewDeleteQuery(c.Context)
+			if e != nil {
+				panic(e)
+			}
+			dTable := pqdb.NewTable(assComp.GetTableName())
+			dQuery.Table = dTable
+			dWhere := pqdb.MakeWhereItem("", pqdb.Predicate{"component_data_id", "=", compID})
+			dQuery.SetWhere(dWhere)
+			_, e = dQuery.Run()
+			if e != nil {
+				panic(e)
+			}
+
+			// Remove the old Mongo cache for this product
+			e = pqdb.MongoRemoveProduct(c.Context, id)
+			if e != nil {
+				panic(e)
+			}
+
+			w.Header().Set("Content-Type", "application/hal+json")
+			fmt.Fprint(w, `{}`)
+		} else {
+			panic(oops.BadRequest("Can only delete sub-components", "Tried to delete a non-sub-component"))
+		}
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func ResetImagesDefaults(c *app.Context, prodID int64) oops.Error {
+	query, e := pqdb.NewUpdateQuery(c)
+	if e != nil {
+		panic(e)
+	}
+
+	table := pqdb.NewTable("image_component")
+	query.Table = table
+
+	exp := pqdb.SetExpression{pqdb.NewColumn("default_image"), false}
+	query.Set.Expressions = append(query.Set.Expressions, exp)
+
+	query.SetWhere(pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("product_id"), "=", prodID}))
+
+	_, e = query.Run()
+	if e != nil {
+		return e
+	}
+
+	return nil
+}

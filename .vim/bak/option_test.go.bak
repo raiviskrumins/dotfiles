@@ -1,0 +1,116 @@
+package models
+
+import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestDeleteOption_InvalidKey(t *testing.T) {
+	id := 10101010
+	e := DeleteOption(TestCtx, id)
+	assert.Error(t, e)
+}
+
+func TestDeleteOption_Valid(t *testing.T) {
+	id := 3
+	e := DeleteOption(TestCtx, id)
+
+	if !assert.NoError(t, e) {
+		return
+	}
+
+	option, e := RetrieveOption(TestCtx, id)
+	assert.Nil(t, option)
+	assert.Error(t, e)
+}
+
+func TestCreateOption(t *testing.T) {
+	stringData := `{"description": "My Option Set", "kind": "hardware", "extended_data": {"height": 1.0, "option_id": 2, "finish": "This is a test", "width": 3, "depth": 4, "diameter": 42}}` // TODO: update this shit
+	jsonData := ioutil.NopCloser(bytes.NewBufferString(stringData))
+
+	opt, e := CreateOption(TestCtx, jsonData)
+
+	if assert.NotNil(t, opt) && assert.NoError(t, e) {
+		assert.True(t, opt.ID.Int64 > 0, "The Primary-key ID must be greater than 0.")
+		opt, e = RetrieveOption(TestCtx, int(opt.ID.Int64))
+		if assert.NotNil(t, opt) && assert.NoError(t, e) {
+			assert.True(t, opt.ID.Valid)
+			assert.True(t, opt.ID.Int64 > 0, "The Primary-key ID must be greater than 0.")
+		}
+	}
+}
+
+/*
+func TestRetrieveOptions_NoneAvailable(t *testing.T) {
+	opts, e := RetrieveOptions(TestCtx, nil)
+
+	assert.Empty(t, opts)
+	assert.Error(t, e)
+}
+
+func TestListOptions_Valid(t *testing.T) {
+	collection, e := RetrieveOptions(TestCtx, nil)
+
+	if !assert.NotNil(t, collection) || !assert.NoError(t, e) {
+		assert.Fail(t, "Invalid collection or an error is present.")
+		return
+	}
+
+	assert.True(t, len(collection) > 1)
+}
+*/
+func TestRetrieveOption_MissingID(t *testing.T) {
+	id := 101010
+	set, e := RetrieveOption(TestCtx, id)
+
+	assert.Nil(t, set)
+	assert.Error(t, e)
+}
+
+func TestRetrieveOption_ValidID(t *testing.T) {
+	id := 1
+
+	opt, e := RetrieveOption(TestCtx, id)
+
+	assert.NoError(t, e)
+	if assert.NotNil(t, opt) {
+		if assert.True(t, opt.ID.Valid) {
+			assert.Equal(t, opt.ID.Int64, int64(id))
+		}
+	}
+}
+
+func TestUpdateOption_Updated(t *testing.T) {
+	id := 68
+
+	opt, e := RetrieveOption(TestCtx, id)
+	if !assert.NotNil(t, opt) || !assert.NoError(t, e) {
+		return
+	}
+	opt.Image.Set("foobar")
+	opt.Surcharge.Set(4)
+	newFinnish := "Some new polish finish"
+	opt.ExtendedData.(*nailheadOptionType).Finish.Set(newFinnish)
+
+	jsonBytes, err := json.Marshal(opt)
+
+	if assert.NotEmpty(t, jsonBytes) && assert.NoError(t, err) {
+		jsonReadCloser := ioutil.NopCloser(bytes.NewBuffer(jsonBytes))
+
+		updatedOpt, e := UpdateOption(TestCtx, id, jsonReadCloser)
+		if !assert.NoError(t, e) && assert.NotNil(t, updatedOpt) && assert.Equal(t, opt, updatedOpt) {
+			return
+		}
+
+		retrievedOpt, e := RetrieveOption(TestCtx, id)
+
+		if assert.NotNil(t, retrievedOpt) && assert.NotNil(t, retrievedOpt.ExtendedData) && assert.NoError(t, e) {
+			assert.Equal(t, retrievedOpt, opt)
+			assert.Equal(t, retrievedOpt.ExtendedData.(*nailheadOptionType).Finish.String, newFinnish)
+		}
+	}
+}

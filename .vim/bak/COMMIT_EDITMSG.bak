@@ -1,0 +1,18 @@
+images fix
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+# rebase in progress; onto 94d795c
+# You are currently rebasing branch 'integration-fixed-imgs' on '94d795c'.
+#
+# Changes to be committed:
+#	modified:   amber_portal/templates/product/image_modal.jinja2
+#	modified:   build/coffee/product_detail.coffee
+#
+# Untracked files:
+#	api.sql
+#	my_photo.png
+#	psql
+#	src/
+#	tearsheet.pdf
+#

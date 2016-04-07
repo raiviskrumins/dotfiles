@@ -1,0 +1,153 @@
+import flask
+import datetime
+import pytz
+
+from flask import (
+    Blueprint,
+    render_template,
+    g
+)
+
+from amber_discover.lib.utils import amber_api
+
+from auth import authenticated
+
+app = flask.current_app
+
+news_feed_view = Blueprint(
+    'news_feed_view',
+    __name__,
+    template_folder='templates'
+)
+
+
+@news_feed_view.route('/news-feed')
+@authenticated
+def news_feed():
+    api_client = amber_api()
+    # Set up time deltas:
+    nowago = datetime.datetime.now(pytz.UTC)
+    weekago = nowago - datetime.timedelta(days=7)
+    dayago = nowago - datetime.timedelta(days=1)
+    # This one defines the time span of the feed:
+    cutoff_time = nowago - datetime.timedelta(days=170)
+    # Format to the date/time string in the API database:
+    date_time_format = "%Y-%m-%d %H:%M:%S"
+
+    # Add params for the product fetch; here we can filter out the results
+    # from the API based on the time span of the feed:
+    params = {
+        'terms': '',
+        'sort_key': 'date_added',
+        'sort_direction': 'desc',
+        'date_limit': cutoff_time.strftime(date_time_format),
+        'date_comparator': 'gte'
+    }
+    result = api_client.search_manufacturers(params)
+
+    # Filter out the manufacturers based on the time span of the feed:
+    manufacturers = [
+        manufacturer for manufacturer in result.get('manufacturers') if
+        manufacturer['date_added'] is not None and
+        pytz.utc.localize(
+            datetime.datetime.strptime(
+                manufacturer['date_added'],
+                date_time_format
+            )
+        ) > cutoff_time
+    ]
+
+    product_result = api_client.search_products(params)
+
+    # Make a feed and populate it with the manufacturer-related events:
+    feed = []
+    for manufacturer in manufacturers:
+        categories = [
+            category for category in manufacturer['categories'] if
+            category is not None
+        ]
+        list_item = {
+            'time_ago': datetime.datetime.strptime(
+                manufacturer['date_added'],
+                date_time_format
+            ),
+            'event': 'manufacturer added',
+            'manufacturer_name': manufacturer['name'],
+            'manufacturer_id': manufacturer['id'],
+            'categories': categories
+        }
+        feed.append(list_item)
+
+    # Separate feed for the products because they need to be sorted in the
+    # events first. So here we make a list of product-related events:
+    prod_events = []
+    for prod in product_result['products']:
+        prod_time = datetime.datetime.strptime(
+            prod['date_added'],
+            date_time_format
+        )
+        event = {
+            'time_ago': prod_time.date(),
+            'event': 'products added',
+            'manufacturer_name': prod['manufacturer_name'],
+            'manufacturer_id': prod['manufacturer_id'],
+            'products': []
+        }
+
+        if event not in prod_events:
+            prod_events.append(event)
+
+    # And here we populate the product-related events with the corresponding
+    # products:
+    for event in prod_events:
+        for prod in product_result['products']:
+            prod_time = datetime.datetime.strptime(
+                prod['date_added'],
+                date_time_format
+            )
+            if (
+                prod_time.date() == event['time_ago'] and
+                prod['manufacturer_id'] == event['manufacturer_id']
+            ):
+                event['products'].append(prod)
+
+    # Update time stamps in the products-related events for sorting:
+    for event in prod_events:
+        prod_time = datetime.datetime.strptime(
+            event['products'][0]['date_added'],
+            date_time_format
+        )
+        event['time_ago'] = prod_time
+    # Combine the list of the manufacturer events and the product-related
+    # events and sort them by time in reverse order:
+    feed = sorted(
+        feed + prod_events,
+        key=lambda li: li['time_ago'],
+        reverse=True
+    )
+
+    # Format the time stapms in the events:
+    for event in feed:
+        tzaware_event_time = pytz.utc.localize(event['time_ago'])
+        date_time = nowago - tzaware_event_time
+
+        if tzaware_event_time < weekago:
+            time_ago = tzaware_event_time.strftime('%b %d, %Y')
+        elif tzaware_event_time < dayago and tzaware_event_time > weekago:
+            if date_time.days == 1:
+                time_ago = 'Yesterday'
+            else:
+                time_ago = str(date_time.days)+' days ago'
+        else:
+            if int(date_time.seconds/3600) < 1:
+                time_ago = 'Just Now'
+            elif int(date_time.seconds/3600) == 1:
+                time_ago = str(int(date_time.seconds/3600))+' hour ago'
+            else:
+                time_ago = str(int(date_time.seconds/3600))+' hours ago'
+        event['time_ago'] = time_ago
+
+    return render_template(
+        'news_feed.jinja2',
+        feed=feed
+    )

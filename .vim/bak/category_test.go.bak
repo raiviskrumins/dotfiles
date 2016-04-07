@@ -1,0 +1,201 @@
+package routes
+
+import (
+	"encoding/json"
+	"io/ioutil"
+	"testing"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/test_utils"
+	"github.com/gorilla/context"
+	"github.com/justinas/alice"
+	"github.com/stretchr/testify/assert"
+)
+
+// TestListCategories_All reads a series of payloads and expected responses from a JSON file and calls the
+// ListCategories route for each set comparing the response to the expectation.
+func TestListCategories_All(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("category.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["retrieve-all-categories"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.ListCategories)), "retrieve-all-categories", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "GET", "/categories")
+	}
+}
+
+// TestListCategories_Manufacturers reads a series of payloads and expected responses from a JSON file and calls the
+// ListCategories route for each set comparing the response to the expectation.
+func TestListCategories_Manufacturers(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("category.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["retrieve-manufacturer-categories"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var mfrs string
+		err = json.Unmarshal(testCaseJSON["manufacturers"], &mfrs)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		uri := lib.Join("", "/categories?manufacturers=", mfrs)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.ListCategories)), "retrieve-manufacturer-categories", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "GET", uri, []string{"manufacturers", mfrs})
+	}
+}
+
+// TestListCategories_Products reads a series of payloads and expected responses from a JSON file and calls the
+// ListCategories route for each set comparing the response to the expectation.
+func TestListCategories_Products(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("category.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["retrieve-product-categories"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var products string
+		err = json.Unmarshal(testCaseJSON["products"], &products)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		uri := lib.Join("", "/categories?products=", products)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.ListCategories)), "retrieve-product-categories", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "GET", uri, []string{"products", products})
+	}
+}
+
+// TestListCategories_Secondary reads a series of payloads and expected responses from a JSON file and calls the
+// ListCategories route for each set comparing the response to the expectation.
+func TestListCategories_Primary(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("category.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["retrieve-by-primary-categories"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var primary string
+		err = json.Unmarshal(testCaseJSON["primary"], &primary)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		uri := lib.Join("", "/categories?primary=", primary)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.ListCategories)), "retrieve-by-primary-categories", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "GET", uri, []string{"primary", primary})
+	}
+}
+
+// TestListCategories_Secondary reads a series of payloads and expected responses from a JSON file and calls the
+// ListCategories route for each set comparing the response to the expectation.
+func TestListCategories_Secondary(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("category.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["retrieve-by-secondary-categories"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var primary string
+		err = json.Unmarshal(testCaseJSON["primary"], &primary)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		var secondary string
+		err = json.Unmarshal(testCaseJSON["secondary"], &secondary)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		uri := lib.Join("", "/categories?primary=", primary, "&secondary=", secondary)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.ListCategories)), "retrieve-by-primary-categories", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "GET", uri, []string{"primary", primary}, []string{"secondary", secondary})
+	}
+}

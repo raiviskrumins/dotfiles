@@ -1,0 +1,35 @@
+class Manager:
+    actions = {}
+
+    def __init__(self, zone):
+        self.zone = zone
+
+    def run(self):
+        for actor in self.actions.keys():
+            self.actions[actor].execute(self.zone)
+        self.actions = {}
+        print(self.actions)
+
+    def add(self, action):
+        self.actions[action.actor] = action
+        
+        if action.wait is False:
+            action.execute(self.zone)
+
+class CheckMove:
+    wait = False
+    def __init__(self, actor, position):
+        self.actor = actor
+        self.check_pos = position
+
+    def execute(self, zone):
+        pass
+
+class Move:
+    wait = True
+    def __init__(self, actor, position):
+        self.actor = actor
+        self.move_to = position
+
+    def execute(self, *args):
+        self.actor.position.move(self.move_to)

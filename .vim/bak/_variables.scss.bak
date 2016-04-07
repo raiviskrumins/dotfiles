@@ -1,0 +1,58 @@
+$footer-height: 291px;
+$footer-sm-height: 499px;
+
+$form-grey: #fcfcfc;
+$light-grey: #f2f2f2;
+$medium-grey: #cccccc;
+$dark-grey: #444043;
+
+$white: #FFFFFF;
+
+$extra-light-orange: #f0a141;
+$light-orange: #e29139;
+$dark-orange: #9F461F;
+
+$light-purple: #835e5c;
+$dark-purple: #563c3a;
+
+$cm-light-green: #5daf9a;
+$cm-dark-green: #338e74;
+
+$d-light-green: #74ad9e;
+$d-dark-green: #5f9686;
+
+$blue: #007FD8;
+
+$outline-color: #cccccc;
+
+/*--------BUTTONS----------*/
+
+$btn-default: transparent;
+$btn-default-hover: rgba(255, 255, 255, 0.2);
+
+$btn-primary: $extra-light-orange;
+$btn-primary-hover: $light-orange;
+
+$btn-info: $cm-light-green;
+$btn-info-hover: $cm-dark-green;
+
+$btn-success: $d-light-green;
+$btn-success-hover: $d-dark-green;
+
+$btn-danger: #a03c1a;
+$btn-danger-hover: #93341b;
+
+$btn-warning: transparent;
+$btn-warning-hover: rgba(255, 255, 255, 0.2);
+
+$font-extra-large: 36px;
+$font-large: 26px;
+$font-medium: 18px;
+$font-small: 15px;
+
+$font-color: $dark-grey;
+
+/*--------SPACING----------*/
+
+$error-header-height: 80px;
+$error-footer-height: 100px;

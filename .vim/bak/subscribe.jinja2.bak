@@ -1,0 +1,29 @@
+{% from 'macros.jinja2' import basic_field %}
+
+<div class="modal fade" id="emailSubscribe">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h5>Subscribe to Updates</h5>
+            </div>
+            <div class="modal-body">
+                <p>Subscribe below by entering your email address, and we'll keep you updated as we get closer to our final product.</p>
+                <form id="subscribeForm" method="POST" action="#submit{{ url_for('subscribe_modal') }}">
+                    <div class="{% if form.manufacturer.errors %} has-error{% endif %}">
+                        I am a:
+                        <div class="checkbox"><label>{{ form.manufacturer }} {{ form.manufacturer.label.text }}</label></div>
+                        <div class="checkbox"><label>{{ form.retailer }} {{ form.retailer.label.text }}</label></div>
+                        {% if form.manufacturer.errors %}
+                        <span class="help-block">{% for error in form.manufacturer.errors %}{{error}} {% endfor %}</span>
+                        {% endif %}
+                    </div>
+                    <div class="row">
+                        <div class="col-md-8 col-sm-8">{{ basic_field(form.email, hide_label=True, placeholder='Email Address') }}</div>
+                        <div class="col-md-4 col-sm-4"><input type="submit" value="Subscribe" class="btn btn-block"></div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

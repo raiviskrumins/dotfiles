@@ -1,0 +1,68 @@
+package oops
+
+import (
+	"crypto/md5"
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+// TestError tests the err.Error() method, asserting that it will provided
+// an error-string in the desired format, based on the status, title and message
+// provided.
+func TestError(t *testing.T) {
+	status := 420
+	title := "Oops, you think that I'm sent from above"
+	message := "I'm not that innocent"
+	code := fmt.Sprintf("%x", md5.Sum([]byte(title)))[:7]
+
+	expected := fmt.Sprintf("HTTP %d - [%s] %s: %s", status, code, title, message)
+
+	e := newError("", 0, "", status, title, message)
+
+	assert.Implements(t, (*error)(nil), e)
+	assert.Equal(t, expected, e.Error())
+}
+
+// TestMakeError tests that it is possible to generate a new err struct instance
+// using the non-exported newError function. Also asserts that SHA1 hashing works
+// as expected.
+func TestMakeError(t *testing.T) {
+	status := 500
+	title := "Oops, I did it again"
+	message := "I played with your heart, got list in the game"
+	code := fmt.Sprintf("%x", md5.Sum([]byte(title)))[:7]
+
+	e := newError("", 0, "", status, title, message)
+
+	assert.Implements(t, (*error)(nil), e)
+	assert.Implements(t, (*Error)(nil), e)
+
+	assert.Equal(t, status, e.(err).Status)
+	assert.Equal(t, code, e.(err).Code)
+	assert.Equal(t, title, e.(err).Title)
+	assert.Equal(t, message, e.(err).Message)
+
+}
+
+// TestMakeErrorType tests that it is possible to create a factory for generating
+// new err instances. This is accomplished by using the returned factory and
+// ensuring that the resulting err instance is valid.
+func TestMakeErrorType(t *testing.T) {
+	status := 404
+	title := "Oops, you think I'm in love"
+	message := "That I'm sent from above"
+	code := fmt.Sprintf("%x", md5.Sum([]byte(title)))[:7]
+
+	factory := makeErrorType(status, title)
+	e := factory(message)
+
+	assert.Implements(t, (*error)(nil), e)
+	assert.Implements(t, (*Error)(nil), e)
+
+	assert.Equal(t, status, e.(err).Status)
+	assert.Equal(t, code, e.(err).Code)
+	assert.Equal(t, title, e.(err).Title)
+	assert.Equal(t, message, e.(err).Message)
+}

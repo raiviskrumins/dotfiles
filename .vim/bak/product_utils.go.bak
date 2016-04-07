@@ -1,0 +1,781 @@
+package models
+
+import (
+	"database/sql"
+	"encoding/json"
+	"reflect"
+	"strconv"
+	"strings"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+	"gopkg.in/mgo.v2/bson"
+)
+
+// RetrieveProductJSON returns a RawMessage object of JSON marshaled from the product specified by the ID provided.
+func RetrieveProductJSON(ctx *app.Context, productID int) (json.RawMessage, oops.Error) {
+	if ctx.Role != nil && ctx.Role["Product"]&permissions.ProductRetrieveAll == 0 {
+		q, e := pqdb.NewSelectQuery(ctx)
+		if e != nil {
+			return nil, e
+		}
+		if ctx.Role["Product"]&permissions.ProductRetrieveVisible != 0 {
+			t := pqdb.NewTable("visibility_component")
+			q.AddTable(t)
+			q.AddColumn(t.Column("product_id"))
+			q.SetWhere(pqdb.MakeWhereItem("", pqdb.Predicate{t.Column("active"), "=", true}))
+		} else {
+			t := pqdb.NewTable("manufacturer_component")
+			q.AddTable(t)
+			q.AddColumn(t.Column("product_id"))
+			q.SetWhere(pqdb.MakeWhereItem("", pqdb.Predicate{t.Column("manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}))
+		}
+		num, e := q.Count()
+		if num < 1 {
+			return nil, oops.NotFound("Product not found.", "No product found for current user permissions.")
+		}
+	}
+
+	var prodJSON json.RawMessage
+	prod, e := getCachedProducts(ctx, []int{productID}, nil)
+	if e != nil {
+		return nil, e
+	}
+	if len(prod) < 1 {
+		aeProd, e := RetrieveProduct(ctx, productID)
+		if e != nil {
+			return nil, e
+		}
+		aeJSON, err := json.Marshal(aeProd)
+		if err != nil {
+			return nil, oops.ServerError("", "Failed to marshal aeProd.", err, aeProd)
+		}
+		prodJSON = json.RawMessage(aeJSON)
+	} else {
+		var bites []byte
+		bites, err := json.Marshal(prod[0]["value"])
+		if err != nil {
+			return nil, oops.ServerError("", err, "Failed to marshal Mongo result.")
+		}
+		prodJSON = json.RawMessage(bites)
+	}
+	return prodJSON, nil
+}
+
+func getWhereItem(column *pqdb.Column, expression map[string]interface{}) (pqdb.WhereItem, oops.Error) {
+	var pred pqdb.Predicate
+	for operator, expected := range expression {
+		switch operator {
+		case "==":
+			pred = pqdb.Predicate{column, "=", expected}
+		case "!=":
+			pred = pqdb.Predicate{column, "!=", expected}
+		case "null":
+			pred = pqdb.Predicate{column, "IS", nil}
+		case "!null":
+			pred = pqdb.Predicate{column, "IS NOT", nil}
+		case ">":
+			pred = pqdb.Predicate{column, ">", expected}
+		case ">=":
+			pred = pqdb.Predicate{column, ">=", expected}
+		case "<":
+			pred = pqdb.Predicate{column, "<", expected}
+		case "<=":
+			pred = pqdb.Predicate{column, "<=", expected}
+		case "in":
+			pred = pqdb.Predicate{column, "IN", expected}
+		case "!in":
+			pred = pqdb.Predicate{column, "NOT IN", expected}
+
+		default:
+			return pqdb.WhereItem{}, oops.ServerError("", "invalid operator")
+		}
+	}
+	return pqdb.MakeWhereItem("", pred), nil
+}
+
+func UnravelNestedFilter(ctx *app.Context, obj Model, sQuery *pqdb.Select, table *pqdb.Table, joins map[string]pqdb.Table, filterMap map[string]interface{}) (pqdb.WhereItem, oops.Error) {
+	for keyName, element := range filterMap {
+		if keyName == "&&" || keyName == "||" {
+			parentWhereItem := pqdb.WhereItem{}
+			for index, expression := range element.([]interface{}) {
+				childWhereItem, e := UnravelNestedFilter(ctx, obj, sQuery, table, joins, expression.(map[string]interface{}))
+				if e != nil {
+					return pqdb.WhereItem{}, e
+				}
+
+				if keyName == "&&" && index > 0 {
+					childWhereItem.Operand = "AND"
+				} else if index > 0 {
+					childWhereItem.Operand = "OR"
+				}
+
+				parentWhereItem.Items = append(parentWhereItem.Items, childWhereItem)
+			}
+			return parentWhereItem, nil
+		} else {
+			splitKey := strings.Split(keyName, ".")
+			mainTable := table
+			var attr string
+
+			// If we are not operating upon a top-level attribute, do stuff
+			if len(splitKey) == 2 {
+				key := splitKey[0]
+				attr = splitKey[1]
+
+				// check and skip if Primaries have already been joined
+				if primaryJoinTable, ok := joins[key]; !ok {
+					comp, e := CreateComponent(ctx, key, nil, nil)
+					if e != nil {
+						return pqdb.WhereItem{}, e
+					}
+
+					var compTable pqdb.Table
+
+					// Create component table based on the named key.
+					compTableName := lib.Join("_", comp.CompName(), "component")
+					if joiningTable, ok := joins[compTableName]; !ok {
+						compTable = *pqdb.NewTable(compTableName)
+						joins[compTableName] = compTable
+
+						// Do join on parent table and current component table
+						sQuery.LeftJoin(&compTable, pqdb.Predicate{compTable.Column("product_id"), "=", table.Column("id")})
+					} else {
+						compTable = joiningTable
+					}
+
+					mainTable = &compTable
+
+					// Check each attribute in the current component's struct to see if we are working with a Primary object.
+					if joiningTable, ok := joins[key]; !ok {
+						for iter := comp.(lib.Iterable).NewIterator(); iter.Next(); {
+							// Get current item from iterator
+							val := iter.Item()
+
+							// Deal with possible int to float json conversion fun...
+							if val.ColumnName() == attr {
+								for i, v := range element.(map[string]interface{}) {
+									if val.DataType.Type == reflect.TypeOf(lib.IntField{}) {
+										switch t := v.(type) {
+										case float64:
+											element.(map[string]interface{})[i] = int64(t)
+										case []interface{}:
+											var ints []int64
+											for _, f := range t {
+												ints = append(ints, int64(f.(float64)))
+											}
+											element.(map[string]interface{})[i] = ints
+										}
+
+									}
+								}
+							}
+
+							// Check specific tag. If found, we can use the primary. Otherwise, we dont do anything else for the component.
+							if val.Tag().Get("sub_object") != "" {
+								// Hurray! It is a primary. Get the table and create the join.
+								idField := val.Tag().Get("rel_field")
+
+								primaryTableName := val.Value().(Relation).TableName()
+								primaryTable := pqdb.NewTable(primaryTableName)
+
+								// Primary join
+								sQuery.LeftJoin(primaryTable, pqdb.Predicate{primaryTable.Column("id"), "=", compTable.Column(idField)})
+								joins[key] = *primaryTable
+								mainTable = primaryTable
+							}
+						}
+					} else {
+						mainTable = &joiningTable
+					}
+				} else {
+					mainTable = &primaryJoinTable
+				}
+			} else {
+				// do no joins
+				attr = keyName
+				for iter := obj.NewIterator(); iter.Next(); {
+					// Get current item from iterator
+					val := iter.Item()
+
+					// Deal with possible int to float json conversion fun...
+					if val.ColumnName() == attr {
+						for i, v := range element.(map[string]interface{}) {
+							if val.DataType.Type == reflect.TypeOf(lib.IntField{}) {
+								switch t := v.(type) {
+								case float64:
+									element.(map[string]interface{})[i] = int64(t)
+								case []interface{}:
+									var ints []int64
+									for _, f := range t {
+										ints = append(ints, int64(f.(float64)))
+									}
+									element.(map[string]interface{})[i] = ints
+								}
+
+							}
+						}
+					}
+				}
+			}
+
+			column := mainTable.Column(attr)
+			item, e := getWhereItem(column, element.(map[string]interface{}))
+			if e != nil {
+				return pqdb.WhereItem{}, e
+			}
+			return item, e
+		}
+	}
+	return pqdb.WhereItem{}, nil
+}
+
+// queryProducts builds and executes a SELECT query on the postgres DB and returns a slice of products based on the supplied params
+func queryProducts(ctx *app.Context, limit int, offset int, apiKey *APIKey, filtering map[string]interface{}, orderBy pqdb.OrderExpression) ([]*AEProduct, int, oops.Error) {
+	// Build query based on params
+	var products []*AEProduct
+	query, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	var wheres []pqdb.WhereItem
+
+	ptr, e := Factory("product")
+	if e != nil {
+		return nil, 0, e
+	}
+	pp := ptr.(*AEProduct)
+	table := pqdb.NewTable(pp.TableName())
+	query.AddTable(table)
+	colNames := []string{"id", "assemblage_id"}
+	for _, col := range colNames {
+		query.AddColumn(table.Column(col))
+	}
+	if ctx.Role != nil && ctx.Role["Product"]&permissions.ProductRetrieveAll == 0 {
+		if apiKey.ManufacturerID.Int64 > 0 {
+			mfrTable := pqdb.NewTable("manufacturer_component")
+			query.LeftJoin(mfrTable, pqdb.Predicate{table.Column("id"), "=", mfrTable.Column("product_id")})
+			where := pqdb.MakeWhereItem("", pqdb.Predicate{mfrTable.Column("manufacturer_id"), "=", apiKey.ManufacturerID.Int64})
+			wheres = append(wheres, where)
+		}
+		if apiKey.SalesChannelID.Int64 > 0 {
+			scTable := pqdb.NewTable(SalesChannel{}.TableName())
+			query.LeftJoin(scTable, pqdb.Predicate{table.Column("id"), "=", scTable.Column("product_id")})
+			where := pqdb.MakeWhereItem("", pqdb.Predicate{scTable.Column("manufacturer_id"), "=", apiKey.SalesChannelID.Int64})
+			wheres = append(wheres, where)
+		}
+		if ctx.Role["Product"]&permissions.ProductRetrieveVisible != 0 {
+			t := pqdb.NewTable("visibility_component")
+			query.LeftJoin(t, pqdb.Predicate{table.Column("id"), "=", t.Column("product_id")})
+			where := pqdb.MakeWhereItem("", pqdb.Predicate{t.Column("active"), "=", true})
+			wheres = append(wheres, where)
+		}
+	}
+
+	var orderByClause pqdb.OrderClause
+
+	if orderBy != (pqdb.OrderExpression{}) {
+		t := orderBy.Column.Table
+		query.LeftJoin(t, pqdb.Predicate{t.Column("product_id"), "=", table.Column("id")})
+		orderByClause.Order = append(orderByClause.Order, orderBy)
+	}
+
+	orderByClause.Order = append(orderByClause.Order, pqdb.OrderExpression{*table.Column("id"), true, false})
+	query.OrderBy = orderByClause
+
+	joins := make(map[string]pqdb.Table)
+	where, e := UnravelNestedFilter(ctx, pp, query, table, joins, filtering)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	if len(where.Items) > 0 {
+		wheres = append(wheres, where)
+	} else if where.Pred != (pqdb.Predicate{}) {
+		wheres = append(wheres, where)
+	}
+
+	for index, whereItem := range wheres {
+		if index > 0 {
+			whereItem.Operand = "AND"
+		}
+		query.Where.Items = append(query.Where.Items, whereItem)
+	}
+
+	if limit > 0 || offset > 0 {
+		query.Limit = pqdb.LimitClause{Limit: limit, Offset: offset}
+	}
+
+	rows, e := query.Run()
+	if e != nil {
+		return nil, 0, e
+	}
+
+	total, e := query.Count()
+	if e != nil {
+		return nil, 0, e
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		ptr, e := Factory("product")
+		if e != nil {
+			return nil, 0, e
+		}
+		prod := ptr.(*AEProduct)
+
+		err := rows.Scan(&prod.ID, &prod.AssemblageID)
+		if err != nil {
+			return nil, 0, oops.ServerError("", "Could not scan row into aeProduct.", err)
+		}
+		products = append(products, prod)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	return products, total, nil
+}
+
+// getCachedProducts returns a map of product results from the mongoDB product_cache
+func getCachedProducts(ctx *app.Context, productIDs []int, fields []string) ([]map[string]interface{}, oops.Error) {
+	var cachedProducts []map[string]interface{}
+
+	mSession, e := ctx.MongoDB.Open()
+	if e != nil {
+		return nil, e
+	}
+
+	c := mSession.DB("api").C("product_cache")
+	query := c.Find(bson.M{"ID": bson.M{"$in": productIDs}}).Sort("ID")
+	if len(fields) > 0 {
+		fieldsM := bson.M{"ID": 1}
+		for _, field := range fields {
+			fieldsM[lib.Join(".", "value", field)] = 1
+		}
+		fieldsM["value.id"] = 1
+		fieldsM["value.assemblage"] = 1
+		query = query.Select(fieldsM)
+	}
+
+	err := query.All(&cachedProducts)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not query all cached products.", err)
+	}
+
+	mapping := make(map[int]interface{})
+	for _, val := range cachedProducts {
+		mapping[int(val["ID"].(int64))] = val
+	}
+
+	var prodResults []map[string]interface{}
+	for _, id := range productIDs {
+		if val, ok := mapping[id]; ok {
+			prodResults = append(prodResults, val.(map[string]interface{}))
+		}
+	}
+	mSession.Close()
+	return prodResults, nil
+}
+
+// RetrieveProducts gets products from the mongoDB cache if they are present. If they are not found in the cache
+// then it will load all product data from Postgres and assemble the product representation before adding it to the
+// cache. Finally it will return the full list of product results as a JSON formatted list.
+func RetrieveProducts(
+	ctx *app.Context,
+	limit int,
+	offset int,
+	apiKey *APIKey,
+	filtering map[string]interface{},
+	orderBy pqdb.OrderExpression,
+) ([]map[string]interface{}, int, oops.Error) {
+
+	// Get product IDs based on params
+	products, total, e := queryProducts(ctx, limit, offset, apiKey, filtering, orderBy)
+	if e != nil {
+		return nil, 0, e
+	}
+	var productIDs []int
+
+	for _, prod := range products {
+		productIDs = append(productIDs, int(prod.ID.Int64))
+	}
+	responseProducts, err := PrepareProducts(ctx, productIDs, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	return responseProducts, total, err
+}
+
+func PrepareProducts(ctx *app.Context, productIDs []int, fields []string) ([]map[string]interface{}, oops.Error) {
+	var cachedIDs []int
+	var uncachedIDs []int
+	var uncachedProducts []*AEProduct
+	var responseProducts []map[string]interface{}
+
+	// Retrieve cached products from mongo
+	cachedProducts, e := getCachedProducts(ctx, productIDs, fields)
+	if e != nil {
+		return nil, e
+	}
+	for _, prod := range cachedProducts {
+		cachedIDs = append(cachedIDs, int(prod["ID"].(int64)))
+	}
+	for _, prodID := range productIDs {
+		if !lib.ContainsInt(cachedIDs, prodID) {
+			uncachedIDs = append(uncachedIDs, prodID)
+		}
+	}
+
+	if len(uncachedIDs) > 0 {
+		query, e := pqdb.NewSelectQuery(ctx)
+		if e != nil {
+			return nil, e
+		}
+
+		table := pqdb.NewTable(AEProduct{}.TableName())
+		cols := []string{"id", "assemblage_id"}
+		for _, col := range cols {
+			query.AddColumn(table.Column(col))
+		}
+
+		where := pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("id"), "IN", uncachedIDs})
+		query.AddTable(table)
+		query.SetWhere(where)
+
+		rows, e := query.Run()
+		if e != nil {
+			return nil, e
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			ptr, e := Factory("product")
+			if e != nil {
+				return nil, e
+			}
+			prod := ptr.(*AEProduct)
+
+			err := rows.Scan(&prod.ID, &prod.AssemblageID)
+			if err != nil {
+				return nil, oops.ServerError("", "Could not scan row into aeProduct.", err)
+			}
+			uncachedProducts = append(uncachedProducts, prod)
+		}
+
+		if err := rows.Err(); err != nil {
+			return nil, oops.ServerError("", err)
+		}
+
+		// Retrieve uncached products from Postgres
+		_, e = ComposeProducts(ctx, uncachedProducts)
+		if e != nil {
+			return nil, e
+		}
+
+		composedProducts, e := getCachedProducts(ctx, uncachedIDs, fields)
+		for _, prod := range composedProducts {
+			responseProducts = append(responseProducts, prod["value"].(map[string]interface{}))
+		}
+	}
+
+	// Combine products into single slice
+	for _, prod := range cachedProducts {
+		responseProducts = append(responseProducts, prod["value"].(map[string]interface{}))
+	}
+	return responseProducts, nil
+}
+
+// RetrieveProductsIn gets products based on the provided list of IDs
+// from the mongoDB cache if they are present. If they are not found in the cache
+// then it will load all product data from Postgres and assemble the product representation before adding it to the
+// cache. Finally it will return the full list of product results as a slice of JSON formatted objects.
+func RetrieveProductsIn(ctx *app.Context, prodIDs []int, apiKey *APIKey, fields []string) ([]map[string]interface{}, oops.Error) {
+	// Get product IDs based on params
+	// Build query based on params
+
+	responseProducts, e := PrepareProducts(ctx, prodIDs, fields)
+	if e != nil {
+		return nil, e
+	}
+	return responseProducts, e
+}
+
+// ComposeProducts take a slice of AEProduct pointers and builds full product representations from them.
+// It then updates the mongo cache with those representations and then returns them as marshaled JSON.
+func ComposeProducts(ctx *app.Context, products []*AEProduct) ([]json.RawMessage, oops.Error) {
+	var jsonProds []json.RawMessage
+
+	assemblages := make(map[int64]*AssemblageTemplate)
+	assemblagesComponents := make(map[string]AssemblageComponent)
+	tables := make(map[string][]int64)
+	productMap := make(map[int64]*AEProduct)
+
+	for _, prod := range products {
+		if _, ok := assemblages[prod.AssemblageID.Int64]; !ok {
+			assemblage, e := RetrieveAssemblageByID(ctx, prod.AssemblageID.Int64)
+			if e != nil {
+				return nil, e
+			}
+			assemblages[prod.AssemblageID.Int64] = assemblage
+		}
+		prod.Assemblage = assemblages[prod.AssemblageID.Int64]
+		prod.Components = make(map[string]Component)
+		productMap[prod.ID.Int64] = prod
+
+		for _, assComp := range prod.Assemblage.Components {
+			if _, ok := assemblagesComponents[assComp.TableName.String]; !ok {
+				assemblagesComponents[assComp.TableName.String] = assComp
+			}
+			tables[assComp.TableName.String] = append(tables[assComp.TableName.String], prod.ID.Int64)
+		}
+	}
+
+	for k, v := range tables {
+		assComp := assemblagesComponents[k]
+		className := assComp.ClassName.String
+		assCompInner, e := CreateComponent(ctx, className, nil, nil)
+		if e != nil {
+			return nil, e
+		}
+		assCols := lib.Join(", ", assCompInner.(lib.Iterable).ColumnNames()...)
+		var ids []string
+
+		for _, id := range v {
+			ids = append(ids, strconv.FormatInt(id, 10))
+		}
+
+		idString := lib.Join(", ", ids...)
+		queryString := lib.Join(" ", "SELECT", assCols, "FROM", k, "WHERE product_id IN", lib.Join("", "(", idString, ")"))
+		rows, err := ctx.DBConn.Query(queryString)
+
+		if err != nil {
+			return nil, oops.ServerError("", "Query resulted in an error.", err, queryString)
+		}
+
+		var subRows *sql.Rows
+		var subClassName string
+		var subFieldName string
+		var subIDFieldName string
+
+		compName := assComp.Name.String
+		targetIter := assCompInner.(lib.Iterable)
+		hasSubs := false
+		hasSubObj := false
+		subResults := make(map[string]map[int64][]Component)
+		subObjResults := make(map[string]map[int64]reflect.Value)
+
+		for it := targetIter.NewIterator(); it.Next(); {
+			field := it.Item()
+			if field.Tag().Get("relation") != "" {
+				subIDFieldName = field.Tag().Get("rel_field")
+				if reflect.Indirect(field.Data).IsValid() == true {
+					tableName := field.Value().(Relation).TableName()
+					subFieldName = field.Name()
+					subClassName = field.Tag().Get("relation")
+					subAssCols := lib.Join(", ", field.Addr().(lib.Iterable).ColumnNames()...)
+					subQueryString := lib.Join(" ", "SELECT", subAssCols, "FROM", tableName)
+
+					subRows, err = ctx.DBConn.Query(subQueryString)
+					if err != nil {
+						return nil, oops.ServerError("", "Database query failed.", err, subQueryString)
+					}
+
+					hasSubObj = true
+					for subRows.Next() {
+						subComp := reflect.New(field.DataType.Type)
+						e := pqdb.Scan(subComp.Interface().(lib.Iterable), subRows)
+						if e != nil {
+							subRows.Close()
+							return nil, e
+						}
+						objectID := int64(subComp.Elem().FieldByName("ID").FieldByName("Int64").Int())
+
+						if _, ok := subObjResults[subClassName]; !ok {
+							subObjResults[subClassName] = make(map[int64]reflect.Value)
+						}
+						subObjResults[subClassName][objectID] = subComp
+					}
+					subRows.Close()
+				}
+			} else if field.Tag().Get("list_sub_field") != "" {
+				subFieldName = field.Name()
+				subTableName := assComp.SubTableName()
+				subClassName = assComp.SubClassName()
+				subComp, e := CreateComponent(ctx, subClassName, nil, nil)
+				if e != nil {
+					return nil, e
+				}
+				subAssCols := lib.Join(", ", subComp.(lib.Iterable).ColumnNames()...)
+				subQueryString := lib.Join(" ", "SELECT", subAssCols, "FROM", subTableName, "WHERE product_id IN", lib.Join("", "(", idString, ")"))
+
+				subRows, err := ctx.DBConn.Query(subQueryString)
+				if err != nil {
+					return nil, oops.ServerError("", "Database query failed.", err, subQueryString)
+				}
+				hasSubs = true
+				for subRows.Next() {
+					subComp, e := CreateComponent(ctx, subClassName, nil, nil)
+					if e != nil {
+						subRows.Close()
+						return nil, e
+					}
+
+					e = pqdb.Scan(subComp, subRows)
+					if e != nil {
+						subRows.Close()
+						return nil, e
+					}
+					productID := int64(reflect.ValueOf(subComp).Elem().FieldByName("ProductID").FieldByName("Int64").Int())
+
+					if _, ok := subResults[subClassName]; !ok {
+						subResults[subClassName] = make(map[int64][]Component)
+					}
+					subResults[subClassName][productID] = append(subResults[subClassName][productID], subComp)
+				}
+				subRows.Close()
+			}
+		}
+
+		for rows.Next() {
+			newComp, e := CreateComponent(ctx, className, nil, nil)
+			if e != nil {
+				rows.Close()
+				return nil, e
+			}
+
+			e = pqdb.Scan(newComp, rows)
+			if e != nil {
+				rows.Close()
+				return nil, e
+			}
+
+			productID := int64(reflect.ValueOf(newComp).Elem().FieldByName("ProductID").FieldByName("Int64").Int())
+			if hasSubs {
+				if _, ok := subResults[subClassName][productID]; ok {
+					field := reflect.ValueOf(newComp).Elem().FieldByName(subFieldName)
+					for _, sub := range subResults[subClassName][productID] {
+						field.Set(reflect.Append(field, reflect.ValueOf(sub).Elem()))
+					}
+
+				}
+			}
+			if hasSubObj {
+				subFieldID := int64(reflect.ValueOf(newComp).Elem().FieldByName(subIDFieldName).FieldByName("Int64").Int())
+				if _, ok := subObjResults[subClassName][subFieldID]; ok {
+					field := reflect.ValueOf(newComp).Elem().FieldByName(subFieldName)
+					field.Set(subObjResults[subClassName][subFieldID].Elem())
+				}
+			}
+			for it := newComp.(lib.Iterable).NewIterator(); it.Next(); {
+				field := it.Item()
+				if field.Tag().Get("multi_value") == "true" {
+					acc, e := RetrieveMultiValues(
+						ctx,
+						compName,
+						field.Tag().Get("json"),
+						0,
+					)
+					if e != nil {
+						return nil, e
+					}
+					vals, e := RetrieveMultiValues(
+						ctx,
+						compName,
+						field.Tag().Get("json"),
+						productID,
+					)
+					mvf := field.Addr().(*lib.MultiValueField)
+					mvf.Scan(vals)
+					mvf.AcceptedValues = acc
+					mvf.Valid = true
+				} else if field.Tag().Get("relation_list") != "" {
+					idField := field.Tag().Get("rel_field")
+					tableName := field.Tag().Get("rel_table")
+					returnCol := field.Tag().Get("rel_col")
+					why := field.Tag().Get("rel_why")
+					instName := field.Tag().Get("inst_name")
+					idVal, _ := lib.ValueByName(newComp.(lib.Iterable).NewIterator(), idField).Value()
+					// get option_set_component by product_id
+					selQuery, e := pqdb.NewSelectQuery(ctx)
+					if e != nil {
+						return nil, e
+					}
+					selTable := pqdb.NewTable(tableName)
+					selQuery.AddTable(selTable)
+					selQuery.AddColumn(selTable.Column(returnCol))
+					selQuery.SetWhere(pqdb.WhereItem{"", pqdb.Predicate{why, "=", idVal}, nil})
+					res, e := selQuery.Run()
+					if e != nil {
+						return nil, e
+					}
+					defer res.Close()
+					var ids []int64
+					for res.Next() {
+						var id int64
+						err := res.Scan(&id)
+						if err != nil {
+							return nil, oops.ServerError("", "Could not scan in component data.", err)
+						}
+						ids = append(ids, id)
+					}
+
+					if err := res.Err(); err != nil {
+						return nil, oops.ServerError("", "Rows has an internal error.", err)
+					}
+
+					relSlice := reflect.MakeSlice(reflect.TypeOf(field.Value()), 0, 0)
+					for _, id := range ids {
+						inst, e := Factory(instName)
+						if e != nil {
+							return nil, e
+						}
+
+						relation, e := inst.(Relation).FetchRelation(ctx, id)
+						if e != nil {
+							return nil, e
+						}
+						relSlice = reflect.Append(relSlice, reflect.ValueOf(relation).Elem())
+					}
+					//set slice into field
+					field.Data.Set(relSlice)
+				}
+
+			}
+			prod := productMap[productID]
+			prod.Components[compName] = newComp
+		}
+		rows.Close()
+	}
+
+	mSession, e := ctx.MongoDB.Open()
+	if e != nil {
+		return nil, e
+	}
+	defer mSession.Close()
+
+	c := mSession.DB("api").C("product_cache")
+	for _, prod := range products {
+
+		prodJSON, err := json.Marshal(prod)
+		var testProd map[string]interface{}
+		err = json.Unmarshal([]byte(prodJSON), &testProd)
+		if err != nil {
+			return nil, oops.ServerError("", "Failed to marshal product.", err)
+		}
+		if err != nil {
+			return nil, oops.ServerError("", "Failed to marshal product.", err, prod)
+		}
+		jsonProds = append(jsonProds, prodJSON)
+		err = c.Insert(map[string]interface{}{"ID": prod.ID.Int64, "value": testProd})
+		if err != nil {
+			return nil, oops.ServerError("", "Failed to insert into MongoDB.", err)
+		}
+	}
+	return jsonProds, nil
+}

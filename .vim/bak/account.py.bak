@@ -1,0 +1,581 @@
+import flask
+import stripe
+import amber_portal.signals
+
+from flask import (
+    Blueprint,
+    flash,
+    g,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for
+)
+from amber_portal.lib.s3 import upload_image
+from amber_portal.lib.utils import (
+    format_phone,
+    amber_api_connection
+)
+from amber_portal.models.user import CMUser
+from amber_portal.models import db
+from amber_portal.forms.manufacturer import (
+    ManufacturerForm,
+    ManufacturerContactForm,
+    ManufacturerReturnForm,
+    ManufacturerImageForm
+)
+from amber_portal.forms.user import GeneralSettingsForm, UpdatePassword
+from amber_portal.forms.signup import BillingForm
+from amber_portal.lib import get_current_user
+from amber_lib import query
+
+from .auth import authenticated, good_standing
+
+app = flask.current_app
+
+account_view = Blueprint('account_view', __name__, template_folder='templates')
+
+current_user = get_current_user()
+
+REACTIVATE_PLAN_ID = 'intro_price'
+
+
+@account_view.route('/account/settings', methods=['GET'])
+@authenticated
+@good_standing
+def account_settings():
+    if request.args.get('showpanel'):
+        if not session.get('panels'):
+            session['panels'] = {}
+        if not session['panels'].get('account'):
+            session['panels']['account'] = {}
+        session['panels']['account'][request.args.get('showpanel')] = True
+
+    api_conn = amber_api_connection()
+    manufacturer = api_conn.Manufacturer.retrieve(current_user.manufacturer_id)
+
+    general_form = GeneralSettingsForm(
+        name=current_user.name,
+        email=current_user.email
+    )
+
+    return_form = ManufacturerReturnForm(**manufacturer.to_dict())
+
+    if 'panels' not in session:
+        session['panels'] = {}
+    return render_template(
+        'settings/account_settings.jinja2',
+        manufacturer=manufacturer,
+        general_form=general_form,
+        return_form=return_form
+    )
+
+
+@account_view.route('/account/settings', methods=['POST'])
+@authenticated
+@good_standing
+def account_save():
+    general_form = GeneralSettingsForm()
+    return_form = ManufacturerReturnForm()
+
+    api_conn = amber_api_connection()
+    manu = api_conn.Manufacturer.retrieve(current_user.manufacturer_id)
+
+    if general_form.validate_on_submit() and return_form.validate_on_submit():
+        g.user.name = general_form.name.data
+        g.user.email = general_form.email.data
+
+        db.session.add(g.user)
+        db.session.commit()
+
+        # TODO: needs functional testing
+        where = query.Predicate(
+                'public',
+                query.equal(g.user.public.encode("utf8"))
+        )
+        api_key = api_conn.APIKey.query(public_key=g.user.public)[0]
+        api_key.name = general_form.email.data
+        api_key.save()
+
+        if (
+            manu.return_period != return_form.data['return_period'] or
+            manu.returnable != return_form.data['returnable'] or
+            manu.restock_fee != return_form.data['restock_fee'] or
+            manu.legal != return_form.data['legal']
+        ):
+            manu_data = manu.to_dict()
+            manu_data.update(return_form.data)
+            manufacturer = api_conn.Manufacturer.retrieve(
+                current_user.manufacturer_id
+            )
+            manufacturer.from_dict(manu_data)
+            manufacturer.save()
+        else:
+            manufacturer = manu
+
+        flash(u'Account settings have been saved.', 'success')
+    else:
+        manufacturer = manu
+
+    return render_template(
+        'settings/account_settings.jinja2',
+        manufacturer=manufacturer,
+        general_form=general_form,
+        return_form=return_form
+    )
+
+
+@account_view.route('/account/profile', methods=['GET'])
+@authenticated
+@good_standing
+def profile():
+    api_conn = amber_api_connection()
+    manufacturer = api_conn.Manufacturer.retrieve(current_user.manufacturer_id)
+
+    where = query.Predicate("manufacturer_id", query.equal(current_user.manufacturer_id))
+    images = api_conn.ManufacturerImage.query(filtering=where)
+    print(images.list_to_json())
+
+    profile_form = ManufacturerForm(**manufacturer.to_dict())
+    contact_form = ManufacturerContactForm(**manufacturer.to_dict())
+
+    if 'panels' not in session:
+        session['panels'] = {}
+
+    if contact_form.phone.data:
+        contact_form.phone.data = format_phone(contact_form.phone.data)
+
+    return render_template(
+        'settings/profile.jinja2',
+        manufacturer=manufacturer,
+        profile_form=profile_form,
+        contact_form=contact_form,
+        images=images
+    )
+
+
+@account_view.route('/account/profile', methods=['POST'])
+@authenticated
+@good_standing
+def profile_save():
+    api_conn = amber_api_connection()
+    profile_form = ManufacturerForm()
+    contact_form = ManufacturerContactForm()
+    manu = api_conn.Manufacturer.retrieve(current_user.manufacturer_id)
+
+    where = query.Predicate("manufacturer_id", query.equal(current_user.manufacturer_id))
+    images = api_conn.ManufacturerImage.query(filtering=where)
+
+    if contact_form.phone.data:
+        contact_form.phone.data = format_phone(contact_form.phone.data)
+
+    profile_valid = profile_form.validate_on_submit()
+    contact_valid = contact_form.validate_on_submit()
+
+    if profile_valid and contact_valid:
+        data = manu.to_dict()
+        data.update(profile_form.data)
+        data.update(contact_form.data)
+
+        manufacturer = api_conn.Manufacturer.retrieve(
+            current_user.manufacturer_id
+        ).from_dict(data).save()
+        flash(u'Your profile has been saved.', 'success')
+
+    else:
+        manufacturer = manu
+
+    return render_template(
+        'settings/profile.jinja2',
+        manufacturer=manufacturer,
+        profile_form=profile_form,
+        contact_form=contact_form,
+        images=images
+    )
+
+
+@account_view.route('/account_settings/preview/profile', methods=['POST'])
+@authenticated
+@good_standing
+def profile_preview():
+    api_conn = amber_api_connection()
+    where = query.Predicate("manufacturer_id", query.equal(current_user.manufacturer_id))
+    images = api_conn.ManufacturerImage.query(filtering=where)
+
+    profile = request.json['profile']
+
+    cover = ''
+    for image in images:
+        if image.default:
+            cover = image
+            images.remove(image)
+            break
+    return render_template(
+        'settings/profile_preview_modal.jinja2',
+        profile=profile,
+        images=images,
+        cover=cover,
+    )
+
+
+@account_view.route('/account/image/new', methods=['GET', 'POST'])
+@authenticated
+@good_standing
+def image_new():
+    api_conn = amber_api_connection()
+    form = ManufacturerImageForm()
+    if request.method == 'GET':
+
+        return render_template(
+            'settings/image_modal.jinja2',
+            form=form
+        )
+
+    elif request.method == 'POST':
+        image_data = {
+            'manufacturer_id': current_user.manufacturer_id,
+            'url': form.data['logo_url'],
+            'default': form.data['default'],
+            'caption': ''
+        }
+        img = api_conn.ManufacturerImage.from_dict(image_data).save()
+        where = query.Predicate(
+            "manufacturer_id",
+            query.equal(current_user.manufacturer_id)
+        )
+        images = api_conn.ManufacturerImage.query(filtering=where)
+
+        return render_template(
+            'settings/forms/images.jinja2',
+            images=images
+        )
+
+
+@account_view.route('/account/image/<int:image_id>', methods=['GET'])
+@authenticated
+@good_standing
+def image_modal(image_id):
+    api_conn = amber_api_connection()
+    image = api_conn.ManufacturerImage.retrieve(image_id)
+
+    form = ManufacturerImageForm(**image.to_dict())
+    return render_template(
+        'settings/image_modal.jinja2',
+        image=image,
+        form=form
+    )
+
+
+@account_view.route('/account/image/<int:image_id>', methods=['POST'])
+@authenticated
+@good_standing
+def image_save(image_id):
+    api_conn = amber_api_connection()
+    form = ManufacturerImageForm()
+
+    if form.validate_on_submit():
+        data = {
+            'manufacturer_id': current_user.manufacturer_id,
+            'url': form.data['logo_url'],
+            'default': form.data['default'],
+            'caption': ''
+        }
+        api_conn.ManufacturerImage.retrieve(image_id).from_dict(data).save()
+
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False})
+
+
+@account_view.route('/account/image/<int:image_id>/delete', methods=['DELETE'])
+@authenticated
+@good_standing
+def image_delete(image_id):
+    api_conn = amber_api_connection()
+    api_conn.ManufacturerImage.retrieve(image_id).delete()
+
+    return jsonify({'success': True})
+
+
+@account_view.route('/billing', methods=['GET'])
+@authenticated
+def billing():
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+    customer = None
+    subscription = None
+    invoices = None
+
+    if g.user.stripe_customer:
+        customer = stripe.Customer.retrieve(g.user.stripe_customer)
+        invoices = stripe.Invoice.all(
+            limit=6,
+            customer=g.user.stripe_customer
+        )
+        invoices.data[:] = [i for i in invoices.data if i['amount_due'] > 0]
+
+        if customer.subscriptions.total_count > 0:
+            subscription = customer.subscriptions.data[0]
+
+    return render_template(
+        'billing/billing.jinja2',
+        subscription=subscription,
+        customer=customer,
+        invoices=invoices
+    )
+
+
+@account_view.route('/billing/update-card', methods=['GET', 'POST'])
+@account_view.route(
+    '/billing/reactivate/<string:sub_id>',
+    methods=['GET', 'POST']
+)
+@authenticated
+def update_card(sub_id='new'):
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+    customer = stripe.Customer.retrieve(current_user.stripe_customer)
+    card = customer.cards.data[0]
+
+    data = {
+        'street_address_1': card.address_line1,
+        'street_address_2': card.address_line2,
+        'country': card.address_country,
+        'city': card.address_city,
+        'state': card.address_state,
+        'province': card.address_state,
+        'zipcode': card.address_zip,
+        'phone': customer.metadata.get('phone', None)
+    }
+    form = BillingForm(**data)
+
+    if form.validate_on_submit():
+        card_data = form.data
+        extras = {
+            'object': 'card',
+            'address_line1': form.street_address_1.data,
+            'address_line2': form.street_address_2.data,
+            'address_city': form.city.data,
+            'address_state': form.state.data or form.province.data,
+            'address_zip': form.zipcode.data
+        }
+        card_data.update(extras)
+
+        try:
+            customer.sources.create(source=card_data)
+            customer.metadata = {'phone': form.phone.data}
+            customer.save()
+
+            customer.sources.retrieve(card.id).delete()
+
+            if 'reactivate' in request.path:
+                return redirect(url_for('.reactivate_confirm', sub_id=sub_id))
+
+            flash('Your card information has been updated.', 'success')
+            return redirect(url_for('.billing'))
+
+        except stripe.error.CardError as error:
+            e = Exception(error._message)
+            if error.code in ['invalid_cvc', 'incorrect_cvc']:
+                form.cvc.errors.append(e)
+            elif error.code in [
+                'invalid_expiry_month',
+                'invalid_expiry_year',
+                'expired_card'
+            ]:
+                form.exp_month.errors.append(e)
+            elif error.code is 'incorrect_zip':
+                form.zipcode.errors.append(e)
+            else:
+                form.number.errors.append(
+                    Exception(
+                        "The card number is not a valid credit card number."
+                    )
+                )
+
+    if 'reactivate' in request.path:
+        plan = stripe.Plan.retrieve(REACTIVATE_PLAN_ID)
+        subscription = None
+        if sub_id != 'new':
+            subscription = customer.subscriptions.retrieve(sub_id)
+        return render_template(
+            'billing/reactivate.jinja2',
+            form=form,
+            plan=plan,
+            subscription=subscription
+        )
+
+    return render_template('billing/update_card.jinja2', form=form)
+
+
+@account_view.route(
+    '/billing/reactivate/<string:sub_id>/confirm',
+    methods=['GET', 'POST']
+)
+@authenticated
+def reactivate_confirm(sub_id='new'):
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+
+    customer = stripe.Customer.retrieve(current_user.stripe_customer)
+
+    if request.method == 'GET':
+        plan = stripe.Plan.retrieve(REACTIVATE_PLAN_ID)
+
+        return render_template(
+            'billing/confirm.jinja2',
+            sub_id=sub_id,
+            customer=customer,
+            plan=plan
+        )
+
+    if request.method == 'POST':
+        if sub_id == 'new':
+            subscription = customer.subscriptions.create(
+                plan=REACTIVATE_PLAN_ID,
+                trial_end='now'
+            )
+        else:
+            subscription = customer.subscriptions.retrieve(sub_id)
+            subscription.plan = REACTIVATE_PLAN_ID
+            subscription.save()
+
+        return redirect(url_for('.billing'))
+
+
+@account_view.route('/billing/payment-history', methods=['GET'])
+@authenticated
+@good_standing
+def payment_history():
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+
+    invoices = stripe.Invoice.all(customer=current_user.stripe_customer)
+
+    return render_template(
+        'settings/payment_history.jinja2',
+        invoices=invoices
+    )
+
+
+@account_view.route('/billing/<string:sub_id>/cancel/confirm', methods=['GET'])
+@authenticated
+def cancel_modal(sub_id):
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+
+    customer = stripe.Customer.retrieve(current_user.stripe_customer)
+    subscription = customer.subscriptions.retrieve(sub_id)
+
+    return render_template(
+        'billing/cancel_account_modal.jinja2',
+        subscription=subscription
+    )
+
+
+@account_view.route('/billing/<string:sub_id>/cancel', methods=['GET'])
+@authenticated
+def account_cancel(sub_id):
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+
+    customer = stripe.Customer.retrieve(current_user.stripe_customer)
+    subscription = customer.subscriptions.retrieve(sub_id)
+    end_of_service = subscription.current_period_end
+
+    subscription.delete(at_period_end=True)
+    amber_portal.signals.user_signals.cancelled_account.send(
+        current_user,
+        end_of_service=end_of_service
+    )
+
+    return redirect(url_for('.billing'))
+
+
+@account_view.route('/monthly-receipt', methods=['POST'])
+def monthly_receipt():
+    payload = request.json['data']['object']
+    user = CMUser.query.filter_by(
+        stripe_customer=payload['customer']
+    ).first()
+    plan_name = payload['lines']['data'][0]['plan']['name']
+    amber_portal.signals.user_signals.monthly_receipt.send(
+        user,
+        payment_amount=payload['amount_due'],
+        plan_name=plan_name,
+        period_start_date=payload['period_start'],
+        period_end_date=payload['period_end']
+    )
+    return ("A-OK", 200)
+
+
+@account_view.route('/account/update-password', methods=['GET', 'POST'])
+@authenticated
+@good_standing
+def update_password():
+    form = UpdatePassword()
+
+    if request.method == 'POST':
+        user = CMUser.query.get(g.user.id)
+        if form.validate_on_submit():
+
+            if user.verify_password(form.password.data):
+                user.set_password(form.new_password.data)
+                user.save()
+
+                flash(u'Your password has been changed.', 'success')
+
+                return redirect(url_for('account_view.account_settings'))
+
+            else:
+                if len(form.password.errors) == 0:
+                    form.password.errors.append(
+                        'Password Incorrect. Please re-enter your password.'
+                    )
+
+        if not user.verify_password(form.password.data):
+            if len(form.password.errors) == 0:
+                form.password.errors.append(
+                    'Password Incorrect. Please re-enter your password.'
+                )
+
+    return render_template('settings/forms/password.jinja2', form=form)
+
+
+@account_view.route('/account/upload', methods=['POST'])
+@authenticated
+@good_standing
+def file_upload():
+    access = app.config['S3_ACCESS']
+    secret = app.config['S3_SECRET']
+    s3_bucket = app.config['S3_BUCKET']
+
+    image = request.files['img']
+
+    image_url = upload_image(image, access, secret, s3_bucket=s3_bucket)
+    return jsonify({'success': True, 'image_url': image_url})
+
+
+@account_view.route('/account/panels/add', methods=['PUT'])
+@authenticated
+def panels_add():
+    panel = request.json['panel']
+
+    if 'panels' not in session:
+        session['panels'] = {}
+
+    if 'account' not in session['panels']:
+        session['panels']['account'] = []
+
+    session['panels']['account'].append(panel)
+    session.regenerate()
+
+    return jsonify({'success': True})
+
+
+@account_view.route('/account/panels/remove', methods=['PUT'])
+@authenticated
+def panels_remove():
+    panel = request.json['panel']
+
+    if panel in session['panels']['account']:
+        session['panels']['account'].remove(panel)
+        session.regenerate()
+
+    return jsonify({'success': True})

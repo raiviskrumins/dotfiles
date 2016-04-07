@@ -1,0 +1,386 @@
+from wtforms import (
+    BooleanField,
+    HiddenField,
+    PasswordField,
+    SelectField,
+    TextField,
+    TextAreaField
+)
+from wtforms.validators import (
+    DataRequired,
+    Email,
+    EqualTo,
+    InputRequired,
+    Length,
+    Optional,
+    ValidationError
+)
+from flask_wtf import Form
+from amber_portal.forms.validators import (
+    ExpirationMonth,
+    ExpirationYear,
+    PhoneNumber,
+    RequireEither,
+    RequiredIf,
+    UnregisteredManufacturer,
+    PasswordRequirement,
+    ExtendedURL
+)
+
+import us
+from pycountry import countries
+
+states = list((state.abbr, state.name) for state in us.states.STATES)
+states.insert(0, ('', 'Select One'))
+provinces = [
+    ('', 'Select One'),
+    ('AB', 'Alberta'),
+    ('BC', 'British Columbia'),
+    ('MB', 'Manitoba'),
+    ('NB', 'New Brunswick'),
+    ('NL', 'Newfoundland and Labrador'),
+    ('NS', 'Nova Scotia'),
+    ('NT', 'Northwest Territories'),
+    ('NU', 'Nunavut'),
+    ('ON', 'Ontario'),
+    ('PE', 'Prince Edward Island'),
+    ('QC', 'Quebec'),
+    ('SK', 'Saskatchewan'),
+    ('YT', 'Yukon')
+]
+
+
+def filter_field(value):
+    """ Filter that sets a value to lowercase.
+    """
+    if value:
+        return value.lower()
+
+
+class SignUpForm(Form):
+    name = TextField(
+        u'Full Name',
+        [InputRequired(message=u'Please enter your full name.')]
+    )
+    manufacturer_name = TextField(
+        u'Company Name',
+        [InputRequired(message=u'Please enter your company name.')]
+    )
+    email = TextField(
+        u'Work Email',
+        [Email(message=u'Please enter a valid email address.')],
+        filters=[filter_field]
+    )
+    password = PasswordField(
+        u'Password',
+        [
+            InputRequired(message=u'Please enter a password.'),
+            EqualTo(
+                'confirm_password',
+                message=u'Please enter matching passwords.'
+            ),
+            PasswordRequirement(min=8, max=64)
+        ]
+    )
+    confirm_password = PasswordField(
+        u'Confirm Password',
+        [InputRequired(message=u'Please enter a password.')]
+    )
+    tos = BooleanField(
+        u'', [InputRequired(message=u'In order to use our products, \
+                                    you must agree to the Terms of Service.')]
+    )
+
+    def validate_name(form, field):
+        if field.data:
+            word_count = field.data.split()
+            if len(word_count) < 2:
+                raise ValidationError(u'Please enter your full name.')
+
+
+class BillingForm(Form):
+    number = TextField(
+        'Credit Card Number',
+        validators=[
+            InputRequired(message='Please enter a credit card number.')
+        ]
+    )
+    exp_year = TextField(
+        'Year',
+        validators=[
+            InputRequired(message='Please enter an expiration year.'),
+            ExpirationYear(message='Please enter a valid expiration year.')
+        ]
+    )
+    exp_month = TextField(
+        'Month',
+        validators=[
+            InputRequired(message='Please enter an expiration month.'),
+            ExpirationMonth(
+                year_field='exp_year',
+                message='Please enter a valid expiration month.'
+            )
+        ]
+    )
+    cvc = TextField(
+        'CSC',
+        validators=[
+            InputRequired(message='Please enter a CSC.'),
+            Length(min=3, max=4, message='Please a 3-4 digit CSC.')
+        ]
+    )
+    name = TextField(
+        u'Name on Card',
+        validators=[InputRequired(message=u'Please enter a name.')]
+    )
+    address_country = SelectField(
+        u'Country',
+        validators=[Optional()],
+        default='US',
+        choices=[
+            ('', 'Select One'),
+            ('CA', 'Canada'),
+            ('US', 'United States')
+        ]
+    )
+    street_address_1 = TextField(
+        u'Billing Address',
+        validators=[Optional()]
+    )
+    street_address_2 = TextField(
+        u'Address Line 2',
+        validators=[Optional()]
+    )
+    city = TextField(
+        u'City',
+        validators=[Optional()]
+    )
+    state = SelectField(u'State', validators=[Optional()], choices=states)
+    province = SelectField(u'Province', validators=[Optional()], choices=provinces)
+    zipcode = TextField(
+        u'Zip/Postal Code',
+        validators=[
+            InputRequired(message=u'Please enter a zip code.'),
+            Length(
+                min=3,
+                max=10,
+                message=u'Please enter a 3-10 digit zip code.'
+            )
+        ]
+    )
+    phone = TextField(
+        u'Phone Number',
+        validators=[
+            InputRequired(message=u'Please enter a phone number.'),
+            PhoneNumber()
+        ]
+    )
+    coupon = TextField(u'Promo Code', validators=[Optional()])
+
+    def validate_creditcard(form, field):
+        min = 15
+        max = 16
+        if field.data:
+            cc_count = len(field.data.replace('-', ''))
+            if cc_count < min or cc_count > max:
+                raise ValidationError(
+                    u'Please enter valid credit card information.'
+                )
+
+    def validate_state(form, field):
+        if not field.data:
+            if form.address_country.data == 'US':
+                raise ValidationError(u'Please select a state.')
+
+    def validate_province(form, field):
+        if not field.data:
+            if form.address_country.data == 'CA':
+                raise ValidationError(u'Please select a province.')
+
+
+class CompanyForm(Form):
+    name = TextField(
+        'Company Name',
+        validators=[
+            InputRequired(message='Please enter a company name.'),
+            UnregisteredManufacturer(
+                data='name',
+                message=u'Manufacturer already exists.'
+            )
+        ]
+    )
+    email = TextField(
+        'Company Email Address',
+        validators=[
+            UnregisteredManufacturer(
+                data='email',
+                message=u'This email is already in use. \
+                Please select a different email address.'
+            ),
+            Email(message=u'Please enter a valid email address.'),
+            RequireEither(
+                'phone',
+                'Please enter your email or a phone number.'
+            ),
+            Optional()
+        ]
+    )
+    phone = TextField(
+        'Company Phone Number',
+        validators=[
+            RequireEither(
+                'email',
+                'Please enter your email or a phone number.'
+            ),
+            RequiredIf(
+                'extension',
+                'Please enter a phone number for your extension.'
+            ),
+            Optional(),
+            PhoneNumber()
+        ],
+        filters=[
+            lambda data: filter(lambda char: char.isalnum(), data) if data else ''
+        ]
+    )
+    extension = TextField(
+        'Extension',
+        validators=[
+            Optional()
+        ]
+    )
+    street_address_1 = TextField(
+        'Company Address 1',
+        validators=[InputRequired(message='Please enter a company address.')]
+    )
+    street_address_2 = TextField('Company Address 2')
+    city = TextField(
+        'City',
+        validators=[InputRequired(message='Please enter a city.')]
+    )
+    state = SelectField(
+        'State',
+        validators=[InputRequired(message='Please select a state.')],
+        choices=states
+    )
+    zipcode = TextField(
+        'Zip Code',
+        validators=[
+            InputRequired(message='Please enter a zip code.'),
+            Length(min=3, max=10)
+        ]
+    )
+
+
+class ProfileForm(Form):
+    logo_url = TextField('Company Logo')
+    name = TextField(
+        u'Company Name',
+        validators=[InputRequired(message=u'Please enter a company name.')]
+    )
+    url = TextField(
+        'Company Website',
+        validators=[
+            Optional(),
+            ExtendedURL()
+        ]
+    )
+    bio = TextAreaField('Company Bio')
+    address_country = SelectField(
+        u'Country',
+        validators=[InputRequired(message=u'Please select a country.')],
+        default='US',
+        choices=[
+            ('', 'Select One'),
+            ('CA', 'Canada'),
+            ('US', 'United States')
+        ]
+    )
+    street_address_1 = TextField(
+        u'Company Address 1',
+        validators=[InputRequired(message=u'Please enter a billing address.')]
+    )
+    street_address_2 = TextField(
+        u'Company Address 2',
+        validators=[Optional()]
+    )
+    city = TextField(
+        u'City',
+        validators=[InputRequired(message=u'Please enter a city.')]
+    )
+    state = SelectField(
+        u'State',
+        validators=[],
+        choices=states
+    )
+    province = SelectField(
+        u'Province',
+        validators=[],
+        choices=provinces
+    )
+    zipcode = TextField(
+        u'Zip/Postal Code',
+        validators=[
+            InputRequired(message=u'Please enter a zip code.'),
+            Length(
+                min=3,
+                max=10,
+                message=u'Please enter a 3-10 digit zip code.'
+            )
+        ]
+    )
+    phone = TextField(
+        u'Company Phone Number',
+        validators=[InputRequired()]
+    )
+    facebook_url = TextField(
+        'Facebook',
+        validators=[
+            Optional(),
+            ExtendedURL(message='Please provide a valid URL \
+            for your Facebook page.')
+        ]
+    )
+    twitter_url = TextField(
+        'Twitter',
+        validators=[
+            Optional(),
+            ExtendedURL(message='Please provide a valid URL \
+            for your Twitter page.')
+        ]
+    )
+    linkedin_url = TextField(
+        'LinkedIn',
+        validators=[
+            Optional(),
+            ExtendedURL(message='Please provide a valid URL \
+            for your LinkedIn page.')
+        ]
+    )
+    pinterest_url = TextField(
+        'Pinterest',
+        validators=[
+            Optional(),
+            ExtendedURL(message='Please provide a valid URL \
+            for your Pinterest page.')
+        ]
+    )
+    google_plus_url = TextField(
+        'Google Plus',
+        validators=[
+            Optional(),
+            ExtendedURL(message='Please provide a valid URL \
+            for your Google+ page.')
+        ]
+    )
+    new_images = TextField()
+
+    def validate_state(form, field):
+        if not field.data:
+            if form.address_country.data == 'US':
+                raise ValidationError(u'Please select a state.')
+
+    def validate_province(form, field):
+        if not field.data:
+            if form.address_country.data == 'CA':
+                raise ValidationError(u'Please select a province.')

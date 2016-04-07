@@ -1,0 +1,99 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+
+{% extends 'signup/index.jinja2' %}
+
+{% block content_main %}
+
+<div class="col-md-12">
+    <div class="signup-header hidden-sm hidden-xs">
+        <a href="{{ url_for('registration_view.upload_products') }}" class="btn btn-default pull-right">Skip</a>
+        <h1>Create a Profile (Optional)</h1>
+        <hr>
+    </div>
+    <div class="signup-header hidden-md hidden-lg">
+        <h1>Welcome to Channel Manager</h1>
+        <hr>
+    </div>
+</div>
+<form action="" method="POST" id="createProfileForm" class="hidden-sm hidden-xs">
+    <div class="col-md-10">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="logo" style="background-image:url('{{ form.logo_url.data or '/static/img/defaultlogo.svg'}}');"></div>
+            </div>
+            <div class="col-md-2">
+                <a href="#" data-target="#image_file" class="btn btn-info js-file-trigger">Upload Image</a>
+                <input type="file" name="image_file" id="image_file" class="js-file-input" accept="image/jpeg, image/jpg, image/png">
+            </div>
+            {{ form.hidden_tag() }}
+            {{ form.logo_url(class_="hidden") }}
+            <div class="clearfix"></div>
+            <div class="col-md-6">{{ basic_field(form.name) }}</div>
+            <div class="col-md-6">{{ basic_field(form.url) }}</div>
+            <div class="col-md-12">{{ basic_field(form.bio) }}</div>
+        </div>
+        <hr class="spacing"></hr>
+        <h3>Contact Information</h3>
+        <div class="row">
+            <div class="col-md-6">
+                {{ basic_field(form.street_address_1) }}
+                {{ basic_field(form.address_country) }}
+                <div class="row">
+                    <div class="col-md-8">
+                        <div id="US"{% if form.address_country.data == 'CA' %} class="hide"{% endif %}>
+                            {{ basic_field(form.state) }}
+                        </div>
+                        <div id="CA"{% if form.address_country.data != 'CA' %} class="hide"{% endif %}>
+                            {{ basic_field(form.province) }}
+                        </div>
+                    </div>
+                    <div class="col-md-4">{{ basic_field(form.zipcode) }}</div>
+                </div>
+
+            </div>
+            <div class="col-md-6">
+                {{ basic_field(form.street_address_2) }}
+                {{ basic_field(form.city) }}
+                {{ basic_field(form.phone) }}
+            </div>
+        </div>
+        <hr class="spacing"></hr>
+        <h3>Social Media</h3>
+        <div class="row">
+            <div class="col-md-6">
+                {{ basic_field(form.facebook_url) }}
+                {{ basic_field(form.google_plus_url) }}
+                {{ basic_field(form.linkedin_url) }}
+            </div>
+            <div class="col-md-6">
+                {{ basic_field(form.twitter_url) }}
+                {{ basic_field(form.pinterest_url) }}
+            </div>
+        </div>
+        <hr class="spacing"></hr>
+        <h3>Portfolio</h3>
+        <p><i>Add some images that best represent your company and brand.</i></p>
+        {% for image in images %}
+        <div href="" class="manu-image" data-image="{{ image }}" style="background-image:url('{{ image }}')">
+            <a href="#" class="js-manu-image-delete btn btn-info delete"><span class="icon-trash light"></span></a>
+          </div>
+        {% endfor %}
+        <a href="#" data-target="#manu_image_file" id="js_new_image" class="manu-image new-manu-image text-center js-file-trigger">+ New Image</a>
+        <input type="file" name="manu_image_file" id="manu_image_file" class="js-manu-file-input" accept="image/jpeg, image/jpg, image/png">
+        {% set new_images = form.new_images.data if form.new_images.data else '' %}
+        <input type="hidden" name="new_images" id="js_new_image_list" value="{{ new_images }}">
+    </div>
+</form>
+<div class="hidden-md hidden-lg col-md-12">
+    <p>Thank you for signing up with Channel Manager. We look forward to working with you!</p>
+    <p>To make the most of its features, Channel Manager is meant to be used on a computer. In the meantime, your login information will be waiting for you in your email!</p>
+    <p>For help with adding products to your portal or to schedule a walkthrough, give us a call at <a href="tel:+18776152121">(877) 615-2121</a>, or email us at <a href="mailto:info@amberengine.com">info@amberengine.com</a></p>
+</div>
+{% endblock %}
+{% block signup_footer %}
+<div class="hidden-sm hidden-xs">
+    <input type="submit" class="btn btn-primary js-trigger-form pull-right" value="Continue">
+    <a href="{{ url_for('registration_view.upload_products') }}" class="btn btn-default pull-right">Skip</a>
+</div>
+    {{ super() }}
+{% endblock %}

@@ -1,0 +1,346 @@
+# functions serving product view in Discover
+search = false
+$(document).ready ->
+  # updating the preview element for the product detail view
+  thumbPreview = (e) ->
+    $('.product-thumb').each ()->
+      $(@).removeClass 'current'
+    thumbSRC = $(e.target).data 'url'
+    $(e.currentTarget).parent().addClass 'current'
+    $('.product-main-image').css 'background-image', "url(#{thumbSRC})"
+
+  optionModal = (e)->
+    e.preventDefault()
+    set = $(@).data 'set'
+    option = $(@).data 'option'
+    prev = $(".product-option-thumb[data-option=#{option-1}]", "#collapse#{set}")
+    next = $(".product-option-thumb[data-option=#{option+1}]", "#collapse#{set}")
+
+    $.ajax "/option-sets/#{set}/options/#{option}",
+      type: 'GET'
+      success: (result) ->
+        modal = $(result)
+        if next.length
+          $('.arrow-buffer', modal).prepend('<a href="#" class="js-next next" data-set="'+set+'" data-option="'+(option+1)+'"><span class="icon-rightarrow"></span></a>')
+        if prev.length
+          $('.arrow-buffer', modal).prepend('<a href="#" class="js-prev prev" data-set="'+set+'" data-option="'+(option-1)+'"><span class="icon-leftarrow"></span></a>')
+
+        if $('body').hasClass 'modal-open'
+          $('.modal .modal-dialog').replaceWith modal.html()
+        else
+          modal.appendTo('body').modal('show')
+
+  returnPolicyModal = (e)->
+    e.preventDefault()
+    $.ajax $(e.currentTarget).attr('href'),
+      type: 'GET'
+      success: (result) ->
+        modal = $(result)
+        modal.appendTo('body').modal('show')
+
+  #search, filtering and sorting
+  queryFromSubmit = (e) ->
+    $('.pagination').empty()
+    $('.product-container').remove()
+    $('.loader-animation').show()
+    $('.alert').parent().remove() if $('.alert').length > 0
+    $('.no-results-message').parent().remove() if $('.no-results-message').length > 0
+    search = true
+    initialDataRequest()
+
+  enterPressed = (e) ->
+    if e.keyCode == 13
+      e.preventDefault()
+      queryFromSubmit()
+
+  valueSearch = (value) ->
+    if value?
+      if value.length > 0
+        $('.js-clear-search').fadeIn()
+      else
+        $('.js-clear-search').fadeOut 100
+
+  # update search term with a suggested term
+  updateSearch = (e)->
+    e.preventDefault()
+    $('input#terms').val($(e.currentTarget).text())
+    queryFromSubmit(e)
+
+  clearSearch = (e) ->
+    e.preventDefault()
+    $('.form-control#terms').val ''
+    $('.js-clear-search').fadeOut 100
+    queryFromSubmit()
+
+  resetAll = (e) ->
+    e.preventDefault()
+    $('.toolbar .form-control').val('')
+    $('.toolbar .form-control#sort').val('relevance')
+    queryFromSubmit()
+
+  # Data requests and helpers
+  requestQuantity = () ->
+    return switch
+      when 1200 <= $(window).width() then 32
+      when 992 <= $(window).width() < 1200 then 24
+      when 768 <= $(window).width() < 992 then 16
+      when $(window).width() < 768 then 8
+
+  getFormData = () ->
+    formData = _.object _.map $('form').serializeArray(), (row)->
+      return [row.name, row.value]
+    formData.quantity = requestQuantity()
+    return formData
+
+  setFormData = (list) ->
+    _.each list, (value, key) ->
+      value = value.replace('+', ' ')
+      $('#'+key, 'form').val(value)
+
+  callForData = (data, doThis = ()->) ->
+    url = '/products/data'
+    $.ajax url,
+      type: 'GET'
+      contentType: 'application/json'
+      data: data
+      success: (result) ->
+        doThis(result)
+      error: (jqXHR, textStatus, errorThrown) ->
+        $('.loader-animation').hide()
+        valueSearch($('.form-control#terms').val())
+        $('.product-grid').append('<div class="col-sm-12"><div class="alert alert-info" role="alert">There has been an error processing your request. '+errorThrown+'</div></div>')
+
+  buildManufacturerFilter = (search_result) ->
+    # Clear out the filter, add the stanrdard options, then append all
+    # available manufacturers as addition option-choices.
+
+    manufacturer_dropdown = $('select#manufacturer')
+    manufacturer_dropdown.empty()
+
+    standard_options = """
+      <option value>All Manufacturers</option>
+      <option value disabled>─────────</option>'
+    """
+
+    manufacturer_dropdown.append standard_options
+
+
+    mfg_array = _.sortBy search_result.manufacturer_list, 'name'
+
+    _.each mfg_array, (manufacturer) ->
+      id = manufacturer.id
+      name = manufacturer.name
+
+      option_element = "<option value='#{ id }'>#{ name }</option>"
+      manufacturer_dropdown.append option_element
+
+  processResult = (result, data) ->
+    perPage = data.quantity
+    $('.loader-animation').hide()
+    valueSearch($('.form-control#terms').val())
+
+    if result.count > 0
+      bottomDisplayValue = parseInt(data.offset) + 1
+      if result.count > parseInt(data.offset) + parseInt(data.quantity)
+        topDisplayValue =  parseInt(data.offset) + parseInt(data.quantity)
+      else
+        topDisplayValue = result.count
+      $('.js-total-product-count').text('Showing '+ bottomDisplayValue + '-' + topDisplayValue + ' of ' + result.count + ' results')
+
+      currentPage = data.offset/perPage+1
+      buildPagination(result.count, perPage, currentPage)
+
+      addProductToList prod, i for prod, i in result.products
+    else
+      feedback_message = "<div class=\"col-sm-12\">"
+      if result.search_terms != ""
+        feedback_message += "<h4 class=\"no-results-message\">No results were found for <em>#{result.search_terms}</em>"
+        if result.category != ""
+          feedback_message += " in <em>#{result.category}</em>"
+        if result.manufacturer != ""
+          $('option', '#manufacturer').each ()->
+            if $(@).val() == result.manufacturer
+              feedback_message += " in <em>#{$(@).text()}</em>"
+        if result.suggestion != ""
+          feedback_message += ". Would you like to search for <a href=\"#\" class=\"search-suggestion\">#{result.suggestion}</a>?</h4>"
+        else
+          feedback_message += ". Please try a different search.</h4>"
+      else
+        feedback_message += "<h4 class=\"no-results-message\">No results were found. Please try a different search.</h4>"
+      feedback_message += "</div>"
+      $('.product-grid').append(feedback_message)
+
+    # Construct the mfg filter menu.
+    buildManufacturerFilter result
+
+    if result.manufacturer
+      id = result.manufacturer
+      $("#manufacturer option[value='#{ id }']").attr 'selected', 'selected'
+
+
+  processBrowserNav = (e)->
+    if e.originalEvent.state
+      $('.pagination').empty()
+      $('.product-grid').empty()
+      $('.loader-animation').show()
+      $('.js-total-product-count').text('')
+
+      data = g.Request.parameters()
+      if jQuery.isEmptyObject(data)
+        initialDataRequest()
+      else
+        setFormData(data)
+        callForData data, (result) ->
+          processResult result, data
+
+  initialDataRequest = () ->
+    g.resetButtonStatus()
+    $('.js-total-product-count').text('')
+    $('.alert').parent().remove() if $('.alert').length > 0
+    $('.no-results-message').parent().remove() if $('.no-results-message').length > 0
+
+    if $('body').has('.product-grid').length > 0
+      formData = getFormData()
+      offset = g.Request.parameter('offset')
+      if typeof offset != 'undefined' and offset != ''
+        if search
+          formData.offset = 0
+        else
+          formData.offset = offset
+      else
+        formData.offset = 0
+      window.history.pushState({page: formData.offset/formData.quantity+1}, 'Discover Products', 'products?'+jQuery.param(formData))
+
+      data = g.Request.parameters()
+      callForData data, (result) ->
+        processResult result, data
+
+
+  additionalDataRequest = (e) ->
+    e.preventDefault()
+    if($(e.currentTarget).parent().hasClass('disabled') != true)
+      $('li.active').removeClass('active')
+      $(e.currentTarget).parent().addClass('active')
+      $('.product-grid').empty()
+      $('.loader-animation').show()
+      $('.js-total-product-count').text('')
+
+      formData = getFormData()
+      page = $(e.currentTarget).data('page')
+      if typeof page != 'undefined' and page != null
+        formData.offset = (page-1)*requestQuantity()
+      else
+        formData.offset = g.Request.parameter('offset')
+
+      window.history.pushState({page: formData.offset/formData.quantity+1}, 'Discover Products', 'products?'+jQuery.param(formData))
+
+      data = g.Request.parameters()
+
+      callForData data, (result) ->
+        processResult result, data
+
+  addProductToList = (prod, i) ->
+    i++
+    newProdElement = '<div class="col-lg-3 col-md-4 col-sm-6 col-xs-12 product-container">'
+    if prod.full_size_image?
+<<<<<<< HEAD
+      newProdElement += "<button class=\"js-show-add-product-to-folder btn 
+        btn-primary add-to-folder-btn hidden-xs hidden-sm\" data-product-id=\"#{prod.id}\" 
+        data-ref=\"/folder/product\">Add To Folder</button><a href=\"products/#{prod.id}\">
+        <div class=\"product-image\" style=\"background-image:url('#{prod.full_size_image}')\">
+        </div></a>"
+=======
+      newProdElement += "<button class=\"js-show-add-product-to-folder btn btn-primary add-to-folder-btn hidden-xs hidden-sm\" data-product-id=\"#{prod.id}\" data-ref=\"/folder/product\">Add To Folder</button><a href=\"products/#{prod.id}\"><div class=\"product-image\" style=\"background-image:url('#{prod.full_size_image}')\"></div></a>"
+>>>>>>> 31e5289f480ab59b618b657d1659e1164b3b1320
+    if prod.name?
+      newProdElement += "<div class=\"product-header\"><h3>#{prod.name}</h3>"
+    if prod.manufacturer_name?
+      newProdElement += "<p>#{prod.manufacturer_name}</p><a href=\"\" class=\"js-show-add-product-to-folder add-to-folder-btn hidden-md hidden-lg\" data-product-id=\"#{prod.id}\" data-ref=\"/folder/product\">Add To Folder</a></div>"
+
+    newProdElement += '</div>'
+    if i%4 is 0
+      newProdElement += '<div class="clearfix visible-lg-block"></div>'
+    if i%3 is 0
+      newProdElement += '<div class="clearfix visible-md-block"></div>'
+    if i%2 is 0
+      newProdElement += '<div class="clearfix visible-sm-block"></div>'
+
+    $('.product-grid').append(newProdElement)
+
+  buildPagination = (count, perPage, currentPage) ->
+    $('.pagination').empty()
+    numPages = Math.ceil(count/perPage)
+    start = currentPage - 2
+    stop = currentPage + 3
+    pageLinks = []
+    data = getFormData()
+
+    _.each _.range(start, stop), (page) ->
+      if page > 0 and page <= numPages
+        pageLink = '<li><a href="#" class="pagination-link" data-page="'+page+'">'+page+'</a></li>'
+        pageLink = $(pageLink)
+        if page != currentPage
+          # data.offset = (page-1)*perPage
+          # callForData data
+        else
+          $(pageLink).addClass('active')
+        pageLinks.push(pageLink)
+
+    prevPage = $('<li class="previous-page"><a href="#" aria-label="Previous" class="pagination-link"><span aria-hidden="true">&laquo;</span></a></li>')
+    if currentPage == 1
+      prevPage.addClass('disabled')
+    else
+      $('a', prevPage).data('page', currentPage - 1)
+
+    nextPage = $('<li class="next-page"><a href="#" aria-label="Next" class="pagination-link"><span aria-hidden="true">&raquo;</span></a></li>')
+    if currentPage == numPages
+      nextPage.addClass('disabled')
+    else
+      $('a', nextPage).data('page', currentPage + 1)
+
+    $('.pagination').append(prevPage)
+    $('.pagination').append(nextPage)
+
+    $('.previous-page').after(pageLinks)
+
+    if currentPage > 3
+      if currentPage != 4
+          $('.previous-page').after('<li class="disabled"><a href="">...</a></li>')
+          # data.offset = 0
+          # callForData data
+      $('.previous-page').after('<li><a href="" class="pagination-link" data-page="1">1</a></li>')
+
+    if currentPage < numPages - 2
+      if currentPage != numPages - 3
+        $('.next-page').before('<li class="disabled"><a href="">...</a></li>')
+        # data.offset = (numPages-1)*perPage
+        # callForData data
+      $('.next-page').before('<li><a href="" class="pagination-link" data-page="'+numPages+'">'+numPages+'</a></li>')
+
+
+  $('.js-thumb-preview').on 'click', thumbPreview
+
+  $('.form-control#terms').on 'keydown', enterPressed
+  $('.form-control#terms').on 'focus', enterPressed
+  $('.form-control#manufacturer').on 'change', queryFromSubmit
+  $('.form-control#category').on 'change', queryFromSubmit
+  $('.form-control#sort').on 'change', queryFromSubmit
+
+  $('.js-reset-all').on 'click', resetAll
+
+  $('.js-clear-search').on 'click', clearSearch
+  $('body').on 'click', '.pagination-link', additionalDataRequest
+
+  $('.product-option-thumb').on 'click', optionModal
+  $('body').on 'click', '.js-next', optionModal
+  $('body').on 'click', '.js-prev', optionModal
+
+  $('.return-policy-link').on 'click', returnPolicyModal
+  $('body').on 'click', '.search-suggestion', updateSearch
+
+  $(window).load ->
+    initialDataRequest()
+
+  $(window).on 'popstate', processBrowserNav
+
+  return

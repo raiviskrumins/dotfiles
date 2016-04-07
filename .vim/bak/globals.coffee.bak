@@ -1,0 +1,8 @@
+(($) ->
+  $(document).ready ->
+    if $('.hide-links').length > 0
+      $('#navbar').removeClass 'navbar-collapse collapse'
+      $('#navbar').addClass 'hidden'
+
+    Typekit.load()
+)(jQuery)

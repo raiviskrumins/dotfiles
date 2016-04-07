@@ -1,0 +1,334 @@
+from flask import (
+    Blueprint,
+    jsonify,
+    render_template,
+    request,
+    redirect,
+    session,
+    url_for
+)
+
+from amber_portal.lib import get_current_user
+from amber_portal.lib.utils import amber_api_connection
+from amber_portal.models.user import CMUser
+from amber_portal.forms.manufacturer import (
+    ManufacturerForm,
+    ManufacturerImageForm,
+    ManufacturerContactForm,
+    ManufacturerReturnForm
+)
+from amber_portal.forms.product import NewProductForm
+from amber_portal.forms.signup import CompanyForm
+from .auth import authenticated, allowed_roles
+
+from amber_lib import errors, query
+
+current_user = get_current_user()
+
+manufacturer_view = Blueprint('manufacturer_view', __name__,
+                              template_folder='templates')
+
+
+@manufacturer_view.route('/admin/manufacturers/add', methods=['GET', 'POST'])
+@authenticated
+@allowed_roles(['portal_admin'])
+def manufacturer_add():
+    api_conn = amber_api_connection()
+    form = CompanyForm()
+
+    if form.validate_on_submit():
+        try:
+            mfrs = api_conn.Manufacturer.query()
+        except errors.NotFound:
+            mfrs = []
+
+        if mfrs:
+            for mfr in mfrs:
+                if mfr.get('name').lower() == form.data['name'].lower():
+                    form.name.errors.append("Manufacturer already exists.")
+                    return render_template(
+                        'manufacturer_add.jinja2',
+                        form=form
+                    )
+
+        data = dict(form.data)
+        mfr = api_conn.Manufacturer.from_dict(data).save()
+        return redirect('/admin/manufacturers/%s' % (mfr['id'],))
+
+    return render_template('manufacturer_add.jinja2', form=form)
+
+
+@manufacturer_view.route('/admin/manufacturers/<int:mfr_id>', methods=['GET'])
+@authenticated
+@allowed_roles(['portal_admin'])
+def manufacturer_get(mfr_id):
+    api_conn = amber_api_connection()
+    mfr = api_conn.Manufacturer.retrieve(mfr_id)
+
+    # TODO: needs functional testing
+    where = query.Predicate("ManufacturerComponent.manufacturer_id", query.equal(mfr_id))
+    products = api_conn.Product.query(filtering=where, batch_size=1000)
+
+    session['product_ids'] = [entity.id for entity in products]
+    session['referrer'] = {'name': 'manufacturer', 'id': mfr_id}
+
+    prods = []
+    for product in products:
+        dict_ = {}
+        dict_['id'] = product['id']
+        dict_['manufacturer_sku'] = product['identity']['manufacturer_sku']
+        dict_['name'] = product['identity']['name']
+        dict_['active'] = product['visibility']['active']
+
+        image_url = ''
+        for img in product['image']['images']:
+            if img['default']:
+                image_url = img['thumbnail'] if img['thumbnail'] \
+                    else img['full_size']
+                break
+
+        dict_['thumbnail_image'] = image_url
+        prods.append(dict_)
+
+    return render_template(
+        'admin/manufacturer.jinja2',
+        manufacturer=mfr,
+        products=prods
+    )
+
+
+@manufacturer_view.route(
+    '/manufacturers/<int:mfr_id>/edit',
+    methods=['GET', 'POST']
+)
+@authenticated
+@allowed_roles(['portal_admin'])
+def manufacturer_edit(mfr_id):
+    api_conn = amber_api_connection()
+    mfr = api_conn.Manufacturer.retrieve(mfr_id)
+    form = ManufacturerForm(**mfr.to_dict())
+    contact_form = ManufacturerContactForm(**mfr.to_dict())
+    return_form = ManufacturerReturnForm(**mfr.to_dict())
+
+    if form.validate_on_submit():
+        data = dict(form.data)
+        data.update(dict(contact_form.data))
+        mfr = api_conn.Manufacturer.retrieve(mfr_id).from_dict(data).save()
+        return redirect('/admin/manufacturers/%s' % (mfr.id,))
+    return render_template(
+        'admin/manufacturer_edit.jinja2',
+        manufacturer=mfr,
+        form=form,
+        contact_form=contact_form,
+        return_form=return_form
+    )
+
+
+@manufacturer_view.route(
+    '/admin/manufacturers/<int:mfr_id>/logo',
+    methods=['POST']
+)
+@authenticated
+@allowed_roles(['portal_admin'])
+def logo(mfr_id):
+    api_conn = amber_api_connection()
+    mfr = api_conn.Manufacturer.retrieve(mfr_id)
+    mfr.from_dict(request.json)  # TODO: maybe? Or is this actually a string?
+    mfr.save()
+
+    return jsonify({'success': True})
+
+
+@manufacturer_view.route(
+    '/manufacturers/<int:mfr_id>/image/new',
+    methods=['GET', 'POST']
+)
+@authenticated
+@allowed_roles(['portal_admin'])
+def image_new(mfr_id):
+    api_conn = amber_api_connection()
+    form = ManufacturerImageForm()
+    if request.method == 'GET':
+
+        return render_template(
+            'admin/feature_image.jinja2',
+            mfr_id=mfr_id,
+            form=form
+        )
+
+    elif request.method == 'POST':
+        image_data = {
+            'manufacturer_id': mfr_id,
+            'url': form.data['logo_url'],
+            'default': form.data['default'],
+            'caption': '',
+            'manufacturer_id': mfr_id
+        }
+        api_conn.ManufacturerImage.from_dict(image_data).save()
+
+        return redirect(url_for('.manufacturer_get', mfr_id=mfr_id))
+
+
+@manufacturer_view.route(
+    '/manufacturer/<int:mfr_id>/image/<int:image_id>',
+    methods=['GET']
+)
+@authenticated
+@allowed_roles(['portal_admin'])
+def image_modal(mfr_id, image_id):
+    api_conn = amber_api_connection()
+    image = api_conn.ManufacturerImage.retrieve(image_id)
+
+    form = ManufacturerImageForm(**image.to_dict())
+
+    return render_template(
+        'admin/feature_image.jinja2',
+        mfr_id=mfr_id,
+        image=image,
+        form=form
+    )
+
+
+@manufacturer_view.route(
+    '/manufacturer/<int:mfr_id>/image/<int:image_id>',
+    methods=['POST']
+)
+@authenticated
+@allowed_roles(['portal_admin'])
+def image_save(mfr_id, image_id):
+    api_conn = amber_api_connection()
+    form = ManufacturerImageForm()
+
+    if form.validate_on_submit():
+        data = {
+            'manufacturer_id': mfr_id,
+            'url': form.data['logo_url'],
+            'default': form.data['default'],
+            'caption': ''
+        }
+        api_conn.ManufacturerImage.retrieve(image_id).from_dict(data).save()
+
+        return redirect(url_for('.manufacturer_get', mfr_id=mfr_id))
+
+
+@manufacturer_view.route(
+    '/manufacturers/<int:mfr_id>/image/<int:image_id>/delete',
+    methods=['DELETE']
+)
+@authenticated
+@allowed_roles(['portal_admin'])
+def image_delete(mfr_id, image_id):
+    api_conn = amber_api_connection()
+    api_conn.ManufacturerImage.delete(image_id)
+
+    return jsonify({'success': True})
+
+
+@manufacturer_view.route(
+    '/manufacturers/<int:mfr_id>/delete',
+    methods=['GET']
+)
+@authenticated
+@allowed_roles(['portal_admin'])
+def manufacturer_delete(mfr_id):
+    api_conn = amber_api_connection()
+    mfr = api_conn.Manufacturer.retrieve(mfr_id)
+    mfr.active = not mfr.active
+    mfr.save()
+    return redirect('/admin/manufacturers/%s' % (mfr['id'],))
+
+
+@manufacturer_view.route('/admin/manufacturers', methods=['GET'])
+@authenticated
+@allowed_roles(['portal_admin'])
+def manufacturer_list():
+    api_conn = amber_api_connection()
+    try:
+        mfrs = api_conn.Manufacturer.query()
+    except errors.NotFound:
+        mfrs = []
+
+    for manufacturer in mfrs:
+        users = CMUser.query.filter_by(
+            manufacturer_id=manufacturer.id
+        ).first()
+    return render_template('/admin/manufacturers.jinja2', manufacturers=mfrs, cm_account=users)
+
+
+@manufacturer_view.route(
+    '/admin/manufacturers/<int:manu_id>/product/new',
+    methods=['GET', 'POST']
+)
+@authenticated
+@allowed_roles(['portal_admin'])
+def manufacturer_new_product(manu_id):
+    api_conn = amber_api_connection()
+    if 'collection' in request.args:
+        collection = request.args['collection']
+
+    else:
+        collection = None
+
+    form = NewProductForm()
+
+    if form.validate_on_submit():
+        data = dict(form.data)
+        product_data = {
+            'identity': {
+                'manufacturer_sku': data['manufacturer_sku'],
+                'name': data['name'],
+            },
+            'manufacturer': {
+                'manufacturer_id': manu_id
+            }
+        }
+
+        if data['full_size']:
+            product_data['image'] = {
+                'images': [{
+                    'full_size': data['full_size'],
+                    'thumbnail': data['thumbnail'],
+                    'medium': data['medium'],
+                    'large': data['large'],
+                    'default': True,
+                    'category': data['image_type'],
+                    'caption': data['caption']
+                }]
+            }
+
+        product = api_conn.Product.from_dict(product_data).save()
+
+        channels = api_conn.SalesChannel.query()
+        channels_status = []
+        for channel in channels:
+            sc_products = channel.get_product_ids()
+            if sc_products:
+                channels_status.append(channel)
+        for channel in channels_status:
+            channel.relate(product)
+
+        referrer = None
+
+        if data.get('collection'):
+            # TODO: needs functional testing
+            col = api_conn.components.Collection
+            col.collection_id = data['collection']
+            col.product_id = product['id']
+            col.save()
+
+            referrer = data['collection']
+
+        return jsonify({
+            'success': True,
+            'url': url_for(
+                'product_view.prod_get',
+                prod_id=product['id'],
+                referrer=referrer
+            )
+        })
+
+    return render_template(
+        'new_product.jinja2',
+        form=form,
+        collection=collection
+    )

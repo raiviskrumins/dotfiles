@@ -1,0 +1,87 @@
+package es
+
+import (
+	"strconv"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/models"
+	"github.com/AmberEngine/api/oops"
+	"gopkg.in/olivere/elastic.v2"
+)
+
+// createSearchProduct creates a new instance of SearchProduct using the info from the provided AEProduct.
+func createSearchProduct(prod *models.AEProduct) (models.SearchProduct, oops.Error) {
+	var sp models.SearchProduct
+
+	sp.ID = strconv.Itoa(int(prod.ID.Int64))
+	sp.Name = prod.Components["identity"].(*models.IdentityComponent).Name.String
+	sp.ManufacturerSKU = prod.Components["identity"].(*models.IdentityComponent).ManufacturerSku.String
+	sp.Description = prod.Components["description"].(*models.DescriptionComponent).Primary.String
+	sp.ManufacturerName = prod.Components["manufacturer"].(*models.ManufacturerComponent).Manufacturer.Name.String
+	sp.ManufacturerID = strconv.Itoa(int(prod.Components["manufacturer"].(*models.ManufacturerComponent).ManufacturerID.Int64))
+	sp.ManufacturerActive = strconv.FormatBool(prod.Components["manufacturer"].(*models.ManufacturerComponent).Manufacturer.Active.Bool)
+	sp.Active = strconv.FormatBool(prod.Components["visibility"].(*models.VisibilityComponent).Active.Bool)
+	sp.MeetsPostingRequirements = strconv.FormatBool(prod.Components["visibility"].(*models.VisibilityComponent).MeetsPostingRequirements.Bool)
+	cat, err := prod.Components["category"].(*models.CategoryComponent).Primary.Value()
+	if err != nil {
+		return models.SearchProduct{}, oops.ServerError("", err)
+	}
+	if cat != nil {
+		sp.Category = string(cat.([]byte))
+	}
+	return sp, nil
+}
+
+// updateSearchProduct updates the Elastic Search index for the provided SearchProduct.
+func updateSearchProduct(ctx *app.Context, sp models.SearchProduct) oops.Error {
+	client, e := ctx.Elastic.Client()
+	if e != nil {
+		return e
+	}
+
+	_, err := client.Index().
+		Index(ctx.Elastic.IndexName).
+		Type("go-product").
+		Id(sp.ID).
+		BodyJson(sp).
+		Do()
+	if err != nil {
+		return oops.ServerError("", err)
+	}
+	return nil
+}
+
+// DeleteProduct removes the product document with the provided ID from the Elastic Search index.
+func DeleteProduct(ctx *app.Context, prodID int) oops.Error {
+	client, e := ctx.Elastic.Client()
+	if e != nil {
+		return e
+	}
+
+	bq := elastic.NewBoolQuery()
+	bq.Must(elastic.NewMatchAllQuery())
+	_, err := elastic.NewDeleteByQueryService(client).
+		Index(ctx.Elastic.IndexName).
+		Type("go-product").
+		Q(lib.Join(":", "id", strconv.Itoa(prodID))).
+		Do()
+	if err != nil {
+		return oops.ServerError("", err)
+	}
+	return nil
+}
+
+// UpdateProduct creates a SearchProduct from the provided AEProduct and updates the Elastic Search index with it.
+func UpdateProduct(ctx *app.Context, prod *models.AEProduct) oops.Error {
+	sp, e := createSearchProduct(prod)
+	if e != nil {
+		return e
+	}
+
+	e = updateSearchProduct(ctx, sp)
+	if e != nil {
+		return e
+	}
+	return nil
+}

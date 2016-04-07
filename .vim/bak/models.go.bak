@@ -1,0 +1,220 @@
+package pqdb
+
+import (
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+)
+
+type Model interface {
+	lib.Iterable
+	TableName() string
+}
+
+func CreateModel(ctx *app.Context, subject Model) (interface{}, oops.Error) {
+	query, e := NewInsertQuery(ctx)
+	if e != nil {
+		return nil, e
+	}
+
+	table := NewTable(subject.TableName())
+	query.Table = table
+
+	var values []interface{}
+
+	for iter := subject.NewIterator(); iter.Next(); {
+		field := iter.Item()
+		tag := field.Tag()
+
+		if len(tag.Get("list_sub_field")+tag.Get("relation")) > 0 {
+			continue
+		}
+
+		var err error
+		if len(tag.Get("primary")) > 0 {
+			query.Returning = NewColumn(field.ColumnName())
+			continue
+		}
+
+		fieldVal, err := field.Addr().(lib.Field).Value()
+		if err != nil {
+			return nil, oops.ServerError("", err.Error())
+		}
+
+		query.AddColumn(NewColumn(field.ColumnName()))
+		values = append(values, fieldVal)
+	}
+
+	query.Values = values
+	_, e = query.Run()
+	if e != nil {
+		return nil, e
+	}
+	return query.Returned, nil
+}
+
+func DeleteModel(ctx *app.Context, subject Model, filters []WhereItem) oops.Error {
+	query, e := NewDeleteQuery(ctx)
+	if e != nil {
+		return e
+	}
+
+	table := NewTable(subject.TableName())
+	query.Table = table
+
+	if len(filters) > 0 {
+		query.Where.Items = append(query.Where.Items, filters...)
+	}
+	query.Where.DefaultOperands()
+
+	result, e := query.Run()
+	if e != nil {
+		return e
+	}
+
+	if total, err := result.RowsAffected(); err != nil {
+		return oops.ServerError("", err)
+	} else if total <= 0 {
+		return oops.BadRequest("No models could be deleted", subject.TableName())
+	}
+
+	return nil
+}
+
+func UpdateModel(ctx *app.Context, subject Model, filters []WhereItem) oops.Error {
+	query, e := NewUpdateQuery(ctx)
+	if e != nil {
+		return e
+	}
+
+	table := NewTable(subject.TableName())
+	query.Table = table
+
+	for iter := subject.NewIterator(); iter.Next(); {
+		field := iter.Item()
+		tag := field.Tag()
+
+		if len(tag.Get("list_sub_field")+tag.Get("relation")) > 0 {
+			continue
+		}
+
+		fieldVal, err := field.Addr().(lib.Field).Value()
+		if err != nil {
+			return oops.ServerError("", err.Error())
+		}
+
+		expression := SetExpression{NewColumn(field.ColumnName()), fieldVal}
+		query.Set.Expressions = append(query.Set.Expressions, expression)
+	}
+
+	if len(filters) > 0 {
+		query.Where.Items = append(query.Where.Items, filters...)
+	}
+	query.Where.DefaultOperands()
+
+	_, e = query.Run()
+	return e
+}
+
+func RetrieveModel(ctx *app.Context, subject Model, filters []WhereItem) oops.Error {
+	query, e := NewSelectQuery(ctx)
+	if e != nil {
+		return e
+	}
+
+	table := NewTable(subject.TableName())
+	query.AddTable(table)
+
+	for _, col := range subject.ColumnNames() {
+		query.AddColumn(table.Column(col))
+	}
+
+	for _, item := range filters {
+		query.Where.Items = append(query.Where.Items, item)
+	}
+	query.Where.DefaultOperands()
+	query.Limit = LimitClause{0, 0}
+
+	rows, e := query.Run()
+	if e != nil {
+		return e
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		e = Scan(subject, rows)
+		if e != nil {
+			return e
+		}
+		count++
+	}
+
+	if err := rows.Err(); err != nil {
+		return oops.ServerError("", err)
+	}
+
+	if count == 0 {
+		return oops.NotFound("Could not locate the API Key.", "")
+	}
+
+	if count > 1 {
+		// Only one model is expected.
+		return oops.ServerError("", "More than one model retrieved", count)
+	}
+
+	return nil
+}
+
+func RetrieveModels(ctx *app.Context, filters []WhereItem, sorts []OrderExpression, modelFn func() Model) ([]Model, oops.Error) {
+	query, e := NewSelectQuery(ctx)
+	if e != nil {
+		return nil, e
+	}
+
+	subject := modelFn()
+	table := NewTable(subject.TableName())
+	query.AddTable(table)
+
+	for _, col := range subject.ColumnNames() {
+		query.AddColumn(table.Column(col))
+	}
+
+	for _, item := range filters {
+		query.Where.Items = append(query.Where.Items, item)
+	}
+	query.Where.DefaultOperands()
+	query.Limit = LimitClause{0, 0}
+
+	for _, sort := range sorts {
+		query.OrderBy.Order = append(query.OrderBy.Order, sort)
+	}
+
+	rows, e := query.Run()
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+
+	count := 0
+	var models []Model
+	for rows.Next() {
+		m := modelFn()
+		e = Scan(m, rows)
+		if e != nil {
+			return nil, e
+		}
+		models = append(models, m)
+		count++
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", err)
+	}
+
+	if count == 0 {
+		return nil, oops.NotFound("Could not find any "+subject.TableName(), "")
+	}
+
+	return models, nil
+}

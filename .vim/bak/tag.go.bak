@@ -1,0 +1,111 @@
+package models
+
+import (
+	"database/sql/driver"
+	"errors"
+	"reflect"
+	"strings"
+
+	"database/sql"
+
+	"github.com/AmberEngine/api/database"
+	"github.com/AmberEngine/api/lib"
+)
+
+// Tag
+type Tag struct {
+	ID   lib.IntField    `json:"id"`
+	Name lib.StringField `db:"tag_name" json:"name"`
+}
+
+func (tag *Tag) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(tag).Elem(), DataType: reflect.TypeOf(*tag), Current: -1}
+}
+
+func (tag *Tag) ColumnNames() []string {
+	return lib.ColumnNames(tag.NewIterator())
+}
+
+func (tag *Tag) Map() map[string]lib.IteratorItem {
+	return lib.Map(tag.NewIterator())
+}
+
+func (tag *Tag) SetValue(newVal interface{}) {
+	lib.SetFields(tag, newVal)
+}
+
+func (tag Tag) TableName() string {
+	return "product_tag"
+}
+
+func (tag Tag) FetchRelation(ctx *database.AppContext, primaryID driver.Value) (interface{}, error) {
+	return RetrieveTag(ctx, primaryID.(int))
+}
+
+// NewTag is a factory for creating a new instance of Tag.
+func NewTag() (*Tag, error) {
+	p := new(Tag)
+	if p == nil {
+		return nil, errors.New("The Tag pointer cannot be null.")
+	}
+
+	return p, nil
+}
+
+// RetrieveTag retrieves a Tag from the database by its provided ID, or returns
+// nil and an error if no such Tag exists.
+func RetrieveTag(ctx *database.AppContext, id int) (*Tag, error) {
+	tag, err := NewTag()
+	if err != nil {
+		return nil, err
+	}
+
+	columns := tag.ColumnNames()
+	queryParams, err := database.NewQueryParams(0, 0, database.Clause{"id", "=", id})
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := database.SelectQuery(ctx.DBConn, strings.Join(columns, ", "), tag.TableName(), queryParams)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	resultCount := 0
+	for rows.Next() {
+		err = database.Scan(&tag, rows)
+		if err != nil {
+			return nil, err
+		}
+		resultCount++
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if resultCount == 0 {
+		return nil, nil
+	}
+
+	return tag, nil
+}
+
+// CreateTag takes in a JSON object and creates a Tag object with the defined
+// attributes, then stores it in the database.
+func CreateTag(ctx *database.AppContext, name string) (*Tag, error) {
+	tag, err := NewTag()
+	if err != nil {
+		return nil, err
+	}
+
+	tag.Name = lib.StringField{sql.NullString{name, true}}
+	return tag, errors.New("This is a stub")
+}
+
+// DeleteTag removes a Tag from the database based on its ID and returns an
+// error if the operation fails (e.g. if no Tag has that ID).
+func DeleteTag(ctx *database.AppContext, tagID int64) error {
+	return errors.New("This is a stub")
+}

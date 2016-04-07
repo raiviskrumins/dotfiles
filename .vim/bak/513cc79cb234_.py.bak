@@ -1,0 +1,24 @@
+"""empty message
+
+Revision ID: 513cc79cb234
+Revises: ae4f155f76a
+Create Date: 2015-06-24 17:26:12.737441
+
+"""
+
+# revision identifiers, used by Alembic.
+revision = '513cc79cb234'
+down_revision = 'ae4f155f76a'
+
+from alembic import op
+import sqlalchemy as sa
+
+
+def upgrade():
+    conn = op.get_bind()
+    conn.execute('UPDATE export_column SET label = "Depth (in)" WHERE field_name = "door_thickness"')
+
+
+def downgrade():
+    conn = op.get_bind()
+    conn.execute('UPDATE export_column SET label = "Thickness (in)" WHERE field_name = "door_thickness"')

@@ -1,0 +1,101 @@
+import argparse
+import base64
+import datetime
+import hashlib
+import json
+
+
+def generate_time():
+    now = datetime.datetime.now()
+    timestamp = now.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+    return timestamp
+
+
+def main():
+    program_parser = setup_parser()
+    arguments = program_parser.parse_args()
+
+    data = arguments.json
+    if len(data) == 0:
+        data = "{}"
+
+    payload = {
+        "data": data,
+        "headers": {"Content-Type": "application/json"},
+        "public_key": arguments.public,
+        "timestamp": generate_time(),
+        "url": arguments.url,
+    }
+
+    unsigned_json = json.dumps(payload, sort_keys=True)
+
+    sha256_string = hashlib.sha256(
+        unsigned_json + str(arguments.private)
+    ).hexdigest()
+
+    signature = base64.b64encode(sha256_string)
+
+    payload["signature"] = signature
+
+    signed_json = json.dumps(payload, sort_keys=True)
+
+    if len(arguments.curl) == 0:
+        print(signed_json)
+    else:
+
+        cmd = 'curl -H "Content-Type: application/json" -X %s -d \'%s\' %s'
+        cmd = cmd % (arguments.curl.upper(), signed_json, arguments.url)
+
+        print(cmd)
+
+
+def setup_parser():
+    parser = argparse.ArgumentParser(
+        description="Create a signed-JSON payload for a specified API resource."
+    )
+
+    parser.add_argument(
+        "--public",
+        action="store",
+        description="A user's API public-key.",
+        dest="public",
+        required=True
+    )
+    parser.add_argument(
+        "--private",
+        action="store",
+        description="A user's API private-key.",
+        dest="private",
+        required=True
+    )
+    parser.add_argument(
+        "--url",
+        action="store",
+        description="A full URL to an API resource.",
+        dest="url",
+        required=True
+    )
+    parser.add_argument(
+        "--curl",
+        action="store",
+        default="",
+        description=(
+            "A HTTP method (GET, POST, ...), used to generate a cURL command."
+        ),
+        dest="curl",
+        required=False
+    )
+    parser.add_argument(
+        "--json",
+        action="store",
+        default="{}",
+        description="A valid JSON object. For the request's data payload.",
+        dest="json",
+        required=False
+    )
+
+    return parser
+
+if __name__ == "__main__":
+    main()

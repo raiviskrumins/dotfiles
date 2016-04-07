@@ -1,0 +1,11 @@
+# This is an example of doing code
+```python
+import markdown
+
+def main():
+    content = "Hello world!"
+    print(content)
+
+if __name__ == "__main__":
+    main()
+```

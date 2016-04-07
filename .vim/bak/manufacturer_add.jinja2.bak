@@ -1,0 +1,70 @@
+{% from 'macros.jinja2' import with_errors %}
+
+{% extends 'index.jinja2' %}
+
+{% block title %}ADMIN | {{super()}}{% endblock title %}
+
+{% block content_main %}
+<div class="col-md-12">
+    <h1>Add a new manufacturer</h1>
+    <hr>
+</div>
+
+<div class="clearfix"></div>
+
+<form class="add-manufacturer-form" method="POST" action="">
+    
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <div class="col-md-6 col-md-offset-2">
+            <ul class="errors">
+                {% for message in messages %}
+                <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+            </div>
+            {% endif %}
+        {% endwith %}
+    
+    <div class="col-md-6 col-md-offset-1">
+    {{ with_errors(form.name) }}
+    </div>
+    <div class="col-md-6 col-md-offset-1">
+    {{ with_errors(form.email) }}
+    </div>
+    <div class="clearfix"></div>
+    <div class="col-md-6 col-md-offset-1">
+    {{ with_errors(form.phone) }}
+    </div>
+    <div class="clearfix"></div>
+    <div class="col-md-6 col-md-offset-1">
+    {{ with_errors(form.street_address_1) }}
+    </div>
+    <div class="clearfix"></div>
+    <div class="col-md-6 col-md-offset-1">
+    {{ with_errors(form.street_address_2) }}
+    </div>
+    <div class="clearfix"></div>
+    <div class="col-md-6 col-md-offset-1">
+    {{ with_errors(form.city) }}
+    </div>
+    <div class="clearfix"></div>
+    <div class="col-md-3 col-md-offset-1">
+    {{ with_errors(form.state) }}
+    </div>
+    <div class="col-md-3">
+    {{ with_errors(form.zipcode) }}
+    </div>
+    <div class="clearfix"></div>
+
+    <div class="col-md-3 col-md-offset-1">
+        <p><sup>*</sup>Required</p>
+    </div>
+    <div class="col-md-2 col-md-offset-10">
+        <p class="text-center">
+            <input type="submit" class="btn btn-primary" value="Continue">
+        </p>
+    </div>
+
+</form>
+{% endblock %}

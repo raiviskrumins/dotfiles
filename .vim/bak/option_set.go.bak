@@ -1,0 +1,236 @@
+package models
+
+import (
+	"database/sql/driver"
+	"io"
+	"reflect"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+)
+
+// OptionSet contains the necessary properties required for representing an
+// Option Set within the database.
+type OptionSet struct {
+	ID             lib.IntField        `json:"id" primary:"true"`
+	ManufacturerID lib.IntField        `json:"manufacturer_id"`
+	Name           lib.StringField     `json:"name" db:"option_set_name"`
+	Kind           lib.StringEnumField `json:"kind"`
+	OptionList     []Option            `json:"option_list" list_sub_field:"true"`
+}
+
+func (os OptionSet) FormSchema() *form.Schema {
+	keys := []string{"finish", "hardware", "leather", "nailhead", "textile", "trim"}
+	values := []string{"Finish", "Hardware", "Leather", "Nailhead", "Textile", "Trim"}
+
+	return form.NewSchema(
+		form.NewField("id", form.ClassInt, form.Render("ID", form.ElementText)),
+		form.NewField("name", form.ClassStr, form.Render("Name", form.ElementText)),
+		form.NewField("kind", form.ClassStr, form.Render("Option Set Type", form.ElementSelect, form.SelectChoices(keys, values))),
+	)
+}
+
+func (comp *OptionSet) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(comp).Elem(), DataType: reflect.TypeOf(*comp), Current: -1}
+}
+
+func (comp *OptionSet) ColumnNames() []string {
+	return lib.ColumnNames(comp.NewIterator())
+}
+
+func (comp *OptionSet) Map() map[string]lib.IteratorItem {
+	return lib.Map(comp.NewIterator())
+}
+
+func (comp *OptionSet) SetValue(newComp interface{}) {
+	lib.SetFields(comp, newComp)
+}
+
+func (set OptionSet) TableName() string {
+	return "option_set"
+}
+
+func (set OptionSet) FetchRelation(ctx *app.Context, primaryID driver.Value) (interface{}, oops.Error) {
+	return RetrieveOptionSet(ctx, int(primaryID.(int64)))
+}
+
+// CreateOptionSet inserts a new Option Set entry into the database, and returns
+// an instance the created OptionSet.
+func CreateOptionSet(ctx *app.Context, body io.ReadCloser) (*OptionSet, oops.Error) {
+	ptr, e := Factory("option_set")
+	if e != nil {
+		return nil, e
+	}
+	set := ptr.(*OptionSet)
+
+	e = lib.DecodeJSON(body, set)
+	if e != nil {
+		return nil, e
+	}
+
+	if ctx.Role != nil && ctx.Role["OptionSet"]&permissions.OptionSetCreateAll == 0 {
+		if set.ManufacturerID.Int64 != ctx.APIKey.(*APIKey).ManufacturerID.Int64 {
+			return nil, oops.Forbidden("User may only delete options for their own option sets.")
+		}
+	}
+
+	pkID, e := pqdb.CreateModel(ctx, set)
+	if e != nil {
+		return nil, e
+	}
+
+	set.ID.Set(pkID.(int64))
+
+	return set, nil
+}
+
+// ListOptionSets returns a collection of OptionSets which are related to the
+// manufacturer associated with the provided Public Key.
+func ListOptionSets(ctx *app.Context, publicKey string, apiKey *APIKey) ([]OptionSet, oops.Error) {
+	ptr, e := Factory("option_set")
+	if e != nil {
+		return nil, e
+	}
+	set := ptr.(*OptionSet)
+
+	query, e := pqdb.NewSelectQuery(ctx)
+	table := pqdb.NewTable(set.TableName())
+	query.AddTable(table)
+	columnNames := set.ColumnNames()
+	for _, cn := range columnNames {
+		query.AddColumn(table.Column(cn))
+	}
+
+	akt := pqdb.NewTable("api_key")
+	if ctx.Role != nil && ctx.Role["OptionSet"]&permissions.OptionSetRetrieveOwn != 0 {
+		query.LeftJoin(akt, pqdb.Predicate{akt.Column("manufacturer_id"), "=", table.Column("manufacturer_id")})
+		where := pqdb.MakeWhereItem("", pqdb.Predicate{akt.Column("public"), "=", publicKey})
+		where.Items = append(where.Items, pqdb.MakeWhereItem("AND", pqdb.Predicate{akt.Column("manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}))
+		query.SetWhere(where)
+	} else if apiKey != nil && apiKey.ManufacturerID.Int64 > 0 {
+		query.LeftJoin(akt, pqdb.Predicate{akt.Column("manufacturer_id"), "=", table.Column("manufacturer_id")})
+		where := pqdb.MakeWhereItem("", pqdb.Predicate{akt.Column("public"), "=", publicKey})
+		query.SetWhere(where)
+	}
+
+	query.OrderBy.Add(*table.Column("id"), true, false)
+	idRows, e := query.Run()
+	if e != nil {
+		return nil, e
+	}
+	defer idRows.Close()
+
+	var collection []OptionSet
+
+	var ptr2 Model
+	for idRows.Next() {
+		ptr2, e = Factory("option_set")
+		if e != nil {
+			return nil, e
+		}
+		set2 := ptr2.(*OptionSet)
+
+		e = pqdb.Scan(set2, idRows)
+		if e != nil {
+			return nil, e
+		}
+		pred := pqdb.Predicate{"option_set_id", "=", set2.ID.Int64}
+		options, e := RetrieveOptionsByOptionSet(ctx, pred)
+		if e != nil {
+			return nil, e
+		}
+		set2.OptionList = options
+
+		collection = append(collection, *set2)
+	}
+	if err := idRows.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	return collection, nil
+}
+
+// RetrieveOptionSet returns a instance of OptionSet containing properties
+// which are extracted from the database from the Option Set entry based on the
+// specified primary key.
+func RetrieveOptionSet(ctx *app.Context, id int) (*OptionSet, oops.Error) {
+	ptr, e := Factory("option_set")
+	if e != nil {
+		return nil, e
+	}
+	set := ptr.(*OptionSet)
+	table := pqdb.NewTable(set.TableName())
+
+	var wheres []pqdb.WhereItem
+	wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("id"), "=", id}))
+
+	if ctx.Role != nil && ctx.Role["OptionSet"]&permissions.OptionSetRetrieveAll == 0 {
+		pred := pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+
+	e = pqdb.RetrieveModel(ctx, set, wheres)
+	if e != nil {
+		return nil, e
+	}
+
+	pred := pqdb.Predicate{"option_set_id", "=", id}
+	options, e := RetrieveOptionsByOptionSet(ctx, pred)
+	if e != nil {
+		if e.HTTPStatus() != 404 {
+			return nil, e
+		}
+	}
+	set.OptionList = options
+
+	return set, nil
+}
+
+// UpdateOptionSet updates the Option Set specified by the ID and JSON
+// io.ReadCloser data provided.
+func UpdateOptionSet(ctx *app.Context, id int, body io.ReadCloser) (*OptionSet, oops.Error) {
+	set, e := RetrieveOptionSet(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+
+	e = lib.DecodeJSON(body, set)
+	if e != nil {
+		return nil, e
+	}
+
+	var wheres []pqdb.WhereItem
+	wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{"id", "=", id}))
+
+	if ctx.Role != nil && ctx.Role["OptionSet"]&permissions.OptionSetUpdateAll == 0 {
+		pred := pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+	e = pqdb.UpdateModel(ctx, set, wheres)
+	return set, e
+}
+
+// DeleteOptionSet deletes an Option Set entry from the database which matches
+// the specified primary-key number.
+func DeleteOptionSet(ctx *app.Context, id int) oops.Error {
+	ptr, e := Factory("option_set")
+	if e != nil {
+		return e
+	}
+	set := ptr.(*OptionSet)
+	set.ID.Set(id)
+
+	var wheres []pqdb.WhereItem
+	wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{"id", "=", id}))
+
+	if ctx.Role != nil && ctx.Role["OptionSet"]&permissions.OptionSetDeleteAll == 0 {
+		pred := pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+
+	return pqdb.DeleteModel(ctx, set, wheres)
+}

@@ -1,0 +1,33 @@
+{% from 'macros.jinja2' import basic_field, hidden_field %}
+
+<div class="row">
+  <div class="col-md-10">{{ basic_field(form.description.primary) }}</div>
+  <div class="col-md-10">
+    {{ basic_field(form.description.alternate, placeholder="If you would like certain channels to see an alternate description, please add that description here. Limit 130 words.") }}
+  </div>
+  <div class="col-md-10">
+    <label>Features</label>
+    <ul id="feature">
+    {% for feature in form.description.feature_list %}
+        {% set component_id = product.description.feature_list[loop.index0].component_data_id or 0 %}
+        <li class="subcomponent-section">
+          {{ feature['description'].data }}
+            <a href="{{ url_for('product_view.delete_product_sub_component', prod_id=product.id, component='feature', sub_component_data_id=component_id) }}" class="js-remove-subcomponent">Remove</a>
+
+            {{ hidden_field(feature.description) }}
+        </li>
+    {% endfor %}
+    </ul>
+
+    <div class="row">
+        <div class="col-md-5">
+            <div class="form-group">
+                <input type="text" data-component="feature" data-attribute="description_of_feature" class="form-control js-component-data">
+            </div>
+        </div>
+        <div class="col-md-5">
+            <a href="{{ url_for('product_view.new_sub_component_form', prod_id=product.id, component='feature') }}" class="btn btn-primary js-add-subcomponent" data-target="feature">Add Feature</a>
+        </div>
+    </div>
+  </div>
+</div>

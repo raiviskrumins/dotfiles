@@ -1,0 +1,221 @@
+package lib
+
+import (
+	"encoding/json"
+	"strconv"
+	"strings"
+
+	"github.com/AmberEngine/api/oops"
+)
+
+type Resource struct {
+	Links    map[string]HALHref       `json:"_links"`
+	Embedded map[string][]interface{} `json:"_embedded"`
+	State    map[string]interface{}
+}
+
+// Embed appends a Resource to the Embedded attribute of this Resource
+func (r *Resource) EmbedIn(key string, res interface{}) {
+	r.Embedded[key] = append(r.Embedded[key], res)
+}
+
+func (r *Resource) Embed(key string, res []interface{}) {
+	r.Embedded[key] = res
+}
+
+// AddLink adds a HALHref link to the Resource
+func (r *Resource) AddLink(rel string, link HALHref) {
+	r.Links[rel] = link
+}
+
+// NewResource instantiates a pointer to a new instance of Resource, and
+// initializes its internal state using the object parameter provided.
+func NewResource(obj interface{}) (*Resource, oops.Error) {
+	msg, e := NewRawMessageJSON(obj)
+	if e != nil {
+		return nil, e
+	}
+
+	p := new(Resource)
+	p.Links = make(map[string]HALHref)
+	p.Embedded = make(map[string][]interface{})
+
+	err := json.Unmarshal(msg, &p.State)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not unmarshal raw JSON message into state.", string(msg), err)
+	}
+
+	return p, nil
+}
+
+// AddNavLinks generates links for collection navigation and appends them to Resource.Links
+func (r *Resource) AddNavLinks(total, offset, limit int) {
+	if self, ok := r.Links["self"]; ok {
+		selfLink := HALHref{}
+		selfLink.Endpoint = self.Endpoint
+		selfLink.Params = make(map[string]interface{})
+		for k, v := range self.Params {
+			if k != "limit" && k != "offset" {
+				selfLink.Params[k] = v
+			}
+		}
+
+		if limit > 0 {
+			selfLink.Params["limit"] = limit
+		}
+
+		if limit < total {
+			firstLink := HALHref{}
+			firstLink.Endpoint = selfLink.Endpoint
+			firstLink.Params = make(map[string]interface{})
+			for k, v := range selfLink.Params {
+				firstLink.Params[k] = v
+			}
+			firstLink.Params["offset"] = 0
+			r.AddLink("first", firstLink)
+
+			lastLink := HALHref{}
+			lastLink.Endpoint = selfLink.Endpoint
+			lastLink.Params = make(map[string]interface{})
+			for k, v := range selfLink.Params {
+				lastLink.Params[k] = v
+			}
+			lastLink.Params["offset"] = total - limit
+			r.AddLink("last", lastLink)
+		}
+
+		next := offset + limit
+
+		if next < total {
+			nextLink := HALHref{}
+			nextLink.Endpoint = selfLink.Endpoint
+			nextLink.Params = make(map[string]interface{})
+			for k, v := range selfLink.Params {
+				nextLink.Params[k] = v
+			}
+			nextLink.Params["offset"] = next
+			r.AddLink("next", nextLink)
+		}
+
+		prev := offset - limit
+		if prev > 0 {
+			previousLink := HALHref{}
+			previousLink.Endpoint = selfLink.Endpoint
+			previousLink.Params = make(map[string]interface{})
+			for k, v := range selfLink.Params {
+				previousLink.Params[k] = v
+			}
+			previousLink.Params["offset"] = prev
+			r.AddLink("previous", previousLink)
+		}
+	}
+}
+
+// Resource returns a JSON representation of the current state.
+func (r Resource) MarshalJSON() ([]byte, error) {
+	rMap := make(map[string]interface{})
+	rMap["_links"] = r.Links
+	embedded := make(map[string]*json.RawMessage)
+	for k, em := range r.Embedded {
+		embed, err := json.Marshal(em)
+		if err != nil {
+			return nil, oops.ServerError("", "Could not marshal element.", err, em)
+		}
+		raw := json.RawMessage(embed)
+		embedded[k] = &raw
+	}
+	if len(embedded) > 0 {
+		rMap["_embedded"] = embedded
+	}
+	for k, v := range r.State {
+		rMap[k] = v
+	}
+
+	slice, err := json.Marshal(rMap)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal JSON for rMap.", rMap)
+	}
+
+	return slice, nil
+}
+
+type HALLink struct {
+	Self     *HALHref `json:"self"`
+	First    *HALHref `json:"first"`
+	Previous *HALHref `json:"previous"`
+	Next     *HALHref `json:"next"`
+	Last     *HALHref `json:"last"`
+}
+
+// MarshalJSON returns a JSON representation of the models current state.
+func (h HALLink) MarshalJSON() ([]byte, error) {
+	hMap := make(map[string]interface{})
+	if h.Self != nil {
+		hMap["self"] = h.Self
+	}
+	if h.First != nil {
+		hMap["first"] = h.First
+	}
+	if h.Previous != nil {
+		hMap["previous"] = h.Previous
+	}
+	if h.Next != nil {
+		hMap["next"] = h.Next
+	}
+	if h.Last != nil {
+		hMap["last"] = h.Last
+	}
+
+	slice, err := json.Marshal(hMap)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal JSON for hMap.", hMap)
+	}
+	return slice, nil
+}
+
+type HALHref struct {
+	Endpoint string
+	Params   map[string]interface{}
+}
+
+// MarshalJSON returns a JSON representation of the models current state.
+func (h HALHref) MarshalJSON() ([]byte, error) {
+	hMap := make(map[string]interface{})
+	var params []string
+	for k, v := range h.Params {
+		switch tv := v.(type) {
+		case int:
+			params = append(params, Join("=", k, strconv.Itoa(tv)))
+		case string:
+			params = append(params, Join("=", k, tv))
+		}
+	}
+	pars := Join("&", params...)
+	if len(pars) > 0 {
+		hMap["href"] = Join("?", h.Endpoint, pars)
+	} else {
+		hMap["href"] = h.Endpoint
+	}
+
+	slice, err := json.Marshal(hMap)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal JSON for hMap.", hMap)
+	}
+	return slice, nil
+}
+
+func (h *HALHref) FromURI(uri string) {
+	uriParts := strings.Split(uri, "?")
+	h.Endpoint = uriParts[0]
+	h.Params = make(map[string]interface{})
+	if len(uriParts) > 1 {
+		params := strings.Split(uriParts[1], "&")
+		for _, par := range params {
+			parParts := strings.Split(par, "=")
+			if len(parParts) <= 1 {
+				panic(oops.BadRequest("Invalid query string", "You provided an invalid query stirng."))
+			}
+			h.Params[parParts[0]] = parParts[1]
+		}
+	}
+}

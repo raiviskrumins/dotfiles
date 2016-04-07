@@ -1,0 +1,317 @@
+package models
+
+import (
+	"database/sql/driver"
+	"io"
+	"reflect"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+)
+
+type Manufacturer struct {
+	ID                  lib.IntField    `json:"id" primary:"true"`
+	Name                lib.StringField `db:"manufacturer_name" json:"name"`
+	Bio                 lib.StringField `json:"bio"`
+	URL                 lib.StringField `json:"url"`
+	LogoURL             lib.StringField `json:"logo_url"`
+	DateAdded           lib.TimeField   `json:"date_added"`
+	DateUpdated         lib.TimeField   `json:"date_updated"`
+	DateProfileComplete lib.TimeField   `json:"date_profile_complete"`
+	UpdateByAPIKey      lib.StringField `json:"updated_by_api_key"`
+	Active              lib.BoolField   `json:"active"`
+	City                lib.StringField `json:"city"`
+	Email               lib.StringField `json:"email"`
+	FacebookURL         lib.StringField `json:"facebook_url"`
+	GooglePlusURL       lib.StringField `json:"google_plus_url"`
+	Legal               lib.StringField `json:"legal"`
+	LinkedInURL         lib.StringField `json:"linkedin_url"`
+	Phone               lib.StringField `json:"phone"`
+	Extension           lib.StringField `json:"phone_extension"`
+	PinterestURL        lib.StringField `json:"pinterest_url"`
+	RestockFee          lib.FloatField  `json:"restock_fee"`
+	ReturnPeriod        lib.IntField    `json:"return_period"`
+	Returnable          lib.BoolField   `json:"returnable"`
+	State               lib.StringField `db:"address_state" json:"state"`
+	StreetAddress1      lib.StringField `json:"street_address_1"`
+	StreetAddress2      lib.StringField `json:"street_address_2"`
+	Province            lib.StringField `json:"province"`
+	Country             lib.StringField `json:"country"`
+	TwitterURL          lib.StringField `json:"twitter_url"`
+	ZipCode             lib.StringField `json:"zipcode"`
+	Featured            lib.BoolField   `json:"featured"`
+	Internal            lib.BoolField   `json:"internal"`
+}
+
+func (mfr Manufacturer) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("name", form.ClassStr, form.Render("Name", form.ElementText)),
+		form.NewField("bio", form.ClassStr, form.Render("Company Bio", form.ElementText)),
+		form.NewField("url", form.ClassURL, form.Render("URL", form.ElementText)),
+		form.NewField("logo_url", form.ClassURL, form.Render("Logo URL", form.ElementText)),
+		form.NewField("date_added", form.ClassDateTime, form.Render("Date Added", form.ElementText)),
+		form.NewField("date_updated", form.ClassDateTime, form.Render("Date Updated", form.ElementText)),
+		form.NewField("date_profile_complete", form.ClassDateTime, form.Render("Date Profile Complete", form.ElementText)),
+		form.NewField("update_by_api_key", form.ClassStr, form.Render("Update by API Key", form.ElementText)),
+		form.NewField("active", form.ClassBool, form.Render("Active", form.ElementCheckbox)),
+		form.NewField("city", form.ClassStr, form.Render("City", form.ElementText)),
+		form.NewField("email", form.ClassEmail, form.Render("Email Address", form.ElementText)),
+		form.NewField("facebook_url", form.ClassURL, form.Render("Facebook", form.ElementText)),
+		form.NewField("google_plus_url", form.ClassURL, form.Render("Google Plus", form.ElementText)),
+		form.NewField("legal", form.ClassStr, form.Render("Policy Terms", form.ElementText)),
+		form.NewField("linked_in_url", form.ClassURL, form.Render("LinkedIn", form.ElementText)),
+		form.NewField("phone", form.ClassPhone, form.Render("Phone Number", form.ElementText)),
+		form.NewField("extension", form.ClassStr, form.Render("Ext.", form.ElementText)),
+		form.NewField("pinterest_url", form.ClassURL, form.Render("Pinterest", form.ElementText)),
+		form.NewField("restock_fee", form.ClassFloat, form.Render("Restocking Fee", form.ElementText)),
+		form.NewField("return_period", form.ClassStr, form.Render("Return Period", form.ElementText)),
+		form.NewField("returnable", form.ClassBool, form.Render("Do you accept returns?", form.ElementCheckbox)),
+		form.NewField("state", form.ClassStr, form.Render("State", form.ElementText)),
+		form.NewField("street_address_1", form.ClassStr, form.Render("Company Address", form.ElementText)),
+		form.NewField("street_address_2", form.ClassStr, form.Render("Company Address 2", form.ElementText)),
+		form.NewField("province", form.ClassStr, form.Render("Province", form.ElementText)),
+		form.NewField("country", form.ClassStr, form.Render("Country", form.ElementText)),
+		form.NewField("twitter_url", form.ClassURL, form.Render("Twitter", form.ElementText)),
+		form.NewField("zip_code", form.ClassStr, form.Render("Zip Code", form.ElementText)),
+		form.NewField("featured", form.ClassBool, form.Render("Featured", "bool")),
+	)
+}
+
+// NewIterator constructs a new lib.Iterator object using the calling Manufacturer object's value and type.
+func (comp *Manufacturer) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(comp).Elem(), DataType: reflect.TypeOf(*comp), Current: -1}
+}
+
+// ColumnNames returns the names of the columns in the calling Manufacturer object as a slice of strings.
+func (comp *Manufacturer) ColumnNames() []string {
+	return lib.ColumnNames(comp.NewIterator())
+}
+
+// Map returns the calling Manufacturer object as a map of strings to lib.IteratorItem objects.
+func (comp *Manufacturer) Map() map[string]lib.IteratorItem {
+	return lib.Map(comp.NewIterator())
+}
+
+// SetValue takes in an interface and sets the fields of the calling Manufacturer object with the values in the
+// provided interface.
+func (comp *Manufacturer) SetValue(newComp interface{}) {
+	lib.SetFields(comp, newComp)
+}
+
+// TableName returns the name of the table for the model.
+func (mfr Manufacturer) TableName() string {
+	return "manufacturer"
+}
+
+// FetchRelation acts as a wrapper for RetriveManufacturer and returns a Manufacturer that corresponds to the ID provided.
+func (mfr Manufacturer) FetchRelation(ctx *app.Context, primaryID driver.Value) (interface{}, oops.Error) {
+	return RetrieveManufacturer(ctx, int(primaryID.(int64)))
+}
+
+// CreateManufacturer creates a new Manufacturer instance using the provided JSON data,
+// sets the DateAdded and DateUpdated times to now, and inserts the instance into the
+// database. The created manufacturer (and error, if applicable) is returned.
+func CreateManufacturer(ctx *app.Context, body io.ReadCloser) (*Manufacturer, oops.Error) {
+	ptr, e := Factory("manufacturer")
+	if e != nil {
+		return nil, e
+	}
+	mfr := ptr.(*Manufacturer)
+
+	e = lib.DecodeJSON(body, mfr)
+	if e != nil {
+		return nil, e
+	}
+
+	now := lib.TimeNow()
+
+	mfr.DateAdded.Set(now)
+	mfr.DateUpdated.Set(now)
+	e = mfr.Active.Set(true)
+	if e != nil {
+		return nil, e
+	}
+
+	pkID, e := pqdb.CreateModel(ctx, mfr)
+	if e != nil {
+		return nil, e
+	}
+
+	mfr.ID.Set(pkID.(int64))
+
+	return mfr, nil
+}
+
+// RetrieveManufacturers provides a slice of Manufacturer instance pointers.
+func RetrieveManufacturers(ctx *app.Context, params *pqdb.QueryParams) ([]*Manufacturer, int, oops.Error) {
+	if params == nil {
+		return nil, 0, oops.BadRequest("Must provide query parameters", "QueryParams pointer must not be nil.")
+	}
+
+	var mfrSlice []*Manufacturer
+	ptr, e := Factory("manufacturer")
+	if e != nil {
+		return nil, 0, e
+	}
+	mfr := ptr.(*Manufacturer)
+
+	selectQuery, e := pqdb.NewSelectQuery(ctx)
+	mfrTable := pqdb.NewTable(mfr.TableName())
+
+	for _, col := range mfr.ColumnNames() {
+		selectQuery.AddColumn(mfrTable.Column(col))
+	}
+
+	selectQuery.AddTable(mfrTable)
+	selectQuery.Limit = pqdb.LimitClause{params.Limit, params.Offset}
+	var whereItems []pqdb.WhereItem
+	for i, pred := range params.Preds {
+		op := ""
+		if i > 0 {
+			op = "AND"
+		}
+
+		whereItems = append(whereItems, pqdb.MakeWhereItem(op, pred))
+	}
+
+	if ctx.Role != nil && ctx.Role["Manufacturer"]&permissions.ManufacturerRetrieveAll == 0 {
+		op := ""
+		if len(whereItems) > 0 {
+			op = "AND"
+		}
+		if ctx.Role["Manufacturer"]&permissions.ManufacturerRetrieveActive != 0 {
+			whereItems = append(whereItems, pqdb.MakeWhereItem(op, pqdb.Predicate{mfrTable.Column("active"), "=", true}))
+		} else {
+			whereItems = append(whereItems, pqdb.MakeWhereItem(op, pqdb.Predicate{mfrTable.Column("id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}))
+		}
+	}
+
+	selectQuery.SetWhere(pqdb.WhereItem{Items: whereItems})
+	selectQuery.OrderBy.Add(*mfrTable.Column("id"), true, false)
+
+	max, e := selectQuery.Count()
+	if e != nil {
+		return nil, 0, e
+	}
+
+	rows, e := selectQuery.Run()
+	if e != nil {
+		return nil, 0, e
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		ptr2, e := Factory("manufacturer")
+		if e != nil {
+			return nil, 0, e
+		}
+		man := ptr2.(*Manufacturer)
+
+		e = pqdb.Scan(man, rows)
+		if e != nil {
+			return nil, 0, e
+		}
+		mfrSlice = append(mfrSlice, man)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, oops.ServerError("", "Rows contained an internal error.", err)
+	}
+
+	return mfrSlice, max, nil
+}
+
+// RetrieveManufacturer provides a Manufacturer instance with data from an entry
+// within the database which matches the specified ID number.
+func RetrieveManufacturer(ctx *app.Context, manufacturerID int) (*Manufacturer, oops.Error) {
+	ptr, e := Factory("manufacturer")
+	if e != nil {
+		return nil, e
+	}
+	mfr := ptr.(*Manufacturer)
+
+	var wheres []pqdb.WhereItem
+	wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{"id", "=", manufacturerID}))
+
+	if ctx.Role != nil && ctx.Role["Manufacturer"]&permissions.ManufacturerRetrieveAll == 0 {
+		var pred pqdb.Predicate
+		if ctx.Role["Manufacturer"]&permissions.ManufacturerRetrieveActive != 0 {
+			pred = pqdb.Predicate{"active", "=", true}
+		} else {
+			pred = pqdb.Predicate{"id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+
+	e = pqdb.RetrieveModel(ctx, mfr, wheres)
+	if e != nil {
+		return nil, e
+	}
+
+	return mfr, nil
+}
+
+// UpdateManufacturer updates the manufacturer as specified by ID, using the provided
+// JSON data. An updated Manufacturer instance is returned.
+func UpdateManufacturer(ctx *app.Context, id int, body io.ReadCloser) (*Manufacturer, oops.Error) {
+	manufacturer, e := RetrieveManufacturer(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+
+	dateAdded := manufacturer.DateAdded
+
+	e = lib.DecodeJSON(body, manufacturer)
+	if e != nil {
+		return nil, e
+	}
+
+	now := lib.TimeNow()
+
+	manufacturer.DateUpdated.Set(now)
+	manufacturer.DateAdded = dateAdded
+
+	var wheres []pqdb.WhereItem
+	wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{"id", "=", id}))
+
+	if ctx.Role != nil && ctx.Role["Manufacturer"]&permissions.ManufacturerUpdateAll == 0 {
+		pred := pqdb.Predicate{"id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+
+	e = pqdb.UpdateModel(ctx, manufacturer, wheres)
+	if e != nil {
+		return nil, e
+	}
+
+	e = pqdb.MongoRemoveProductByManufacturer(ctx, int64(id))
+	return manufacturer, e
+}
+
+// DeleteManufacturer will delete an existing database entry with a matching
+// ID number as the provided manufacturer ID.
+func DeleteManufacturer(ctx *app.Context, id int) oops.Error {
+	ptr, e := Factory("manufacturer")
+	if e != nil {
+		return e
+	}
+	mfr := ptr.(*Manufacturer)
+	mfr.ID.Set(id)
+	var wheres []pqdb.WhereItem
+	wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{"id", "=", id}))
+
+	if ctx.Role != nil && ctx.Role["Manufacturer"]&permissions.ManufacturerDeleteAll == 0 {
+		pred := pqdb.Predicate{"id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+	e = pqdb.DeleteModel(ctx, mfr, wheres)
+	if e != nil {
+		return e
+	}
+
+	e = pqdb.MongoRemoveProductByManufacturer(ctx, int64(id))
+	return e
+}

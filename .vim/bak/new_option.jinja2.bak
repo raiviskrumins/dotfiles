@@ -1,0 +1,39 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, image_upload, prepend_field %}
+
+{% extends 'index.jinja2' %}
+
+{% block javascript %}
+{{super()}}
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/options.min.js')|cache_update }}"></script>
+{% endblock %}
+
+{% block content_main %}
+<a href="{{url_for('options_view.options_index')}}" class="back-btn"><span class="icon-leftarrow"></span> Option Sets</a>
+<div class="col-md-12">
+    <h1>New Option</h1>
+    <hr>
+    <form method="POST" action="{{ url_for('options_view.option_new', set_id=set.id) }}" id="optionForm">
+        <div class="row">
+            <div class="option-image-upload col-md-4">
+                {{image_upload(form.image, class='js-upload-image', url=url_for('options_view.upload'))}}
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-4">{{ basic_field(form.name) }}</div>
+            <div class="col-md-4">{{ basic_field(form.number) }}</div>
+            <div class="col-md-4">{{ prepend_field(form.surcharge, '$') }}</div>
+        </div>
+        {{ basic_field(form.description) }}
+        {{ checkbox_field(form.default) }}
+
+        {% set advanced = 'options/advanced/' + set.set_type + '.jinja2' %}
+        {% include advanced ignore missing %}
+        <div class="form-footer">
+            <div class="footer-wrapper clearfix text-center">
+                <button class="btn btn-primary pull-right">Save</button>
+                <a href="{{ url_for('options_view.options_index') }}" class="btn btn-default pull-right">Cancel</a>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

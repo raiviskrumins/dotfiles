@@ -1,0 +1,166 @@
+from flask import request
+from flask_wtf import Form
+from wtforms import (
+    TextField,
+    TextAreaField,
+    BooleanField,
+    SelectField,
+    SelectMultipleField,
+    FormField,
+    FieldList,
+    DateField,
+    HiddenField,
+    RadioField
+)
+from wtforms import Form as wt_Form
+from wtforms.validators import DataRequired, Optional
+from amber_portal.forms.validators import ValidInteger, ValidateCollection
+from amber_portal.forms.fields import (
+    CMIntegerField,
+    CMDecimalField,
+    CMRadioField,
+    CurrencyField
+)
+
+
+def append_field(
+    form,
+    field_name,
+    field_schema,
+    validators=None
+):
+    classification = field_schema.get("classification")
+    render = field_schema.get("render", {})
+    embedded = field_schema.get("embedded", {})
+    required = field_schema.get("required")
+    units = field_schema.get("units")
+
+    html_element = render.get("element")
+    html_label = render.get("label")
+    select_choices = render.get("choices")
+    if field_name == 'secondary':
+        pass
+    select_multi = render.get("multi_select")
+
+    if validators is None:
+        validators = []
+
+    if not required:
+        validators.append(Optional())
+
+    field = None
+
+    if classification == 'form_list':
+        class ChildComponentForm(wt_Form):
+            pass
+        for key, schema in embedded.items():
+            append_field(ChildComponentForm, key, schema, None)
+        field = FieldList(FormField(ChildComponentForm))
+    else:
+        if html_element == 'text':
+            if classification == 'string':
+                field = TextField(html_label, validators=validators)
+            elif classification == 'url':
+                field = TextField(html_label, validators=validators)
+            elif classification == 'integer':
+                field = CMIntegerField(html_label, validators=validators)
+            elif classification == 'float':
+                field = CMDecimalField(html_label, validators=validators)
+            elif classification == 'currency':
+                field = CurrencyField(html_label, validators=validators)
+        elif html_element == 'textarea':
+            field = TextAreaField(html_label, validators=validators)
+        elif html_element == 'datetime':
+            pass
+        elif html_element == 'checkbox':
+            field = BooleanField(html_label, validators=validators)
+        elif html_element == 'radio':
+            choices = select_choices if select_choices else []
+            field = RadioField(html_label, validators=validators, choices=choices)
+        elif html_element == 'select':
+            choices = select_choices if select_choices else []
+            if choices:
+                choices = sorted(choices, key=lambda x: x[1])
+                for index_, list_ in enumerate(choices):
+                    if len(list_[0]) == 0:
+                        del choices[index_]
+                        break
+                choices = [['none', 'None']] + choices
+            if select_multi:
+                field = SelectMultipleField(html_label, validators, choices=choices)
+            else:
+                field = SelectField(html_label, validators, choices=choices)
+        elif html_element == 'hidden':
+            field = HiddenField(validators=[Optional()])
+
+    setattr(form, field_name, field)
+
+
+def build_product_form(product_schema, product_data, empty):
+    class ProductForm(Form):
+        pass
+
+    for name, component in product_schema.items():
+        if name == "_links":
+            # TODO: Remove _links attribute before this point.
+            continue
+
+        class ComponentForm(wt_Form):
+            pass
+
+        for field_name, field_specs in component.items():
+            validators = []
+            print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+            print(name, field_name)
+            append_field(ComponentForm, field_name, field_specs, validators)
+        setattr(
+            ProductForm,
+            name,
+            FormField(ComponentForm)
+        )
+
+    if empty:
+        return ProductForm
+    return ProductForm(**product_data)
+
+def build_component_form(component_schema, component_data=None, **fields):
+    class ComponentForm(Form):
+        pass
+    for field_name, field_schema in component_schema.items():
+        if field_name == "_links":
+            continue
+        validators = []
+        append_field(ComponentForm, field_name, field_schema, validators)
+
+    for field_name, field in fields.items():
+        setattr(ComponentForm, field_name, field)
+
+    if component_data is None:
+        component_data = {}
+    return ComponentForm(**component_data)
+
+def build_sub_component_form(component_assembly, product_data):
+    class SubComponentForm(Form):
+        pass
+    sub_fields = component_assembly['sub_component']['fields']
+    for sub_field, sub_specs in sub_fields.iteritems():
+        append_field(
+            SubComponentForm,
+            sub_field,
+            sub_specs['type'],
+            sub_specs['label'],
+            sub_specs['required'],
+            sub_specs.get('choices')
+        )
+    if component_assembly['name'] == 'image':
+        append_field(
+            SubComponentForm,
+            'rotation_angle',
+            'hidden',
+            'Rotation Angle',
+            False,
+            default=0
+        )
+    form = SubComponentForm(**product_data)
+
+    return form

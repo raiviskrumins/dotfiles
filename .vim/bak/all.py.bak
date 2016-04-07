@@ -1,0 +1,19 @@
+import json
+
+
+def get(instance):
+    instance_data = instance.__dict__
+    class_dict = instance.__class__.__dict__
+
+    data_dict = {
+        key: value for key, value in class_dict.iteritems()
+        if not hasattr(value, "__call__") and
+        key not in ["__module__", "__main__", "__doc__", "json"]
+    }
+
+    data_dict.update(instance_data)
+    return json.dumps(data_dict)
+
+def __set__(self, instance, value):
+    print(instance)
+    print(value)

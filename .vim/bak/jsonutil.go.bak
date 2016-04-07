@@ -1,0 +1,512 @@
+package lib
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"reflect"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+// getFloat will convert an interface of type int or float64 to a float64 return
+// value.
+func getFloat(num interface{}) (float64, error) {
+	switch num.(type) {
+	case float64:
+		return num.(float64), nil
+	case int:
+		return float64(num.(int)), nil
+	}
+
+	msg := fmt.Sprintf("Number: %v could not be asserted to float64.", num)
+	return 0, errors.New(msg)
+}
+
+type JSONMap map[string]interface{}
+type ErrorJSONType interface {
+	AddKey(key string)
+	Error() string
+}
+
+type ErrorJSON struct {
+	Msg  string
+	Keys []string
+}
+
+// AddKey will pre-append the specified key to the key slices for an ErrorJSON instance.
+func (e *ErrorJSON) AddKey(key string) {
+	var keys []string
+	keys = append(keys, key)
+	keys = append(keys, e.Keys...)
+	e.Keys = keys
+}
+
+// Error returns a string representation of the error.
+func (e ErrorJSON) Error() string {
+	err := Join("", "[", Join(".", e.Keys...), "] ", e.Msg)
+	return err
+}
+
+// NewError creates a new instance of ErrorJSON with the provided key and
+// error message.
+func NewError(key string, err string) ErrorJSON {
+	e := ErrorJSON{err, nil}
+	if len(key) > 0 {
+		e.AddKey(key)
+	}
+	return e
+}
+
+// ConvertErrors will accept a slice of standard error instances and return
+// them as a converted slice of ErrorJSON instances.
+func ConvertErrors(errs []error) []ErrorJSON {
+	var errorJSONSlice []ErrorJSON
+
+	for _, err := range errs {
+		errorJSONSlice = append(errorJSONSlice, NewError("", err.Error()))
+	}
+
+	return errorJSONSlice
+}
+
+// JSONVerifyElements will compare an actual JSON object byte-slice against a JSON
+// template object byte-slice.
+func JSONVerifyElements(actual, expected []byte) []ErrorJSON {
+	aMap := make(JSONMap)
+	eMap := make(JSONMap)
+
+	err := json.Unmarshal([]byte(actual), &aMap)
+	if err != nil {
+		return []ErrorJSON{ErrorJSON{err.Error(), nil}}
+	}
+
+	err = json.Unmarshal([]byte(expected), &eMap)
+	if err != nil {
+		return []ErrorJSON{ErrorJSON{err.Error(), nil}}
+	}
+
+	var errorJSONSlice []ErrorJSON
+
+	unusedKeys := make(map[string]bool)
+	for key, _ := range aMap {
+		unusedKeys[key] = true
+	}
+
+	for key, val := range eMap {
+		errors := JSONVerifyElement(key, val.(map[string]interface{}), aMap)
+		if errors != nil {
+			errorJSONSlice = append(errorJSONSlice, errors...)
+		}
+
+		if _, ok := unusedKeys[key]; ok {
+			delete(unusedKeys, key)
+		}
+	}
+
+	for key, _ := range unusedKeys {
+		msg := fmt.Sprintf("Missing rules for Key: '%s'", key)
+		errorJSONSlice = append(errorJSONSlice, NewError(key, msg))
+	}
+
+	return errorJSONSlice
+}
+
+// JSONVerifyElement will attempt to compare the provided rules against the value as
+// specified by key for the provided actual JSON map.
+func JSONVerifyElement(key string, rules JSONMap, aMap JSONMap) []ErrorJSON {
+	var definedElementType string
+	if t, ok := rules["type"]; ok {
+		definedElementType = t.(string)
+	} else {
+		msg := fmt.Sprintf("Missing type declaration for key: '%s'", key)
+		return []ErrorJSON{NewError(key, msg)}
+	}
+
+	var data interface{}
+	var ok bool
+
+	if data, ok = aMap[key]; !ok {
+		if required, ok := rules["required"]; ok {
+			if required.(bool) == true {
+				msg := fmt.Sprintf("Key: '%s' is required but was not found.", key)
+				return []ErrorJSON{NewError(key, msg)}
+			} else {
+				return nil
+			}
+		} else {
+			msg := fmt.Sprintf("Key: '%s' expected but not found.", key)
+			return []ErrorJSON{NewError(key, msg)}
+		}
+	}
+
+	var errorsSlice []ErrorJSON
+
+	actualType := "nil"
+	if data != nil {
+		actualType = reflect.TypeOf(data).Kind().String()
+	}
+
+	switch data.(type) {
+	case bool:
+		if definedElementType != "bool" {
+			msg := fmt.Sprintf("Actual type: '%s' is not the expected type: '%s'", actualType, definedElementType)
+			return []ErrorJSON{NewError(key, msg)}
+		}
+		value := data.(bool)
+		errorsSlice = JSONVerifyBool(value, rules)
+	case float64:
+		testInt := int(data.(float64))
+		if definedElementType == "int" && (float64(testInt) != data.(float64)) {
+			msg := fmt.Sprintf("Actual type: '%s' is not the expected type: '%s'", actualType, definedElementType)
+			return []ErrorJSON{NewError(key, msg)}
+		}
+		if definedElementType == "int" {
+			value := int(data.(float64))
+			errorsSlice = JSONVerifyInt(value, rules)
+		} else {
+			value := data.(float64)
+			errorsSlice = JSONVerifyFloat(value, rules)
+		}
+	case []interface{}:
+		if definedElementType != "list" {
+			msg := fmt.Sprintf("Actual type: '%s' is not the expected type: '%s'", actualType, definedElementType)
+			return []ErrorJSON{NewError(key, msg)}
+		}
+		value := data
+		errorsSlice = JSONVerifyList(value, rules)
+	case string:
+		if definedElementType != "string" {
+			msg := fmt.Sprintf("Actual type: '%s' is not the expected type: '%s'", actualType, definedElementType)
+			return []ErrorJSON{NewError(key, msg)}
+		}
+		value := data.(string)
+		errorsSlice = JSONVerifyString(value, rules)
+	case map[string]interface{}:
+		if definedElementType != "object" {
+			msg := fmt.Sprintf("Actual type: '%s' is not the expected type: '%s'", actualType, definedElementType)
+			return []ErrorJSON{NewError(key, msg)}
+		}
+		value := data
+		errorsSlice = JSONVerifyObject(value, rules)
+	case nil:
+		if nullable, ok := rules["nullable"]; !ok {
+			msg := fmt.Sprintf("Key: '%s' cannot be null.", key)
+			return []ErrorJSON{NewError(key, msg)}
+		} else {
+			if nullable.(bool) != true {
+				msg := fmt.Sprintf("Key: '%s' is not allowed to be null.", key)
+				return []ErrorJSON{NewError(key, msg)}
+			}
+		}
+	}
+
+	if errorsSlice != nil {
+		for index, _ := range errorsSlice {
+			errorsSlice[index].AddKey(key)
+		}
+		return errorsSlice
+	}
+	return nil
+}
+
+// JSONVerifyBool is a comparison function for JSON booleans. Can check for equality.
+func JSONVerifyBool(value bool, rules JSONMap) []ErrorJSON {
+	var errorSlice []error
+
+	if val, ok := rules["value"]; ok {
+		if value != val.(bool) {
+			msg := fmt.Sprintf("Actual value: '%v' does not equal expected value: '%v'", value, val.(bool))
+			errorSlice = append(errorSlice, errors.New(msg))
+		}
+	}
+
+	return ConvertErrors(errorSlice)
+}
+
+// JSONVerifyFloat is a comparison function for JSON floats. Can check for equality
+// and range rules.
+func JSONVerifyFloat(value float64, rules JSONMap) []ErrorJSON {
+	var errorSlice []error
+
+	if val, ok := rules["range"]; ok {
+		err := gamut(value, val.(map[string]interface{}))
+		if err != nil {
+			errorSlice = append(errorSlice, err...)
+		}
+	}
+
+	if val, ok := rules["value"]; ok {
+		float, err := getFloat(val)
+		if err != nil {
+			errorSlice = append(errorSlice, err)
+		} else if value != float {
+			msg := fmt.Sprintf("Actual value: '%v' does not equal expected value: '%v'", value, float)
+			errorSlice = append(errorSlice, errors.New(msg))
+		}
+	}
+
+	return ConvertErrors(errorSlice)
+}
+
+// JSONVerifyInt is a comparison function for JSON ints. Can check for equality and
+// for range rules.
+func JSONVerifyInt(value int, rules JSONMap) []ErrorJSON {
+	var errorSlice []error
+
+	if val, ok := rules["range"]; ok {
+		err := gamut(float64(value), val.(map[string]interface{}))
+		if err != nil {
+			errorSlice = append(errorSlice, err...)
+		}
+	}
+
+	if val, ok := rules["value"]; ok {
+		float, err := getFloat(val)
+		if err != nil {
+			errorSlice = append(errorSlice, err)
+		} else if value != int(float) {
+			msg := fmt.Sprintf("Actual value: '%v' does not equal expected value: '%v'", value, int(float))
+			errorSlice = append(errorSlice, errors.New(msg))
+		}
+	}
+
+	return ConvertErrors(errorSlice)
+}
+
+// JSONVerifyList is a comparison function for JSON lists. Runs the elements through
+// the specified element rules.
+func JSONVerifyList(value interface{}, rules JSONMap) []ErrorJSON {
+	var errorSlice []error
+	var errorJSONSlice []ErrorJSON
+
+	dataMap := make(map[string]interface{})
+	for index, val := range value.([]interface{}) {
+		dataMap[strconv.Itoa(index)] = val
+	}
+
+	if expected, ok := rules["element"]; !ok {
+		errorSlice = append(errorSlice, errors.New("Missing list 'element' key."))
+		return errorJSONSlice
+	} else {
+		for index, _ := range value.([]interface{}) {
+			errors := JSONVerifyElement(strconv.Itoa(index), expected.(map[string]interface{}), dataMap)
+			if errors != nil {
+				errorJSONSlice = append(errorJSONSlice, errors...)
+			}
+		}
+	}
+
+	if val, ok := rules["len"]; ok {
+		float, err := getFloat(val)
+		if err != nil {
+			errorSlice = append(errorSlice, err)
+		} else if len(value.([]interface{})) != int(float) {
+			msg := fmt.Sprintf("List contains: '%v' number of elements, when '%v' is expected.", len(value.([]interface{})), int(float))
+			errorSlice = append(errorSlice, errors.New(msg))
+		}
+	}
+
+	errorJSONSlice = append(errorJSONSlice, ConvertErrors(errorSlice)...)
+	return errorJSONSlice
+}
+
+// JSONVerifyString is a comparison for JSON strings. Can check equality, length and
+// regex pattern matching.
+func JSONVerifyString(value string, rules JSONMap) []ErrorJSON {
+	var errorSlice []error
+
+	if val, ok := rules["value"]; ok {
+		if value != val.(string) {
+			msg := fmt.Sprintf("Actual value: '%s' != expected value: '%s'", value, val.(string))
+			errorSlice = append(errorSlice, errors.New(msg))
+		}
+	}
+
+	if val, ok := rules["regex"]; ok {
+		err := regex(value, val.(string))
+		if err != nil {
+			errorSlice = append(errorSlice, err)
+		}
+	}
+
+	if val, ok := rules["len"]; ok {
+		float, err := getFloat(val)
+		if err != nil {
+			errorSlice = append(errorSlice, err)
+		} else if len(value) != int(float) {
+			msg := fmt.Sprintf("String length of: '%d' != expected length of: '%d'", len(value), float)
+			errorSlice = append(errorSlice, errors.New(msg))
+		}
+	}
+
+	return ConvertErrors(errorSlice)
+}
+
+// JSONVerifyObject is a comparison for JSON objects. Can provide template JSON either
+// as an inline object within the rule's parameter, or pointer to a external file
+// to use. When using an external file, it is possible to specify the key to use;
+// view testing for an example of such.
+func JSONVerifyObject(value interface{}, rules JSONMap) []ErrorJSON {
+	var errorSlice []error
+	var expectedJSON []byte
+
+	actualJSON, err := json.Marshal(value.(map[string]interface{}))
+	if err != nil {
+		errorSlice = append(errorSlice, errors.New("Could not marshal value into actualJSON."))
+		return ConvertErrors(errorSlice)
+	}
+
+	if val, ok := rules["object"]; ok {
+		expectedJSON, err = json.Marshal(val.(map[string]interface{}))
+		if err != nil {
+			errorSlice = append(errorSlice, errors.New("Could not marshal JSON object data to expectedJSON."))
+			return ConvertErrors(errorSlice)
+		}
+		if expectedJSON == nil {
+			errorSlice = append(errorSlice, errors.New("Expected JSON from object must not be nil."))
+		}
+	}
+
+	if val, ok := rules["template"]; ok {
+		slice := strings.Split(val.(string), ":")
+		if len(slice) == 1 {
+			fileName := slice[0]
+			bites, err := ioutil.ReadFile(fileName)
+			if err != nil {
+				errorSlice = append(errorSlice, err)
+				return ConvertErrors(errorSlice)
+			}
+
+			expectedJSON = bites
+		} else if len(slice) == 2 {
+			fileName := slice[0]
+			templateName := slice[1]
+
+			bites, err := ioutil.ReadFile(fileName)
+			if err != nil {
+				errorSlice = append(errorSlice, err)
+				return ConvertErrors(errorSlice)
+			}
+
+			jsonMap := make(map[string]interface{})
+			err = json.Unmarshal(bites, &jsonMap)
+			if err != nil {
+				errorSlice = append(errorSlice, errors.New("Could not unmarshal expected JSON template object."))
+				return ConvertErrors(errorSlice)
+			}
+
+			slice := strings.Split(templateName, ".")
+			if len(slice) == 1 {
+				if val, ok := jsonMap[templateName]; ok {
+					expectedJSON, err = json.Marshal(val.(map[string]interface{}))
+					if err != nil {
+						errorSlice = append(errorSlice, errors.New("Could not marshal template JSON object data to expectedJSON."))
+						return ConvertErrors(errorSlice)
+					}
+				} else {
+					msg := fmt.Sprintf("Could not locate template by key: '%s'", templateName)
+					errorSlice = append(errorSlice, errors.New(msg))
+				}
+			} else if len(slice) > 1 {
+				templateJSON := make(map[string]interface{})
+
+				for index, val := range slice {
+					if index == 0 {
+						templateJSON = jsonMap
+					}
+
+					if val, ok := templateJSON[val]; ok {
+						templateJSON = val.(map[string]interface{})
+					} else {
+						msg := fmt.Sprintf("Template name index: '%d' and key: '%s' could not be found.", index, val)
+						errorSlice = append(errorSlice, errors.New(msg))
+					}
+				}
+
+				if templateJSON == nil {
+					errorSlice = append(errorSlice, errors.New("Could not locate template by name."))
+				} else {
+
+					expectedJSON, err = json.Marshal(templateJSON)
+					if err != nil {
+						errorSlice = append(errorSlice, errors.New("Could not marshal template JSON object data to expectedJSON."))
+						return ConvertErrors(errorSlice)
+					}
+				}
+			}
+		}
+		if expectedJSON == nil {
+			errorSlice = append(errorSlice, errors.New("Expected JSON from template  must not be nil."))
+		}
+	}
+
+	if actualJSON == nil {
+		errorSlice = append(errorSlice, errors.New("Actual JSON object (bytes) must not be nil."))
+	}
+
+	if errorSlice != nil {
+		return ConvertErrors(errorSlice)
+	}
+
+	if len(expectedJSON) == 0 {
+		expectedJSON = []byte("{}")
+	}
+
+	return JSONVerifyElements(actualJSON, expectedJSON)
+}
+
+// gamut check the provided value to ensure if fits within the range bounds which
+// are specified in the provided rules JSONMap.
+func gamut(value float64, rules JSONMap) []error {
+	var errorSlice []error
+	usedRules := false
+
+	if min, ok := rules["min"]; ok {
+		usedRules = true
+		float, err := getFloat(min)
+		if err != nil {
+			errorSlice = append(errorSlice, err)
+		} else if value < float {
+			msg := fmt.Sprintf("Actual value: '%v' is below minimum value: '%v'", value, float)
+			errorSlice = append(errorSlice, errors.New(msg))
+		}
+	}
+	if max, ok := rules["max"]; ok {
+		usedRules = true
+		float, err := getFloat(max)
+		if err != nil {
+			errorSlice = append(errorSlice, err)
+		} else if value > float {
+			msg := fmt.Sprintf("Actual value: '%v' is above maximum value: '%v'", value, float)
+			errorSlice = append(errorSlice, errors.New(msg))
+		}
+	}
+
+	if usedRules != true {
+		errorSlice = append(errorSlice, errors.New("Must provide a min and/or max range."))
+	}
+
+	return errorSlice
+}
+
+// regex will attempt to match the value to the specified pattern. An error is
+// returned if a match cannot be found.
+func regex(value, pattern string) error {
+	re := regexp.MustCompile(pattern)
+	if re.MatchString(value) != true {
+		var val string
+
+		if len(value) < 25 {
+			val = value
+		} else {
+			val = fmt.Sprintf("%s...", value[:25])
+		}
+
+		msg := fmt.Sprintf("Regex pattern: '%s' not found in string: '%s'", pattern, val)
+		return errors.New(msg)
+	}
+	return nil
+}

@@ -1,0 +1,10 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+
+{{ hidden_field(form.category.component_data_id) }}
+<div class="row">
+  <div class="col-md-5">{{ basic_field(form.category.primary) }}</div>
+  <div class="col-md-5">{{ basic_field(form.category.secondary) }}</div>
+</div>
+<div class="row">
+  <div class="col-md-5">{{ basic_field(form.category.tertiary) }}</div>
+</div>

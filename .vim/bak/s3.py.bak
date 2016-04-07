@@ -1,0 +1,151 @@
+import datetime
+import time
+import string
+import random
+from hashlib import md5
+import boto3
+
+ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
+
+
+def allowed_file(filename):
+    """ Ensures proper filetype
+
+    :param filename: string of filename
+    :return: bool of whether file extension is allowed
+    """
+    if '.' not in filename:
+        return False
+    extension = filename.rsplit('.', 1)[1].lower()
+    return extension in ALLOWED_EXTENSIONS
+
+
+def upload_stream(
+    stream,
+    access,
+    secret,
+    mimetype,
+    filename=None,
+    s3_bucket='amber-cm-prod'
+):
+    if not filename:
+        ext = mimetype.rsplit('/', 1)[1]
+        contents = stream.read()
+        filename = generate_filename(contents, ext)
+
+    key = 'images/%s' % filename
+
+    s3 = boto3.client('s3', 'us-west-2')
+
+    s3.put_object(
+        ACL='public-read',
+        Body=contents,
+        Bucket=s3_bucket,
+        ContentType=mimetype,
+        Key=key
+    )
+
+    return s3.generate_presigned_url(
+        ClientMethod='get_object',
+        Params={
+            'Bucket': s3_bucket,
+            'Key': key
+        }
+    )
+
+
+# TODO: custom exceptions, maybe from werkzeug
+def upload_image(
+    image_file,
+    access,
+    secret,
+    stream=False,
+    mimetype=None,
+    s3_bucket='amber-cm-prod'
+):
+    """ Takes image file from POST request, uploads it to ``amber-cm-prod``
+    S3 bucket, returns filename
+
+    :param image_file: file-like object of an image
+    :return: string of absolute image url
+    """
+    if not image_file:
+        raise Exception('CUSTOMIZE ME, AND UPLOAD SOMETHING')
+
+    if not stream and not allowed_file(image_file.filename):
+        raise Exception('NOT AN ACCEPTABLE IMAGE TYPE')
+
+    if not stream:
+        contents = image_file.stream.read()
+    else:
+        contents = image_file.read()
+
+    mimetype = mimetype or image_file.mimetype
+    ext = mimetype.rsplit('/', 1)[1]
+    key = 'images/%s' % generate_filename(contents, ext)
+
+    s3 = boto3.client('s3', 'us-west-2')
+
+    s3.put_object(
+        ACL='public-read',
+        Body=contents,
+        Bucket=s3_bucket,
+        ContentType=mimetype,
+        Key=key
+    )
+
+    # Manually construct the URL's, because generate_presigned_url will
+    # always eventually expire.
+    url_struct = s3.generate_presigned_post(
+        Bucket=s3_bucket,
+        Key=key
+    )
+    return url_struct['url'] + url_struct['key']
+
+
+def upload_xls_from_stream(
+    stream,
+    access,
+    secret,
+    s3_bucket='amber-cm-prod',
+    is_xlsx=False
+):
+    if not is_xlsx:
+        key = 'export/%s_UTC.xls' % (str(datetime.datetime.utcnow()))
+    else:
+        key = 'export/%s_UTC.xlsx' % (str(datetime.datetime.utcnow()))
+
+    s3 = boto3.client('s3', 'us-west-2')
+
+    s3.put_object(
+        ACL='public-read',
+        Body=stream.read(),
+        Bucket=s3_bucket,
+        ContentType='application/vnd.ms-excel',
+        Key=key
+    )
+
+    return s3.generate_presigned_url(
+        ClientMethod='get_object',
+        Params={
+            'Bucket': s3_bucket,
+            'Key': key
+        }
+    )
+
+
+def generate_filename(contents, ext):
+    file_md_hash = md5()
+    file_md_hash.update(contents)
+    time_md_hash = md5()
+    time_md_hash.update(str(time.time()).encode('utf-8'))
+    filename = '%s_%s.%s' % (
+        randomized_string(16, file_md_hash.hexdigest()),
+        time_md_hash.hexdigest(),
+        ext
+    )
+    return filename
+
+
+def randomized_string(length=16, chars=string.ascii_lowercase + string.digits):
+    return ''.join(random.choice(chars) for _ in range(length))

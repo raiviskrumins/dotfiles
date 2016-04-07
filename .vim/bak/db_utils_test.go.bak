@@ -1,0 +1,92 @@
+package database
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestNewQueryParams(t *testing.T) {
+	params, err := NewQueryParams(0, 0)
+	assert.NoError(t, err)
+	assert.NotNil(t, params)
+	assert.Equal(t, 0, params.Limit)
+	assert.Equal(t, 0, params.Offset)
+
+	params, err = NewQueryParams(3, 6, Clause{"id", "=", 1})
+	assert.NoError(t, err)
+	assert.NotNil(t, params)
+	assert.Equal(t, 3, params.Limit)
+	assert.Equal(t, 6, params.Offset)
+	assert.Len(t, params.Clauses, 1)
+}
+
+// TestValididationError_InvalidClauses tests that running ValidationError on invalid
+// Clauses results in being returned a validation error.
+func TestValididationError_InvalidClauses(t *testing.T) {
+	var clauses []Clause
+	clauses = append(clauses, Clause{"slice", "=", []string{"first", "one"}})
+	clauses = append(clauses, Clause{"", ">", 42})
+	clauses = append(clauses, Clause{"boolean", "", true})
+	clauses = append(clauses, Clause{"", "", false})
+	clauses = append(clauses, Clause{"missing", "value", nil})
+	clauses = append(clauses, Clause{"", "@#$^&", nil})
+	clauses = append(clauses, Clause{"invalid", "ALL THE THINGS!", "operand"})
+	clauses = append(clauses, Clause{"multiple spaced column name", "iS nOt", "null"})
+	clauses = append(clauses, Clause{"casing", "iS nOt", "null"})
+
+	for _, clause := range clauses {
+		err := clause.ValidationError()
+		assert.Error(t, err)
+	}
+}
+
+// TestValidationError_NoErrors tests to ensure that clauses which contain valid
+// data do not return any errors when calling their ValidationError method.
+func TestValidationError_NoErrors(t *testing.T) {
+	var clauses []Clause
+	clauses = append(clauses, Clause{"string", "=", "foobar"})
+	clauses = append(clauses, Clause{"different", ">", "operand"})
+	clauses = append(clauses, Clause{"integer", "<", 1})
+	clauses = append(clauses, Clause{"foo", "!=", int64(1)})
+	clauses = append(clauses, Clause{"bar", "<>", float32(1)})
+	clauses = append(clauses, Clause{"text", "IS NOT", "NULL"})
+
+	for _, clause := range clauses {
+		err := clause.ValidationError()
+		assert.NoError(t, err)
+	}
+}
+
+// TestSQL tests to ensure that correctly formatted SQL strings are returned
+// for valida clauses using the Clauses' SQL method.
+func TestSQL(t *testing.T) {
+	validClauses := []Clause{
+		Clause{"product_id", "=", 42},
+		Clause{"category", "IS NOT", "NULL"},
+		Clause{"name", "!=", "Amber Engine"}}
+
+	validStrings := []string{
+		"product_id = $%d",
+		"category IS NOT $%d",
+		"name != $%d"}
+
+	for index, clause := range validClauses {
+		sql, err := clause.SQL(index)
+		assert.NoError(t, err)
+		assert.Equal(t, sql, fmt.Sprintf(validStrings[index], index))
+	}
+
+	invalidClauses := []Clause{
+		Clause{"product_id", "DOESNT EQUAL", 42},
+		Clause{"", "IS ", "EXISTENTIAL"},
+		Clause{"Foo", "", "bar"},
+		Clause{"Fizz Buzz", "=", "Foobar"}}
+
+	for index, clause := range invalidClauses {
+		sql, err := clause.SQL(index)
+		assert.Error(t, err)
+		assert.Empty(t, sql)
+	}
+}

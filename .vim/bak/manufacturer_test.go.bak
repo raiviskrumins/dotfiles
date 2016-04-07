@@ -1,0 +1,151 @@
+package models
+
+import (
+	"bytes"
+	"encoding/json"
+	"testing"
+
+	"github.com/AmberEngine/api/test_utils"
+	"github.com/stretchr/testify/assert"
+)
+
+// TestCreateManufacturer_ValidData tries to assert a valid manufacturer is returned
+// by CreateManufacturer when provided correct data, and that the manufacturer can
+// be retrieved by the database successfully.
+func TestCreateManufacturer_ValidData(t *testing.T) {
+	jsonString := `{
+	  "manufacturer_name": "Amber MFR",
+	  "update_by_api_key": "18defb6d77091cc3c639efa29d693c8e19ee02c6d4d5aa0683a40e200ef7c3e2",
+	  "active": true,
+	  "city": "Detroit",
+	  "email": "amber@example.com",
+	  "state": "Michigan",
+	  "street_address_1": "123 ABC",
+	  "zipcode": "42424"
+	}`
+
+	jsonData := test_utils.MockJSON{bytes.NewBufferString(jsonString)}
+
+	// Create a MFR and test that the returned instance is valid.
+	returnedMfr, e := CreateManufacturer(TestCtx, jsonData)
+	if !assert.NotNil(t, returnedMfr) || !assert.NoError(t, e) {
+		return
+	}
+
+	// Retrieve the just-created MFR and ensure it is correct and matches
+	// the previous MFR.
+	retrievedMfr, e := RetrieveManufacturer(TestCtx, int(returnedMfr.ID.Int64))
+	if assert.NotNil(t, retrievedMfr) && assert.NoError(t, e) {
+		assert.Equal(t, returnedMfr, retrievedMfr)
+	}
+}
+
+// TestRetrieveManufacturer_MissingID attempts to assert that nil and an error
+// are returned when attempting to retrieve a MFR with a non-existant ID number.
+func TestRetrieveManufacturer_MissingID(t *testing.T) {
+	ID := 101010
+
+	mfr, e := RetrieveManufacturer(TestCtx, ID)
+
+	assert.Nil(t, mfr)
+	assert.Error(t, e)
+}
+
+// TestRetrieveManufacturer_Valid attempts to assert that it is possible to
+// retrieve a perfectly valid manufacturer by ID.
+func TestRetrieveManufacturer_Valid(t *testing.T) {
+	ID := 22
+
+	mfr, e := RetrieveManufacturer(TestCtx, ID)
+
+	assert.NotNil(t, mfr)
+	assert.NoError(t, e)
+}
+
+// TestUpdateManufacturer_InvalidID attempts to assert that nil and error values are
+// returned when attempting to update a manufacturer with an invalid ID.
+func TestUpdateManufacturer_InvalidID(t *testing.T) {
+	validID := 38
+	invalidID := 99999999
+
+	mfr, e := RetrieveManufacturer(TestCtx, validID)
+
+	if !assert.NoError(t, e) {
+		return
+	}
+
+	mfr.ID.Int64 = int64(invalidID)
+
+	jsonBytes, err := json.Marshal(mfr)
+	if assert.NotEmpty(t, jsonBytes) && assert.NoError(t, err) {
+		jsonReadCloser := test_utils.MockJSON{bytes.NewBuffer(jsonBytes)}
+
+		updatedMfr, e := UpdateManufacturer(TestCtx, invalidID, jsonReadCloser)
+
+		assert.Nil(t, updatedMfr)
+		assert.Error(t, e)
+	}
+}
+
+// TestUpdateManufacturer_Updated attempts to assert that a valid manufacturer
+// is returned when updating a existing manufacturer with valid data.
+func TestUpdateManufacturer_Updated(t *testing.T) {
+	ID := 38
+	mfr, e := RetrieveManufacturer(TestCtx, ID)
+
+	if !assert.NotNil(t, mfr) || !assert.NoError(t, e) {
+		return
+	}
+
+	updatedName := "Test"
+	updatedEmail := "test@example.com"
+
+	mfr.Name.Set(updatedName)
+	mfr.Email.Set(updatedEmail)
+
+	jsonBytes, err := json.Marshal(mfr)
+
+	if assert.NotEmpty(t, jsonBytes) && assert.NoError(t, err) {
+		jsonReadCloser := test_utils.MockJSON{bytes.NewBuffer(jsonBytes)}
+
+		mfr, e := UpdateManufacturer(TestCtx, ID, jsonReadCloser)
+		if !assert.NoError(t, e) {
+			return
+		}
+
+		if assert.NotNil(t, mfr) && assert.NoError(t, e) {
+			assert.Equal(t, updatedName, mfr.Name.String)
+			assert.Equal(t, updatedEmail, mfr.Email.String)
+		}
+
+		mfr, e = RetrieveManufacturer(TestCtx, ID)
+		if assert.NotNil(t, mfr) && assert.NoError(t, e) {
+			assert.Equal(t, updatedName, mfr.Name.String)
+			assert.Equal(t, updatedEmail, mfr.Email.String)
+		}
+	}
+}
+
+// TestDeleteManufacturer_InvalidKey attempts to assert that attempting to delete
+// an invalid Manufacturer ID results in being returned an error.
+func TestDeleteManufacturer_InvalidKey(t *testing.T) {
+	// This key does not exist in the database.
+	ID := 101010
+
+	e := DeleteManufacturer(TestCtx, ID)
+	assert.Error(t, e)
+}
+
+// TestDeleteManufacturer_Valid attempts to assert it is possible to delete a
+// manufacturer using a valid ID, and that the manufacturer becomes irretrievable.
+func TestDeleteManufacturer_Valid(t *testing.T) {
+	ID := 706
+	e := DeleteManufacturer(TestCtx, ID)
+
+	// It should no longer be possible to retrieve the deleted MFR.
+	if assert.NoError(t, e) {
+		mfr, e := RetrieveManufacturer(TestCtx, ID)
+		assert.Nil(t, mfr)
+		assert.Error(t, e)
+	}
+}

@@ -1,0 +1,15 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20160115105720(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE option ADD COLUMN option_type CHARACTER VARYING(255)")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160115105720(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE option DROP COLUMN option_type")
+}

@@ -1,0 +1,72 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"testing"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/stretchr/testify/assert"
+)
+
+var TestAppCtx *app.Context
+var TestDB *app.DB
+var TestMongo *app.MongoSession
+var TestES *app.ES
+
+func TestMain(m *testing.M) {
+	var err error
+	TestDB, TestMongo, TestES, err = app.PrepareTestDB("api_scripts_index_test")
+	if err != nil {
+		panic(err)
+		fmt.Println("Failed to prepare test DB")
+		os.Exit(1)
+	}
+
+	TestAppCtx, err = app.NewContext(TestDB, TestMongo, TestES)
+	if err != nil {
+		panic(err)
+	}
+
+	retCode := m.Run()
+
+	app.CleanUpTestDB("api_scripts_index_test")
+
+	os.Exit(retCode)
+}
+
+func TestBuildProductIndex(t *testing.T) {
+	err := BuildProductIndex(TestDB, TestES)
+	assert.NoError(t, err)
+	if err != nil {
+		panic(err)
+		return
+	}
+
+	err = IndexTeardown(TestES)
+	if err != nil {
+		assert.Fail(t, "Something went wrong!", err.Error())
+		return
+	}
+}
+
+func IndexTeardown(es *app.ES) error {
+	client, e := es.Client()
+	if e != nil {
+		return e
+	}
+
+	exists, err := client.IndexExists(es.IndexName).Do()
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		_, err = client.DeleteIndex(es.IndexName).Do()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

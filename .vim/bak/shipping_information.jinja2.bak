@@ -1,0 +1,47 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field, radio_field %}
+<div class="row">
+  <div class="col-md-5">
+    <label>Shipping Method</label>
+    {{ checkbox_field(form.shipping_information.standard) }}
+    {{ checkbox_field(form.shipping_information.freight) }}
+    {{ checkbox_field(form.shipping_information.white_glove) }}
+    {{ checkbox_field(form.shipping_information.drop_ship) }}
+    <br>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-5">{{ basic_field(form.shipping_information.ships_from) }}</div>
+  <div class="col-md-5">{{ basic_field(form.shipping_information.country_of_origin) }}</div>
+
+  <div class="clearfix col-md-10">
+    {{ basic_field(form.shipping_information.notes) }}
+    <br>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-10">
+    {% for box in form.shipping_information.box_list %}
+    <div class="subcomponent-section">
+      {% set component_id = product.shipping_information.box_list[loop.index0].component_data_id or 0 %}
+      <p><b>Box <span class="component-count">{{loop.index}}</span></b> <a href="{{ url_for('product_view.delete_product_sub_component', prod_id=product.id, component='box', sub_component_data_id=component_id) }}" class="js-remove-subcomponent">Remove</a></p>
+
+      <div class="row">
+        <div class="col-md-6">{{ append_field(box.weight, 'lbs') }}</div>
+        <div class="col-md-6">{{ append_field(box.volume, 'cft') }}</div>
+      </div>
+      <div class="row">
+        <div class="col-md-3">{{ append_field(box.quantity) }}</div>
+        <div class="col-md-3">{{ append_field(box.height, 'in') }}</div>
+        <div class="col-md-3">{{ append_field(box.width, 'in') }}</div>
+        <div class="col-md-3">{{ append_field(box.depth, 'in') }}</div>
+
+        {{ box.component_data_id }}
+        {{ box.parent_id }}
+      </div>
+    </div>
+    {% endfor %}
+    <a href="{{ url_for('product_view.new_sub_component_form', prod_id=product.id, component='box') }}" class="btn btn-primary js-add-subcomponent" data-target="box" data-parent="shipping_information">Add Box</a>
+  </div>
+</div>

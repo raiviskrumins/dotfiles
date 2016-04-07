@@ -1,0 +1,15 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20160212144842(txn *sql.Tx) {
+	txn.Exec(`ALTER TABLE ONLY box_component DROP CONSTRAINT fk_shipping_information_sub_component_shipping_information_comp;`)
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160212144842(txn *sql.Tx) {
+
+}

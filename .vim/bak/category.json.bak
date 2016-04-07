@@ -1,0 +1,218 @@
+{
+    "categories": {
+        "total": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "count": {
+            "type": "object",
+            "object": {
+                "primary_categories": {
+                    "type": "int",
+                    "range": {
+                        "min": 0
+                    },
+                    "required": false
+                },
+                "secondary_categories": {
+                    "type": "int",
+                    "range": {
+                        "min": 0
+                    },
+                    "required": false
+                },
+                "tertiary_categories": {
+                    "type": "int",
+                    "range": {
+                        "min": 0
+                    },
+                    "required": false
+                }
+            }
+        },
+        "primary_categories": {
+            "type": "list",
+            "element": {
+                "type": "string",
+                "regex": ".+"
+            },
+            "required": false
+        },
+        "secondary_categories": {
+            "type": "list",
+            "element": {
+                "type": "string",
+                "regex": ".+"
+            },
+            "required": false
+        },
+        "tertiary_categories": {
+            "type": "list",
+            "element": {
+                "type": "string",
+                "regex": ".+"
+            },
+            "required": false
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        }
+    },
+    "retrieve-all-categories": [
+        {
+            "manufacturers": "",
+            "products": "",
+            "primary": "",
+            "secondary": "",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "category.json:categories"
+            }
+        }
+    ],
+    "retrieve-manufacturer-categories": [
+        {
+            "manufacturers": "1",
+            "products": "",
+            "primary": "",
+            "secondary": "",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "category.json:categories"
+            }
+        },
+        {
+            "manufacturers": "1,2,3,4,5",
+            "products": "",
+            "primary": "",
+            "secondary": "",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "category.json:categories"
+            }
+        },
+        {
+            "manufacturers": "-1",
+            "products": "",
+            "primary": "",
+            "secondary": "",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "category.json:categories"
+            }
+        }
+    ],
+    "retrieve-product-categories": [
+        {
+            "manufacturers": "",
+            "products": "1",
+            "primary": "",
+            "secondary": "",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "category.json:categories"
+            }
+        },
+        {
+            "manufacturers": "",
+            "products": "1,2,3,4,5,6,7",
+            "primary": "",
+            "secondary": "",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "category.json:categories"
+            }
+        },
+        {
+            "manufacturers": "",
+            "products": "-1",
+            "primary": "",
+            "secondary": "",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "category.json:categories"
+            }
+        }
+    ],
+    "retrieve-by-primary-categories": [
+        {
+            "manufacturers": "",
+            "products": "",
+            "primary": "casegood",
+            "secondary": "",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "category.json:categories"
+            }
+        },
+        {
+            "manufacturers": "",
+            "products": "",
+            "primary": "does not exist",
+            "secondary": "",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:406"
+            }
+        }
+    ],
+    "retrieve-by-secondary-categories": [
+        {
+            "manufacturers": "",
+            "products": "",
+            "primary": "casegood",
+            "secondary": "chair",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "category.json:categories"
+            }
+        },
+        {
+            "manufacturers": "",
+            "products": "",
+            "primary": "casegood",
+            "secondary": "does not exist",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "category.json:categories"
+            }
+        }
+    ]
+}
+

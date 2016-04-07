@@ -1,0 +1,16 @@
+{% from 'macros.jinja2' import basic_field, append_field %}
+
+<div class="subcomponent-section">
+    <p><b>Door <span class="component-count"></span></b> <a href="{{ url_for('product_view.delete_product_sub_component', prod_id=prod_id, component='door', sub_component_data_id=form.data.component_data_id) }}" class="js-remove-subcomponent">Remove</a></p>
+    <div class="row">
+        <div class="col-md-3">{{ basic_field(form.quantity) }}</div>
+        <div class="col-md-3">{{ append_field(form.opening, 'in') }}</div>
+    </div>
+    <div class="row">
+        <div class="col-md-3">{{ append_field(form.height, 'in') }}</div>
+        <div class="col-md-3">{{ append_field(form.width, 'in') }}</div>
+        <div class="col-md-3">{{ append_field(form.thickness, 'in') }}</div>
+        {{ form.component_data_id }}
+        {{ form.parent_id }}
+    </div>
+</div>

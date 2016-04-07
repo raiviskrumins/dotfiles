@@ -1,0 +1,155 @@
+package routes
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/models"
+	"github.com/AmberEngine/api/oops"
+	perm "github.com/AmberEngine/api/permissions"
+	"github.com/gorilla/context"
+	"github.com/julienschmidt/httprouter"
+	"github.com/justinas/alice"
+)
+
+func DefineFormSchemaRoutes(router *lib.Router, appC *RouteContext, commonHandlers alice.Chain) {
+	router.Get("/form_schemas/:object", appC.RetrieveFormSchema(commonHandlers))
+}
+
+func (c *RouteContext) RetrieveFormSchema(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("FormSchema", perm.FormSchemaRetrieveAll|perm.FormSchemaRetrieveGroup|perm.FormSchemaRetrieveOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		params := context.Get(r, "params").(httprouter.Params)
+		if len(params.ByName("object")) == 0 {
+			panic(oops.BadRequest("Must specify an Object name to retrieve form schema."))
+		}
+
+		objName := params.ByName("object")
+		tableName, e := models.ResToTableName(objName)
+		if e != nil {
+			panic(e)
+		}
+
+		obj, e := models.Factory(tableName)
+		if e != nil {
+			panic(e)
+		}
+
+		var schemas *form.Schema
+		if tableName == "product" {
+			var component, primary, secondary, tertiary string
+			component = r.URL.Query().Get("component")
+			primary = r.URL.Query().Get("primary")
+			secondary = r.URL.Query().Get("secondary")
+			tertiary = r.URL.Query().Get("tertiary")
+
+			if len(component) > 0 && (len(primary)+len(secondary)+len(tertiary)) > 0 {
+				panic(oops.BadRequest("Cannot specify both component name and category."))
+			}
+
+			if len(component) > 0 {
+
+				split := strings.Split(component, "_")
+				for k, v := range split {
+					split[k] = strings.Title(v)
+				}
+
+				component = lib.Join("", strings.Join(split, ""), "Component")
+				comp, e := models.CreateComponent(c.Context, component, nil, nil)
+				if e != nil {
+					panic(e)
+				}
+
+				schemas = comp.FormSchema()
+
+				if component == "CategoryComponent" {
+					categoryChoices(c.Context, schemas)
+				}
+
+			} else {
+				ass, e := models.RetrieveAssemblageByCategory(c.Context, primary, secondary, tertiary)
+				if e != nil {
+					panic(e)
+				}
+				obj.(*models.AEProduct).AssemblageID.Set(ass.ID.Int64)
+				e = obj.(*models.AEProduct).Compose(c.Context)
+				if e != nil {
+					panic(e)
+				}
+				schemas = obj.FormSchema()
+				categoryChoices(c.Context, (*schemas)["category"].Embedded)
+			}
+		} else {
+			schemas = obj.FormSchema()
+		}
+
+		res, e := lib.NewResource(schemas)
+		if e != nil {
+			panic(e)
+		}
+
+		selfLink := new(lib.HALHref)
+		selfLink.FromURI(r.RequestURI)
+		res.AddLink("self", *selfLink)
+
+		jsonResponse, err := json.Marshal(res)
+		if err != nil {
+			panic(oops.ServerError("", "Could not marshal API Key to JSON.", err, schemas))
+		}
+
+		w.Header().Set("Cache-Control", "max-age=10")
+		w.Header().Set("Content-Type", "application/hal+json")
+		fmt.Fprint(w, string(jsonResponse))
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func categoryChoices(c *app.Context, s *form.Schema) {
+	resultMap, e := models.GetCategories(c, "", "", "", "")
+	if e != nil {
+		panic(e)
+	}
+
+	var primaryChoices []form.Choice
+	var secondaryChoices []form.Choice
+	var tertiaryChoices []form.Choice
+
+	for _, primary := range resultMap["primary"].([]string) {
+		key := primary
+		value := strings.Title(strings.Replace(primary, "_", " ", -1))
+		primaryChoices = append(primaryChoices, form.MakeChoice(key, value))
+	}
+
+	for _, secondary := range resultMap["secondary"].([]string) {
+		key := secondary
+		value := ""
+		for _, primary := range primaryChoices {
+			if len(secondary) > 0 && strings.HasPrefix(secondary, primary.Key) {
+				value = strings.Title(strings.Replace(secondary[len(primary.Key)+1:], "_", " ", -1))
+				break
+			}
+		}
+		secondaryChoices = append(secondaryChoices, form.MakeChoice(key, value))
+	}
+
+	for _, tertiary := range resultMap["tertiary"].([]string) {
+		key := tertiary
+		value := ""
+		for _, secondary := range secondaryChoices {
+			if len(secondary.Key) > 0 && strings.HasPrefix(tertiary, secondary.Key) {
+				value = strings.Title(strings.Replace(tertiary[len(secondary.Key)+1:], "_", " ", -1))
+				break
+			}
+		}
+		tertiaryChoices = append(tertiaryChoices, form.MakeChoice(key, value))
+	}
+
+	(*s)["primary"].Render.Choices = primaryChoices
+	(*s)["secondary"].Render.Choices = secondaryChoices
+	(*s)["tertiary"].Render.Choices = tertiaryChoices
+}

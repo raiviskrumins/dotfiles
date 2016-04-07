@@ -1,0 +1,56 @@
+{% extends "index.jinja2" %}
+
+{% from 'macros.jinja2' import basic_field, checkbox_field, basic_field %}
+
+{% block title %}Contact Us{% endblock title %}
+
+{% block content_main %}
+<div class="row">
+    <div class="col-md-12">
+        <h1>Contact Us</h1>
+        <hr>
+    </div>
+</div>
+<div class="row subheader">
+    <div class="col-md-12">
+        <p class=""><strong>Need help?</strong> Send us a message by filling out the form below, and one of our specialists will contact you shortly.</p>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-7">
+        <form action="/contact-us" method="POST" id="contactUsForm">
+            {% with messages = get_flashed_messages() %}
+              {% if messages %}
+                <ul class="errors">
+                {% for message in messages %}
+                  <li>{{ message }}</li>
+                {% endfor %}
+                </ul>
+              {% endif %}
+            {% endwith %}
+            {{ basic_field(form.name) }}
+            {{ basic_field(form.email) }}
+            <div class="row">
+                <div class="col-md-6">
+                    {{ basic_field(form.phone) }}
+                </div>
+                <div class="col-md-6 phone-preference">
+                    {{ checkbox_field(form.phone_preference) }}
+                </div>
+            </div>
+            {{ basic_field(form.message, placeholder="") }}
+            <input type="submit" class="btn btn-primary pull-right" value="Send">
+            <div class="clearfix"></div>
+        </form>
+    </div>
+    <div class="col-md-5 contact-info">
+        <address>
+            <strong>Amber Engine, LLC</strong><br>
+            711 Griswold<br>
+            Detroit, MI 48226
+        </address>
+        <p><a href="tel:+18776152121">(877) 615-2121</a></p>
+        <p><a href="mailto:info@amberengine.com">info@amberengine.com</a></p>
+    </div>
+</div>
+{% endblock content_main %}

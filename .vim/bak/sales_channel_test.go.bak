@@ -1,0 +1,179 @@
+package models
+
+import (
+	"bytes"
+	"encoding/json"
+	"testing"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/pqdb"
+	"github.com/AmberEngine/api/test_utils"
+	"github.com/stretchr/testify/assert"
+)
+
+// TestCreateSalesChannel_ValidData tries to assert a valid Sales Channel is returned
+// when provided correct data for Sales Channel creation, and that the
+// SalesChannel can be retrieved by the database successfully.
+func TestCreateSalesChannel_ValidData(t *testing.T) {
+	jsonBytes := []byte(`{
+		"visible": false,
+		"name": "Example Sales Channel",
+		"bio": "This is my bio.",
+		"url": "http://example.com/sc",
+		"logo_url": "http://example.com/sc.bmp",
+		"phone": "1234567890",
+		"extension": "1337",
+		"street_address_1": "123 Someplace",
+		"street_address_2": "456 Nowhere",
+		"city": "Othertown",
+		"state": "Michigan",
+		"zipcode": "12345"
+	}`)
+
+	jsonData := lib.JSONReaderCloser{bytes.NewBuffer(jsonBytes)}
+	returned, e := CreateSalesChannel(TestCtx, jsonData)
+	if !assert.NotNil(t, returned) || !assert.NoError(t, e) {
+		return
+	}
+
+	// Retrieve the just-created SalesChannel  and ensure it is correct and matches
+	// the previously-returned SalesChannel.
+	retrieved, e := RetrieveSalesChannel(TestCtx, int(returned.ID.Int64))
+	if assert.NotNil(t, retrieved) && assert.NoError(t, e) {
+		assert.Equal(t, returned, retrieved)
+	}
+}
+
+// TestRetrieveSalesChannel will retrieve a limited list of all available
+// SalesChannels, with an offset, and ensures that the proper number is returned.
+func TestRetrieveSalesChannels(t *testing.T) {
+	limit := 3
+	offset := 0
+
+	queryParams, e := pqdb.NewQueryParams(limit, offset)
+	if e != nil {
+		assert.Fail(t, e.Error())
+	}
+
+	collection, max, e := RetrieveSalesChannels(TestCtx, queryParams)
+
+	assert.NoError(t, e)
+	assert.Len(t, collection, limit)
+	assert.True(t, len(collection) <= max)
+}
+
+// TestRetrieveSalesChannel_Valid attempts to assert that it is possible to
+// retrieve a valid SalesChannel by ID.
+func TestRetrieveSalesChannel_Valid(t *testing.T) {
+	id := 12
+
+	sc, e := RetrieveSalesChannel(TestCtx, id)
+	if assert.NotNil(t, sc) && assert.NoError(t, e) {
+		assert.Equal(t, id, int(sc.ID.Int64))
+	}
+}
+
+// TestRetrieveSalesChannel_MissingID attempts to assert that nil and an error
+// are returned when attempting to retrieve a SalesChannel with a
+// non-existant ID number.
+func TestRetrieveSalesChannel_MissingID(t *testing.T) {
+	id := 101010
+
+	sc, e := RetrieveSalesChannel(TestCtx, id)
+
+	assert.Nil(t, sc)
+	assert.Error(t, e)
+}
+
+// TestUpdateSalesChannel_InvalidID attempts to assert that nil and error values are
+// returned when attempting to update a SalesChannel with an invalid ID.
+func TestUpdateSalesChannel_InvalidID(t *testing.T) {
+	validID := 11
+	invalidID := 99999999
+
+	sc, e := RetrieveSalesChannel(TestCtx, validID)
+
+	if !assert.NoError(t, e) {
+		return
+	}
+
+	sc.ID.Int64 = int64(invalidID)
+
+	jsonBytes, err := json.Marshal(sc)
+	if assert.NotEmpty(t, jsonBytes) && assert.NoError(t, err) {
+		jsonReadCloser := test_utils.MockJSON{bytes.NewBuffer(jsonBytes)}
+
+		updatedSalesChannel, e := UpdateSalesChannel(TestCtx, invalidID, jsonReadCloser)
+
+		assert.Nil(t, updatedSalesChannel)
+		assert.Error(t, e)
+	}
+}
+
+// TestUpdateSalesChannel_Updated attempts to assert that a valid SalesChannel
+// is returned when updating an existing SalesChannel with valid data.
+func TestUpdateSalesChannel_Updated(t *testing.T) {
+	ID := 8
+	sc, e := RetrieveSalesChannel(TestCtx, ID)
+
+	if !assert.NotNil(t, sc) || !assert.NoError(t, e) {
+		return
+	}
+
+	updatedBio := "Updated bio test string"
+	updatedURL := "http://example.com/unit/test/example"
+	updatedVisibility := false
+
+	sc.Bio.Set(updatedBio)
+	sc.URL.Set(updatedURL)
+	sc.Visible.Set(updatedVisibility)
+
+	jsonBytes, err := json.Marshal(sc)
+
+	if assert.NotEmpty(t, jsonBytes) && assert.NoError(t, err) {
+		jsonReadCloser := test_utils.MockJSON{bytes.NewBuffer(jsonBytes)}
+
+		sc, e := UpdateSalesChannel(TestCtx, ID, jsonReadCloser)
+		if !assert.NoError(t, e) {
+			return
+		}
+
+		if assert.NotNil(t, sc) && assert.NoError(t, e) {
+			assert.Equal(t, updatedBio, sc.Bio.String)
+			assert.Equal(t, updatedURL, sc.URL.String)
+			assert.Equal(t, updatedVisibility, sc.Visible.Bool)
+		}
+
+		sc, e = RetrieveSalesChannel(TestCtx, ID)
+		if assert.NotNil(t, sc) && assert.NoError(t, e) {
+			assert.Equal(t, updatedBio, sc.Bio.String)
+			assert.Equal(t, updatedURL, sc.URL.String)
+			assert.Equal(t, updatedVisibility, sc.Visible.Bool)
+		}
+	}
+}
+
+// TestDeleteSalesChannel_InvalidKey attempts to assert that deleting
+// an SalesChannel when using an invalid primary-key ID results in
+// being returned an error.
+func TestDeleteSalesChannel_InvalidKey(t *testing.T) {
+	// This key does not exist in the database.
+	ID := 101010
+
+	e := DeleteSalesChannel(TestCtx, ID)
+	assert.Error(t, e)
+}
+
+// TestDeleteSalesChannel_Valid attempts to assert it is possible to delete a
+// SalesChannel using a valid ID, and that the SalesChannel becomes irretrievable.
+func TestDeleteSalesChannel_Valid(t *testing.T) {
+	ID := 11
+	e := DeleteSalesChannel(TestCtx, ID)
+
+	// It should no longer be possible to retrieve the deleted SalesChannel.
+	if assert.NoError(t, e) {
+		mfr, e := RetrieveSalesChannel(TestCtx, ID)
+		assert.Nil(t, mfr)
+		assert.Error(t, e)
+	}
+}

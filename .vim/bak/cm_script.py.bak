@@ -1,0 +1,67 @@
+from sqlalchemy import sql, text
+
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import stripe
+
+from amber_portal import app
+from amber_portal.models import db
+
+
+mfr_list = [
+    ('cblum@davidfrancisfurniture.com', '8889055678'),
+    ('tim@uhurudesign.com', ''),
+    ('josh@detroitwallpaper.com', ''),
+    ('mary@dia.com', '3368858617'),
+    ('christi@puttinout.com', ''),
+    ('sarah@jofran.com', '5083846019'),
+    ('brent@charlottefabrics.com', '8003285224'),
+    ('kelly@remotestylist.com', '8779990829'),
+    ('info@staianosfurniture.com', '9088322191'),
+    ('kurt@furniture4generations.com', '3608521717'),
+    ('stacey@parlore.com', '4044441137')
+]
+
+PLAN_ID = 'beta_plan'
+
+# SENSITIVE INFORMATION
+# DO NOT SHARE! OR LIKE ON FACEBOOK. OR POST ON INSTAGRAM! JUST DONT DO IT!
+#
+# I MEAN IT! DONT!
+#
+#
+# OH, AND FOR THE LOVE OF ALL THAT IS HOLY, DO NOT CHECK INTO GIT!!!!
+AE_CARD_INFO = {
+        'object': 'card',
+        'exp_month': '01',
+        'exp_year': '2024',
+        'number': '4242424242424242',
+        'cvc': '424'
+}
+
+if __name__ == "__main__":
+    with app.app_context():
+        stripe.api_key = app.config['STRIPE_SECRET_KEY']
+        for mfr in mfr_list:
+            customer = stripe.Customer.create(
+                email=mfr[0],
+                metadata={
+                    'phone': mfr[1]
+                }
+            )
+            user_id = customer.id
+
+            update_sql = text("UPDATE cm_user SET stripe_customer = :cust_id WHERE email = :email")
+            db.session.execute(update_sql, {'cust_id': user_id, 'email': mfr[0]})
+
+            cards = customer.sources.all(object='card')
+            card = customer.sources.create(source=AE_CARD_INFO)
+            for old_card in cards.data:
+                if old_card != card:
+                    old_card.delete()
+
+            subscription = customer.subscriptions.create(plan=PLAN_ID)
+
+        db.session.commit()

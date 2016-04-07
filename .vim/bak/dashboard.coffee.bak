@@ -1,0 +1,12 @@
+# detects changes in contact form and alerts user if form has not been sent
+greeting = "Hello world!"
+$(document).ready ->
+
+  shallNotPass = ->
+    cm.setConfirmUnload 'You have not sent this message.'
+
+  okayPass = ->
+    cm.setConfirmUnload false
+
+  $('body').on 'change', '#contactForm input, #contactForm textarea', shallNotPass
+  $('body').on 'submit', '#contactForm', okayPass

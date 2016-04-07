@@ -1,0 +1,87 @@
+{% extends 'index.jinja2' %}
+
+{% block title %}ADMIN{% endblock title %}
+
+{% block javascript %}
+{{super()}}
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/admin.min.js')|cache_update }}"></script>
+{% endblock %}
+
+{% block content_main %}
+<div class="col-md-12">
+  <div class="manufacturer-header">
+      <div class="pull-right text-right">
+          <span class="last-update">Last edited on {{manufacturer.date_updated|string_date_format('%B %d at %I:%M %p', localize=True)}} by {{ manufacturer.updated_by_user_id }}</span>
+          <a href="{{ url_for('admin_view.edit_manufacturer', mfr_id=manufacturer['id']) }}"><span class="icon-pencil"></span></a>
+      </div>
+      <h1>{{ manufacturer.name }} {% if manufacturer.active %}<span class="label label-info">Visible</span>{% else %}<span class="label label-default">Hidden</span>{% endif %}</h1>
+      <p>Added: {{ manufacturer.date_added }}</p>
+  </div>
+
+  <div class="row">
+      <div class="col-md-6">
+          <p>{% if manufacturer.logo_url %}<img src="{{manufacturer.logo_url}}">{% else %}<img src="/static/img/defaultlogo.svg">{% endif %}</p>
+          <a href="#" data-target="#logo_file" class="btn btn-info js-file-trigger">Upload Image</a>
+          <input type="file" name="image_file" id="logo_file" class="js-file-input" accept="image/jpeg, image/jpg, image/png">
+      </div>
+
+      <div class="col-md-6">
+          <p><b>Address:</b></p>
+          <p>{{manufacturer.street_address_1 or ''}}<br>
+              {% if manufacturer.street_address_2 %}{{manufacturer.street_address_2}}<br>{% endif %}
+              {% if manufacturer.city %}{{manufacturer.city + ','}}{% endif %} {{manufacturer.state or ''}} {{manufacturer.zipcode or ''}}
+          </p>
+          <hr>
+          <p><b>Contact</b></p>
+          {% if manufacturer.url %}
+          <p><a href="http://{{manufacturer.url}}" target="_blank">{{manufacturer.url}}</a></p>
+          {% endif %}
+          {% if manufacturer.email %}
+          <p><a href="mailto:{{manufacturer.email}}">{{manufacturer.email}}</a></p>
+          {% endif %}
+          <p>{{manufacturer.phone or ''}}</p>
+          <hr>
+          <p><b>Social</b></p>
+      </div>
+  </div>
+  <hr>
+  <p><b>Company Bio:</b></p>
+  <p>{{ manufacturer.bio }}</p>
+  <hr>
+  <p><b>Feature Images:</b>
+      <a href="{{ url_for('manufacturer_view.image_new', mfr_id=manufacturer.id) }}" class="btn btn-primary js-get-modal pull-right">+ New Image</a></p>
+  <div class="clearfix">
+      {% for image in manufacturer.images %}
+      <div class="manu-image" data-id="{{image.id}}" data-image="{{image.url}}" style="background-image:url('{{image.url}}')">
+          <a href="{{ url_for('manufacturer_view.image_modal', mfr_id=manufacturer.id, image_id=image.id) }}" class="js-get-modal btn btn-info edit" data-id="{{image.id}}"><span class="icon-pencil light"></span></a>
+          <a href="{{ url_for('manufacturer_view.image_delete', mfr_id=manufacturer.id, image_id=image.id) }}" class="js-image-delete btn btn-info delete"><span class="icon-trash light"></span></a>
+          {% if image.default %}<span class="default">Feature</span>{% endif %}
+      </div>
+      {% endfor %}
+  </div>
+  <hr>
+  <a href="{{url_for('manufacturer_view.manufacturer_new_product', manu_id=manufacturer.id)}}" class="btn btn-primary pull-right js-get-modal">+ New Product</a>
+  {% if products %}
+    <h3>Products ({{ products|count }})</h3>
+    <table class="table striped">
+      <tr>
+        <th width="100"></th>
+        <th>SKU</th>
+        <th>Product Name</th>
+        <th>Visible</th>
+      </tr>
+    {% for prod in products %}
+      <tr>
+        <td><img src="{{ prod.thumbnail_image or prod.full_size_image or '' }}" class="pull-left" width=60></td>
+        <td><a href="{{ url_for('product_view.prod_get', prod_id=prod.id, referrer='manufacturer', referrer_id=manufacturer.id) }}">{{prod.identity.manufacturer_sku}}</a></td>
+        <td><p><a href="{{ url_for('product_view.prod_get', prod_id=prod.id, referrer='manufacturer', referrer_id=manufacturer.id) }}">{{ prod.identity.name }}</a></p></td>
+        <td>{{prod.visibility.active}}</td>
+      </tr>
+    {% endfor %}
+    </table>
+  {% else %}
+    <h3>{{ manufacturer.name }} has no products.</h3>
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,81 @@
+#! /bin/bash
+STATUS=0
+PNAME=$(basename $0)
+PDIR=$(dirname $0)
+TMPDIR=/tmp/gotest
+TMPFILE=$TMPDIR/$PNAME.$$-$RANDOM
+SCRIPTS_DIR=$PDIR/scripts
+S3_BUCKET=amber-devops
+S3_CONFIGS=configs
+S3_DB_BACKUPS=db-backups
+S3_DB_FILE=api_test.sql
+S3_CONFIG_FILE=config.test.json
+
+cleanup() {
+    exec > /dev/null 2>&1
+
+    rm -f $TMPFILE.*
+}
+
+trap cleanup EXIT
+
+mkdir -p $TMPDIR
+find $TMPDIR -type f -exec rm {} \;
+
+if [ ${API_HOME:=NULL} != NULL ]
+then
+    SCRIPTS_DIR=$API_HOME/scripts
+else
+    API_HOME=${PDIR:=.}
+fi
+
+if [ ! -s $API_HOME/config.local.json ]
+then
+    aws s3 cp s3://$S3_BUCKET/$S3_CONFIGS/$S3_CONFIG_FILE $API_HOME/config.local.json
+fi
+
+if [ ! -s $API_HOME/db/dbconf.yml ]
+then
+    aws s3 cp s3://$S3_BUCKET/$S3_CONFIGS/test_dbconf.yml $API_HOME/db/dbconf.json
+fi
+
+if [ ! -s $API_HOME/api_test.sql ]
+then
+    aws s3 cp s3://$S3_BUCKET/$S3_DB_BACKUPS/$S3_DB_FILE $TMPDIR
+else
+    cp $API_HOME/api_test.sql $TMPDIR
+fi
+
+PG_URI=$(go run $SCRIPTS_DIR/provisioner.go uri)
+
+go run $SCRIPTS_DIR/provisioner.go sql
+
+if [ ${PG_DOCKER:=NULL} == 'NULL' ]
+then
+    psql $PG_URI -f $TMPDIR/$S3_DB_FILE
+else
+    docker cp $TMPDIR/$S3_DB_FILE $PG_DOCKER:/tmp/$S3_DB_FILE
+    docker exec $PG_DOCKER psql $PG_URI -f /tmp/$S3_DB_FILE
+fi
+
+goose up
+
+go run $SCRIPTS_DIR/provisioner.go mongo
+go run $SCRIPTS_DIR/index/index.go test
+
+for dir in $(find . -type f -name "*_test.go" -exec dirname {} \; | sort -u)
+do
+    cd $dir
+
+    go test
+    lastStatus=$?
+
+    if [ $lastStatus -ne 0 ]
+    then
+        STATUS=1
+    fi
+    
+    cd -
+done
+
+exit $STATUS

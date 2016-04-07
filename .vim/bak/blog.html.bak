@@ -1,0 +1,84 @@
+<!doctype html>
+<html class="no-js" lang="en">
+    <head>
+        <title>dev.blog</title>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1.0,user-scalable=no">
+        <link rel="stylesheet" href="http://localhost:8089/media/style/general.css">
+        <link rel="stylesheet" href="http://localhost:8089/media/style/framework.css">
+        <link rel="stylesheet" href="http://localhost:8089/media/style/site.css">
+        <link rel="stylesheet" href="http://localhost:8089/media/style//prettyPhoto.css" type="text/css" media="screen" charset="utf-8">
+        <link rel="icon" type="../image/png" href="https://cdn4.iconfinder.com/data/icons/ionicons/512/icon-pound-128.png">
+        <script src="http://localhost:8089/media/js/modernizr-2.0.6.min.js"></script>
+        <style>
+    .hll{background-color:#ffffcc}.c{color:#8f5902;font-style:italic}.err{color:#a40000;border:1px solid #ef2929}.g{color:#000000}.k{color:#204a87;font-weight:bold}.l{color:#000000}.n{color:#000000}.o{color:#ce5c00;font-weight:bold}.x{color:#000000}.p{color:#000000;font-weight:bold}.ch{color:#8f5902;font-style:italic}.cm{color:#8f5902;font-style:italic}.cp{color:#8f5902;font-style:italic}.cpf{color:#8f5902;font-style:italic}.c1{color:#8f5902;font-style:italic}.cs{color:#8f5902;font-style:italic}.gd{color:#a40000}.ge{color:#000000;font-style:italic}.gr{color:#ef2929}.gh{color:#000080;font-weight:bold}.gi{color:#00A000}.go{color:#000000;font-style:italic}.gp{color:#8f5902}.gs{color:#000000;font-weight:bold}.gu{color:#800080;font-weight:bold}.gt{color:#a40000;font-weight:bold}.kc{color:#204a87;font-weight:bold}.kd{color:#204a87;font-weight:bold}.kn{color:#204a87;font-weight:bold}.kp{color:#204a87;font-weight:bold}.kr{color:#204a87;font-weight:bold}.kt{color:#204a87;font-weight:bold}.ld{color:#000000}.m{color:#0000cf;font-weight:bold}.s{color:#4e9a06}.na{color:#c4a000}.nb{color:#204a87}.nc{color:#000000}.no{color:#000000}.nd{color:#5c35cc;font-weight:bold}.ni{color:#ce5c00}.ne{color:#cc0000;font-weight:bold}.nf{color:#000000}.nl{color:#f57900}.nn{color:#000000}.nx{color:#000000}.py{color:#000000}.nt{color:#204a87;font-weight:bold}.nv{color:#000000}.ow{color:#204a87;font-weight:bold}.w{color:#f8f8f8;text-decoration:underline}.mb{color:#0000cf;font-weight:bold}.mf{color:#0000cf;font-weight:bold}.mh{color:#0000cf;font-weight:bold}.mi{color:#0000cf;font-weight:bold}.mo{color:#0000cf;font-weight:bold}.sb{color:#4e9a06}.sc{color:#4e9a06}.sd{color:#8f5902;font-style:italic}.s2{color:#4e9a06}.se{color:#4e9a06}.sh{color:#4e9a06}.si{color:#4e9a06}.sx{color:#4e9a06}.sr{color:#4e9a06}.s1{color:#4e9a06}.ss{color:#4e9a06}.bp{color:#3465a4}.vc{color:#000000}.vg{color:#000000}.vi{color:#000000}.il{color:#0000cf;font-weight:bold}  
+        </style>
+    </head>
+    <body>
+        <div class="mother">
+            <header class="mast-head stack-fixed clearfix">
+                <article class="logo"> <a href="index.html"># dev.blog</a> </article>
+                <nav class="main-nav">
+                    <ul>
+                        <li class="first"> <a class="selected"  href="/">Home</a> </li>
+                        <li class="last"> <a  href="/archive">Archive</a> </li>
+                    </ul>
+                </nav>
+                <!-- end .main-nav -->
+            </header>
+            <article class="main" role="main">
+                <div class="home-hero">
+                    <div class="top-mast">
+                        {{!content}}
+                    </div>
+                </div>
+            </article>
+            <section class="stack-fixed entry-text footer clearfix">
+                <ul class="slat-7 first">
+                    <li>
+                        <p>
+                            I am <span class="colored">Curtis La Graff</span>, and this is my blog. It is a chance for me to talk about some of the things I enjoy, though specifically on the subject of <span class="colored">software engineering</span>, along with whatever Comp Sci topics, musically-related & other content that I want to discuss.
+                        </p>    
+                    </li>
+                </ul>
+                <ul class="slat-3">
+                    <li><i class="icon-envelope"></i>
+                        <script type="text/javascript">
+                            //<![CDATA[
+                            <!--
+                            var x="function f(x){var i,o=\"\",ol=x.length,l=ol;while(x.charCodeAt(l/13)!" +
+                                "=48){try{x+=x;l+=l;}catch(e){}}for(i=l-1;i>=0;i--){o+=x.charAt(i);}return o" +
+                                ".substr(0,ol);}f(\")05,\\\"j`tgor*eu-*h#\\\"\\\\\\\"\\\\0&!S~NUOHL[t\\\\420" +
+                            "\\\\iQ^430\\\\WVN\\\\\\\\JMGjZASTPG100\\\\~430\\\\Esjth;8E}z8rtq|kkdFwkt710" +
+                        "\\\\610\\\\230\\\\M230\\\\700\\\\530\\\\600\\\\410\\\\600\\\\K;X500\\\\400\\"+
+                        "\\-5{8kw{?#(? 52m5QXVLTZW\\\"(f};o nruter};))++y(^)i(tAedoCrahc.x(edoCrahCm" +
+                        "orf.gnirtS=+o;721=%y;++y)05<i(fi{)++i;l<i;0=i(rof;htgnel.x=l,\\\"\\\"=o,i r" +
+                                "av{)y,x(f noitcnuf\")"                                                       ;
+                                    while(x=eval(x));
+                                    //-->
+                                    //]]>
+                                </script>                
+                    </li>
+                    <li><i class="icon-share-alt"></i> <a href="https://www.linkedin.com/in/curtis-la-graff-50764240">Connect on Linkedin</a></li>
+                </ul>
+                <ul class="slat-2 last">
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/archive">Archive</a></li>
+                </ul>
+            </section>
+            <footer id="copyright" class="stack-fixed">
+                <p>&copy; Copyright 2016 devblog.lagraff.me</p>
+            </footer>
+        </div>
+        <script src="http://localhost:8089/media/js/jquery.min.js"></script>
+        <script defer src="http://localhost:8089/media/js/accessories-min.js"></script>
+        <script defer src="http://localhost:8089/media/js/site.js"></script>
+        <script src="http://localhost:8089/media/js/jquery.prettyPhoto.js"></script>
+        <script>
+            $(document).ready(function () {
+                $("a[rel^='prettyPhoto']").prettyPhoto();
+            });
+        </script>
+    </body>
+</html>

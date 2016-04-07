@@ -1,0 +1,19 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+
+<div class="row">
+  <div class="col-md-3">{{ append_field(form.suspension_point.canopy_height, 'in') }}</div>
+  <div class="col-md-3">{{ append_field(form.suspension_point.canopy_width, 'in') }}</div>
+  <div class="col-md-3">{{ append_field(form.suspension_point.canopy_depth, 'in') }}</div>
+  <div class="col-md-3">{{ append_field(form.suspension_point.canopy_diameter, 'in') }}</div>
+</div>
+<div class="row">
+  <div class="col-md-5">{{ basic_field(form.suspension_point.support_type) }}</div>
+  <div class="col-md-5">{{ append_field(form.suspension_point.minimum_hanging_length, 'in') }}</div>
+</div>
+<div class="row">
+  <div class="col-md-5">{{ append_field(form.suspension_point.maximum_hanging_length, 'in') }}</div>
+  <div class="col-md-5">{{ append_field(form.suspension_point.chain_length, 'in') }}</div>
+</div>
+<div class="row">
+  <div class="col-md-5">{{ append_field(form.suspension_point.wire_length, 'in') }}</div>
+</div>

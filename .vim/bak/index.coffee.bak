@@ -1,0 +1,36 @@
+(($) ->
+  app = Sammy 'body'
+
+  $(document).ready ->
+    carousel = $('.carousel')
+    if carousel.length > 0
+        carousel.swiperight (e) ->
+          $(@).carousel 'prev'
+        carousel.swipeleft (e) ->
+          $(@).carousel 'next'
+
+    if $('.hide-links').length > 0
+      $('#navbar').removeClass 'navbar-collapse collapse'
+      $('#navbar').addClass 'hidden'
+
+    toc = $('.toc')
+    if toc.length > 0
+      if window.pageYOffset >= 80 and window.pageYOffset < 9392
+        toc.addClass 'fixed'
+      else
+        toc.removeClass 'fixed'
+
+      if window.pageYOffset >= 9392
+        toc.addClass 'absolute'
+      else
+        toc.removeClass 'absolute'
+
+
+    $('.team-block').on 'click', (e) ->
+      e.preventDefault()
+
+    Typekit.load()
+    
+    app.run('#/')
+
+)(jQuery)

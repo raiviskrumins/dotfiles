@@ -1,0 +1,36 @@
+{
+    "sql": {
+        "type": "postgres",
+        "host": "localhost",
+        "user": "doodle",
+        "password": "doodle123",
+        "database": "api",
+        "test-database": "api_test",
+        "ssl-mode": "disable",
+        "old_password": "doodle123",
+        "old_host": "localhost",
+        "old_user": "doodle",
+        "old_database": "doodle",
+        "portal_password": "doodle123",
+        "portal_host": "localhost",
+        "portal_user": "doodle",
+        "portal_database": "portal"
+    },
+    "mongo": {
+        "database": "api1231241",
+        "test-database": "api_test",
+        "host": "127.0.0.1",
+        "port": "27017",
+        "user": "amber",
+        "password": "amber123"
+    },
+    "es": {
+        "host": "localhost",
+        "port": "9200",
+        "index-product": "go-product-index",
+        "test-index-product": "go-test-product-index",
+        "index-manufacturer": "go-manufacturer-index",
+        "test-index-manufacturer": "go-test-manufacturer-index"
+    },
+    "log-errors": false
+}

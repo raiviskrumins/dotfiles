@@ -1,0 +1,144 @@
+from flask import Blueprint, request
+import json
+
+from amber_api.models import db
+from amber_api.auth import auth_required
+from amber_api.lib.decor import resource, errors
+from amber_api.autodoc import uri_parameter, body_parameter
+from amber_api.auth.permissions import permissions
+
+from amber_api.lib.api_key import get_api_key
+from amber_api.lib.product import fetch_product, save_product
+from amber_api.models.component_types import OptionSetSubComponent
+from amber_api.lib.option import get_option_set
+from amber_api.lib.product import get_product_option_sets
+
+from amber_api.resource_schemas import product_option_set_resource
+product_option_view = Blueprint('product_option_view', __name__)
+
+
+@product_option_view.route(
+    '/api/<string:version>/products/<int:product_id>/options',
+    methods=['POST']
+)
+@resource(
+    resource=product_option_set_resource,
+    description='Add an OptionSet to a Product',
+    log_message='Add Option Set to product',
+    uri_parameters={
+        'version': uri_parameter.version,
+        'product_id': uri_parameter.product_id(
+            description='ID number of the product you wish to create the '
+                        'OptionSet on.'
+        )
+    },
+    body_parameters={
+        'public_key': body_parameter.public_key(
+            description='Public key of the API consumer you are retrieving '
+                        'products for.'
+        ),
+        'option_set_id': {
+            'type': 'Integer',
+            'required': False,
+            'example': 1,
+            'description': 'ID number of the option set you are adding.'
+        }
+    }
+)
+@auth_required(view_permission=permissions.product_option_set.create)
+@errors()
+def create_product_option_set(version, product_id):
+    """ Add an OptionSet to a product
+    """
+    import pudb; pu.db()
+    print("CREAT OPTION SET " * 10)
+    product = fetch_product(
+        product_id,
+        api_key=request.data.get('public_key')
+    )
+    print("Product ID", product_id)
+    data = json.loads(request.data['data'])
+    option_set_id = data.get('option_set_id')
+    print("Option Set ID", option_set_id)
+    option_set = get_option_set(option_set_id)
+    product_option_sets = get_product_option_sets(product_id)
+    print("product option sets", product_option_sets)
+    option_set_id_list = [o_set.option_set_id for o_set in product_option_sets]
+    
+    if option_set and int(option_set_id) not in option_set_id_list:
+        set_sub = OptionSetSubComponent()
+        set_sub.option_component_id = product['option']['component_data_id']
+        set_sub.option_set_id = option_set_id
+        set_sub.product_id = product['id']
+        db.session.add(set_sub)
+        db.session.commit()
+        product = fetch_product(
+            product['id'],
+            reload_cache=True,
+            api_key=request.data.get('public_key')
+        )
+        save_product(product)
+
+    return product
+
+
+@product_option_view.route(
+    '/api/<string:version>/products/<int:product_id>/options/'
+    '<int:option_set_id>',
+    methods=['DELETE']
+)
+@resource(
+    resource=product_option_set_resource,
+    description='Remove an OptionSet from a Product',
+    log_message='Remove Option Set from product',
+    uri_parameters={
+        'version': uri_parameter.version,
+        'product_id': uri_parameter.product_id(
+            description='ID number of the product you wish to delete the '
+                        'OptionSet from.'
+        ),
+        'option_set_id': uri_parameter.option_set_id(
+            description='ID number of the OptionSet you wish to remove from '
+                        'the Product.'
+        )
+    },
+    body_parameters={
+        'public_key': {
+            'type': 'String',
+            'required': False,
+            'example': '8abebf3699c192a16278b873ece52d51129523',
+            'description': 'Public key of the API consumer you are retrieving '
+                           'products for.'
+        }
+    }
+)
+@auth_required(view_permission=permissions.product_option_set.delete)
+@errors()
+def delete_product_option_set(version, product_id, option_set_id):
+    """ Remove an OptionSet from a product
+    """
+    product = fetch_product(
+        product_id,
+        api_key=request.data.get('public_key')
+    )
+    option_set = get_option_set(option_set_id)
+
+    if option_set:
+        print("OptionSet", option_set)
+        print("Prod ID", product_id)
+        print("Option Set ID", option_set_id)
+
+        set_sub = OptionSetSubComponent.query.filter(
+            OptionSetSubComponent.product_id == product_id,
+            OptionSetSubComponent.option_set_id == option_set_id
+        ).first()
+        db.session.delete(set_sub)
+        db.session.commit()
+        product = fetch_product(
+            product['id'],
+            reload_cache=True,
+            api_key=request.data.get('public_key')
+        )
+        save_product(product)
+
+    return product

@@ -1,0 +1,34 @@
+package routes
+
+import (
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/lib"
+	"github.com/gorilla/context"
+	"github.com/justinas/alice"
+)
+
+type RouteContext struct {
+	*app.Context
+}
+
+func CreateRouter(ctx *RouteContext) *lib.Router {
+	commonHandlers := alice.New(context.ClearHandler, LoggingHandler, RecoverHandler)
+	router := lib.NewRouter()
+
+	DefineFormSchemaRoutes(router, ctx, commonHandlers)
+	DefineNavigationRoutes(router, ctx, commonHandlers)
+	DefineAPIKeyRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+	DefineCategoryRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+	DefineCollectionRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+	DefineComponentRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+	DefineManufacturerImageRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+	DefineManufacturerRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+	DefineOptionRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+	DefineOptionSetRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+	DefineProductRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+	DefineProductRelationRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+	DefineSalesChannelRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+	DefineSalesChannelPreferenceRoutes(router, ctx, commonHandlers.Append(ctx.AuthenticationHandler))
+
+	return router
+}

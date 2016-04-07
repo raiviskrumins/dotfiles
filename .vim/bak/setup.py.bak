@@ -1,0 +1,30 @@
+import os
+
+from pip.req import parse_requirements
+from setuptools import find_packages
+from setuptools import setup
+
+
+APPLICATION_NAME = 'Amber API'
+APPLICATION_VERSION = '0.11.1'
+CONFIG_OBJECT = os.getenv('AMBER_CONFIG', 'config.DevelopmentConfig')
+requirements_file = 'requirements.txt'
+
+if CONFIG_OBJECT.startswith('config.Development'):
+    requirements_file = 'requirements-local.txt'
+elif CONFIG_OBJECT.startswith('config.Stag'):
+    requirements_file = 'requirements-staging.txt'
+
+requirements = []
+
+for requirement in parse_requirements(requirements_file, session=False):
+    requirements.append(str(requirement.req))
+
+setup(
+    name=APPLICATION_NAME,
+    version=APPLICATION_VERSION,
+    long_description=__doc__,
+    packages=find_packages(),
+    include_package_data=True,
+    install_requires=requirements
+)

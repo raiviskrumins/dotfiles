@@ -1,0 +1,77 @@
+"""Remove specific components from the Upholstery Loveseat.
+
+Revision ID: 269b971fea27
+Revises: 4d2f09006b6b
+Create Date: 2015-06-30 09:04:23.347404
+
+"""
+
+# revision identifiers, used by Alembic.
+revision = '269b971fea27'
+down_revision = '4d2f09006b6b'
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+
+
+def upgrade():
+    conn = op.get_bind()
+   
+    initial_sql = (
+        "SELECT assemblage.id, component.id, component.table_name FROM public.assemblage, "
+        "public.assemblage_components, public.component WHERE assemblage.id "
+        "= assemblage_components.assemblage_id AND "
+        "assemblage_components.component_id = component.id AND "
+        "assemblage.name = 'upholstery_loveseat' AND component.name IN "
+        "('textile', 'durability', 'leather', 'pattern');"
+    )
+
+    for row in conn.execute(initial_sql).fetchall():
+        (assemblage_id, component_id, table_name) = row
+        sql_list = []
+        
+        sql_list.append(
+            (
+                "DELETE FROM %s WHERE component_data_id IN (SELECT component_data_id "
+                "FROM public.components WHERE component_id = %s AND product_id IN "
+                "(SELECT id FROM public.product_entity WHERE assemblage_id = %s))"
+            ) % (table_name, component_id, assemblage_id)
+        )
+
+        sql_list.append(
+            (
+                "DELETE FROM components WHERE component_id = %s AND product_id IN "
+                "(SELECT id FROM public.product_entity WHERE assemblage_id = %s);"
+            ) % (component_id, assemblage_id)
+        )
+
+        sql_list.append(
+            (
+                "DELETE FROM assemblage_components WHERE component_id = %s AND "
+                "assemblage_id = %s;"
+            ) % (component_id, assemblage_id)
+        )
+
+
+        for sql in sql_list:
+            conn.execute(sql)
+
+
+def downgrade():
+    conn = op.get_bind()
+    assemblage_sql = "SELECT assemblage.id FROM public.assemblage WHERE assemblage.name = 'upholstery_loveseat' LIMIT 1;"
+
+    result = conn.execute(assemblage_sql).fetchone()
+    assemblage_id = result[0]
+
+    # For each component type, create an associate between the component and the
+    # Loveseat assemblage entry.
+    for component in ['textile', 'durability', 'leather', 'pattern']:
+        component_id_sql = "SELECT id FROM component WHERE name ='%s' LIMIT 1;" % component
+        component_result = conn.execute(component_id_sql).fetchone()
+        if len(component_result) == 1:
+            id_ = component_result[0]
+            conn.execute("INSERT INTO assemblage_components VALUES (%i, %i);" % (assemblage_id, id_))
+

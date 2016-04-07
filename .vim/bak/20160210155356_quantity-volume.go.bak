@@ -1,0 +1,30 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+)
+
+// Up is executed when this migration is applied
+func Up_20160210155356(txn *sql.Tx) {
+	tables := []string{"cushion", "door", "drawer", "pillow", "shelf", "box", "table_leaf"}
+	sql := `ALTER TABLE %s_component ADD COLUMN quantity INTEGER;`
+
+	for _, t := range tables {
+		txn.Exec(fmt.Sprintf(sql, t))
+	}
+
+	txn.Exec(`ALTER TABLE box_component ADD COLUMN volume DOUBLE PRECISION;`)
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160210155356(txn *sql.Tx) {
+	tables := []string{"cushion", "door", "drawer", "pillow", "shelf", "box", "table_leaf"}
+	sql := `ALTER TABLE %s_component DROP COLUMN quantity;`
+
+	for _, t := range tables {
+		txn.Exec(fmt.Sprintf(sql, t))
+	}
+
+	txn.Exec(`ALTER TABLE box_component DROP COLUMN volume;`)
+}

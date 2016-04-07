@@ -1,0 +1,19 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20151119111052(txn *sql.Tx) {
+
+	txn.Exec("DELETE FROM assemblage_components WHERE component_id IN (SELECT id FROM component WHERE component_name IN ('tag_sub', 'tag'))")
+	txn.Exec("DELETE FROM component WHERE component_name IN ('tag_sub', 'tag')")
+	txn.Exec("DROP TABLE tag_component")
+	txn.Exec("DROP TABLE tag_sub_component")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20151119111052(txn *sql.Tx) {
+	// do a barrel roll
+}

@@ -1,0 +1,341 @@
+import flask
+import stripe
+
+from flask import (
+    Blueprint,
+    flash,
+    jsonify,
+    render_template,
+    redirect,
+    url_for
+)
+
+from flask_wtf import Form
+from wtforms import SelectField
+
+from amber_portal import postman
+from amber_portal.lib.utils import (
+    manufacturer_list,
+    amber_api_connection
+)
+from amber_portal.models.user import CMUser, CMUserRole
+from amber_portal.models import db
+from amber_portal.forms.user import NewUserForm
+
+from amber_lib import query
+
+from amber_portal.lib import get_current_user
+
+from .auth import allowed_roles, authenticated
+
+app = flask.current_app
+
+user_view = Blueprint('user_view', __name__, template_folder='templates')
+
+
+@user_view.route('/users', methods=['GET'])
+@authenticated
+@allowed_roles(['portal_admin'])
+def users_get():
+    users = CMUser.query.all()
+
+    return render_template('admin/users.jinja2', users=users)
+
+
+@user_view.route('/admin/users/new', methods=['GET', 'POST'])
+@authenticated
+@allowed_roles(['portal_admin'])
+def add_user():
+    current_user = get_current_user()
+    api_conn = amber_api_connection()
+    form = NewUserForm()
+    form.csrf_enabled = False
+
+    form.manufacturers.choices = manufacturer_list(current_user)
+    form.roles.choices = [(str(r.id), r.name.title())
+                          for r in CMUserRole.query.all()]
+
+    if form.validate_on_submit():
+        role = CMUserRole()
+        data = {
+            'name': form.data['name'],
+            'email': form.data['email'],
+            'password': form.data['password']
+        }
+
+        user = CMUser(**data)
+
+        if form.data['roles']:
+            for role_id in form.data['roles']:
+                role = CMUserRole.query.filter_by(id=role_id).first()
+                user.roles.append(role)
+
+        if form.manufacturer_name.data and form.manufacturer_email.data:
+            manu_data = {
+                'name': form.manufacturer_name.data,
+                'email': form.manufacturer_email.data
+            }
+            mfr = api_conn.Manufacturer.from_dict(manu_data).save()
+            user.manufacturer_id = mfr.id
+        elif form.manufacturers.data == 'none' or role.name == 'portal_admin':
+            user.manufacturer_id = None
+        else:
+            user.manufacturer_id = form.manufacturers.data
+
+        api_roles = ''
+        role_names = [role.name for role in user.roles]
+        if 'manufacturer_employer' in role_names:
+            api_roles = 'ManufacturerUser'
+        if 'portal_admin' in role_names:
+            api_roles = 'ChannelManagerAdmin'
+
+        api_key_payload = {
+            'name': user.email,
+            'role_name': api_roles,
+            'manufacturer_id': user.manufacturer_id,
+            'kind': 'user_key'
+        }
+
+        # TODO: needs functional testing
+        api_key = api_conn.APIKey.from_dict(api_key_payload).save()
+
+        user.public = api_key.public
+        user.private = api_key.private
+
+        db.session.add(user)
+        db.session.commit()
+
+        return redirect('admin/users/%s' % (user.id,))
+
+    return render_template('admin/new_user.jinja2', form=form)
+
+
+@user_view.route('/admin/users/<int:cm_user_id>', methods=['GET'])
+@authenticated
+@allowed_roles(['portal_admin'])
+def user_get(cm_user_id):
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+    api_conn = amber_api_connection()
+    user = CMUser.query.get(cm_user_id)
+
+    if user.manufacturer_id:
+        mfr = api_conn.Manufacturer.retrieve(user.manufacturer_id)
+        manufacturer = mfr
+    else:
+        manufacturer = None
+
+    customer = None
+    invoices = []
+    if user.stripe_customer is not None:
+        customer = stripe.Customer.retrieve(user.stripe_customer)
+        invoices = stripe.Invoice.all(customer=user.stripe_customer)
+
+    return render_template(
+        'admin/user.jinja2',
+        user=user,
+        manufacturer=manufacturer,
+        customer=customer,
+        invoices=invoices
+    )
+
+
+@user_view.route('/admin/users/<int:user_id>/email', methods=['GET'])
+@authenticated
+@allowed_roles(['portal_admin'])
+def test_email(user_id):
+    user = CMUser.query.get(user_id)
+    first, last = user.name.split(' ', 1)
+    data = {
+        'name': user.name,
+        'first_name': first,
+        'last_name': last,
+        'email': user.email,
+        'manufacturer': 'Pretend manufacturer',
+        'phone': 'Pretend phone #',
+        'url': 'Pretend URL'
+    }
+    postman.deliver(
+        to=user.email,
+        subject='[TEST] Welcome to Amber Engine',
+        template_name='welcome',
+        template_vars=data
+    )
+    return render_template('admin/users/email_modal.jinja2', email=user.email)
+
+
+@user_view.route('/admin/pay_invoice/<string:invoice_id>', methods=['GET'])
+@authenticated
+@allowed_roles(['portal_admin'])
+def pay_invoice(invoice_id):
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+    invoice = stripe.Invoice.retrieve(invoice_id)
+    invoice.pay()
+
+    return jsonify(invoice)
+
+
+@user_view.route('/users/<int:cm_user_id>/edit', methods=['GET', 'POST'])
+@authenticated
+@allowed_roles(['portal_admin'])
+def user_edit_get(cm_user_id):
+    current_user = get_current_user()
+    api_conn = amber_api_connection()
+    user = CMUser.query.filter_by(id=cm_user_id).first()
+    form = NewUserForm(name=user.name, email=user.email, roles=user.roles)
+    form.csrf_enabled = False
+
+    form.manufacturers.choices = manufacturer_list(current_user)
+
+    form.roles.choices = [
+        (str(r.id), r.name.title()) for r in CMUserRole.query.all()
+    ]
+
+    if form.validate_on_submit():
+        user.name = form.data['name']
+        user.email = form.data['email']
+        user.manufacturer_id = None
+
+        user.roles = []
+        for role_id in form.data['roles']:
+            access_role = CMUserRole.query.filter_by(id=role_id).first()
+            exists = False
+            for role in user.roles:
+                if role == access_role:
+                    exists = True
+            if not exists:
+                user.roles.append(access_role)
+
+        if not form.data['manufacturers'] == 'none':
+            user.manufacturer_id = form.data['manufacturers']
+
+        if form.data['password']:
+            user.set_password(form.data['password'])
+
+        api_key_data = {
+            'name': user.email,
+            'manufacturer_id': user.manufacturer_id
+        }
+
+        # TODO: needs functional testing
+        where = query.Predicate(
+            'public',
+            query.equal(user.public)
+        )
+        api_keys = api_conn.APIKey.query(public=user.public)
+        if len(api_keys) == 1:
+            api_key = api_keys[0]
+            api_key.update(api_key_data)
+            api_key.save()
+        else:
+            raise Exception("Could not locate API Key with public: %s" % user.public)
+
+        db.session.add(user)
+        db.session.commit()
+
+        return redirect('/admin/users/%s' % (user.id,))
+    else:
+        for manufacturer in dict(form.manufacturers.choices).keys():
+            if manufacturer == str(user.manufacturer_id):
+                form.manufacturers.data = manufacturer
+        form.roles.data = [str(r.id) for r in user.roles]
+    return render_template('admin/new_user.jinja2', form=form, user=user)
+
+
+@user_view.route('/users/<int:cm_user_id>/delete', methods=['GET'])
+@authenticated
+@allowed_roles(['portal_admin'])
+def user_delete_get(cm_user_id):
+    api_conn = amber_api_connection()
+    user = CMUser.query.filter_by(id=cm_user_id, active=True).first()
+    user.active = False
+
+    where = query.Predicate(
+        'public',
+        query.equal(user.public)
+    )
+    api_conn.APIKey.query(filtering=where).delete()
+
+    db.session.add(user)
+    db.session.commit()
+    return redirect(url_for('admin_view.users'))
+
+
+@user_view.route(
+    '/admin/users/<int:cm_user_id>/apply_coupon',
+    methods=['GET', 'POST']
+)
+@authenticated
+@allowed_roles(['portal_admin'])
+def user_apply_coupon(cm_user_id):
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+    user = CMUser.query.filter_by(id=cm_user_id).first()
+
+    coupons = stripe.Coupon.all()
+    coupon_choices = [(coupon.id, coupon.id) for coupon in coupons.data]
+
+    class CouponForm(Form):
+        coupon_select = SelectField('Coupon', choices=coupon_choices)
+
+    form = CouponForm()
+
+    if form.validate_on_submit():
+        customer = stripe.Customer.retrieve(user.stripe_customer)
+        sub_id = customer.subscriptions.data[0].id
+        subscription = customer.subscriptions.retrieve(sub_id)
+
+        subscription.coupon = form.coupon_select.data
+        subscription.save()
+
+        return redirect(url_for('.user_get', cm_user_id=cm_user_id))
+
+    return render_template(
+        'admin/users/coupon_modal.jinja2',
+        cm_user_id=cm_user_id,
+        form=form
+    )
+
+
+@user_view.route(
+    '/admin/users/<int:cm_user_id>/add_subscription',
+    methods=['GET', 'POST']
+)
+@authenticated
+@allowed_roles(['portal_admin'])
+def user_add_subscription(cm_user_id):
+    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+    user = CMUser.query.filter_by(id=cm_user_id).first()
+    customer = stripe.Customer.retrieve(user.stripe_customer)
+    current_plan = customer.subscriptions.data[0].plan.id
+
+    plans = stripe.Plan.all()
+    plan_choices = [(plan.id, plan.name) for plan in plans.data]
+
+    class PlanForm(Form):
+        plan_id = SelectField(
+            'Plan',
+            choices=plan_choices,
+            default=current_plan
+        )
+
+    form = PlanForm()
+
+    if form.validate_on_submit():
+        for subscription in customer.subscriptions.data:
+            sub_id = subscription.id
+            customer.subscriptions.retrieve(sub_id).delete()
+
+        new_subscription = customer.subscriptions.create(
+            plan=form.plan_id.data
+        )
+
+        message = 'User was subscribed to \
+        the %s plan.' % new_subscription.plan.name
+        flash(message, 'success')
+
+        return redirect(url_for('.user_get', cm_user_id=cm_user_id))
+
+    return render_template(
+        'admin/users/plan_modal.jinja2',
+        cm_user_id=cm_user_id,
+        form=form
+    )

@@ -1,0 +1,65 @@
+{% extends "base.jinja2" %}
+
+{% block content %}
+<div class="container_12">
+  <div class="wrapper">
+    <div class="grid_6">
+      <!--=============== Map ====================-->
+      <div id="map">
+        <figure class="">
+          <iframe src="" widgoogle.com/maps/embed?pb=!1m18!1m12!1m3!1d2956.4837457695116!2d-83.54294566004943!3d42.182723246717174!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x883b59b1e2136887%3A0x82dcb742ebba894a!2sCharleen&#39;s+Daycare+Center!5e0!3m2!1sen!2sus!4v143433767382://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2956.474452044416!2d-83.54340700000002!3d42.182922000000005!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x883b59b1e2136887%3A0x4ea0b0c3e7917225!2s7400+Rawsonville+Rd%2C+Belleville%2C+MI+48111!5e0!3m2!1sen!2sus!4v1440465629261th="800" height="600" frameborder="0" style="border:0"></iframe>        
+        </figure>
+        <div class="bg-color3">
+          <div class="indents9">
+            <dl>
+              <dt>
+              Charleen's Daycare and Learning Center<br>
+              7400 Rawsonville Rd,<br>
+              Belleville, MI 48111
+              </dt>
+              <dd><span>Telephone:</span>+1 (734) 484 1573</dd>
+              <dd>E-mail: <a href="#" class="link-1">mail@demolink.org</a></dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="grid_6 last-col">
+      <!--=========== Contact form ==============-->
+      <form id="contact-form">
+        <div class="bg-color6">
+          <div class="indents10">
+            <h3 class="p4">Get in Touch</h3>
+            <div class="success">
+              Contact form submitted!<br>
+              <strong>We will be in touch soon.</strong>
+            </div>
+            <fieldset>
+              <label class="name">
+                <input type="text" value="Name:">
+                <span class="error">*This is not a valid name.</span> <span class="empty">*This field is required.</span> 
+              </label>
+              <label class="email">
+                <input type="text" value="E-mail:">
+                <span class="error">*This is not a valid email address.</span> <span class="empty">*This field is required.</span>
+              </label>
+              <label class="phone">
+                <input type="tel" value="Phone:">
+                <span class="error">*This is not a valid phone number.</span> <span class="empty">*This field is required.</span>
+              </label>
+              <label class="message">
+                <textarea>Message:</textarea>
+                <span class="error">*The message is too short.</span> <span class="empty">*This field is required.</span>
+              </label>
+            </fieldset>
+          </div>
+        </div>
+        <div class="buttons-wrapper">
+          <a class="button bg-color3" data-type="reset">Clear</a>
+          <a class="button bg-color4" data-type="submit">Submit</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

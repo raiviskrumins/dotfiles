@@ -1,0 +1,156 @@
+$(document).ready ->
+
+  loading_gif = $('<span class="col-md-3 loading"><img src="/static/img/loading.gif"></span>')
+
+  # handles form submission. grabs the type from the form method and the url
+  # from the form action. form data is parsed from input fields and serialized
+  formSubmit = (e) ->
+    e.preventDefault()
+
+    raw_data = $(@).serializeArray()
+    form_data = {}
+
+    $(e.currentTarget).find('.btn-primary').addClass "disabled"
+
+    _.map raw_data, (key_value) ->
+      form_data[key_value.name] = key_value.value
+
+    url = $(@).attr 'action'
+    type = $(@).attr 'method'
+    $.ajax url,
+      type: type,
+      contentType: 'application/json',
+      data: JSON.stringify(form_data),
+      success: (result) ->
+        if result.success
+          window.location.reload()
+        else
+          $(e.currentTarget).find('.btn-primary').removeClass "disabled"
+          cm.loadModal result
+          if url == '/options/new'
+            images = $('input#images').val()
+            if images.length > 0
+              _.each images.split(','), (image) ->
+                $('.image-listing').append loading_gif.clone()
+                drawImage(image)
+
+  # sends DELETE requests
+  deleteRequest = (e) ->
+    e.preventDefault()
+
+    url = $(@).attr 'href'
+
+    $.ajax url,
+      type: 'DELETE'
+      success: (result) ->
+        if result.success
+          window.location.reload()
+
+  # show/hide edit button on panel open/close
+  toggleButtons = (e) ->
+    $(e.currentTarget).find('.edit-btn').toggle()
+
+  triggerFile = (e) ->
+    e.preventDefault()
+    $(e.currentTarget).next('input[type="file"]').trigger 'click'
+
+  # handles the image upload for logo images
+  fileUpload = (e) ->
+    multiple = $(@).prop 'multiple'
+    url = $(@).data 'path'
+    files = e.currentTarget.files
+    _.each files, (file) ->
+      data = new FormData
+      data.append 'img', file
+
+      if multiple
+        $('.image-listing').append loading_gif.clone()
+        upload url, data, updateImageList
+      else
+        upload url, data, appendFile
+
+  # uploads a file (data), then fires the callback when successful
+  upload = (url, data, callback) ->
+    $.ajax
+      url: url
+      type: 'POST'
+      data: data
+      cache: false
+      contentType: false
+      processData: false
+      beforeSend: () ->
+        $('.modal-dialog .btn-primary').addClass 'disabled'
+        $('div.placeholder-image').hide()
+        $('span.loading').show()
+      success: (result) ->
+        $('.modal-dialog .btn-primary').removeClass 'disabled'
+        if result.success
+          callback result
+
+  # updates image placeholder with uploaded image
+  appendFile = (result) ->
+    image = $("<img src='#{result.image_url}'>")
+    image.load ->
+      $('span.loading').hide()
+      $('div.placeholder-image').show()
+      $('.placeholder-image').css 'background-image', "url('#{result.image_url}')"
+      $('#image').val result.image_url
+
+  # adds uploaded filename to list of files
+  updateImageList = (result) ->
+    img_list = $('#images').val()
+    img_list += ',' if img_list.length > 0
+    img_list += result.image_url
+    $('#images').val img_list
+
+    drawImage result.image_url
+
+  drawImage = (image) ->
+    $("<img class='col-md-3' src='#{image}'>").load ->
+      $('.image-listing span:first-of-type').replaceWith @
+
+  # use prev/next buttons as a proxy to submit the option form
+  submitProxy = (e) ->
+    e.preventDefault()
+    e.stopPropagation()
+    url = $(e.currentTarget).attr 'href'
+    form = $(e.currentTarget).parents 'form'
+
+    $(form).attr 'action', url
+    $(form).trigger 'submit'
+
+  # tracks which panels to keep open on page refresh
+  savePanel = (e) ->
+    url = if e.type is 'show' then '/options/panels/add' else '/options/panels/remove'
+
+    panel = $(e.currentTarget).attr 'id'
+    data = JSON.stringify
+      panel: panel
+
+    $.ajax url,
+      type: 'PUT'
+      data: data
+      contentType: 'application/json'
+
+  $('.js-new-optionset').on 'click', cm.getModal
+  $('.js-edit-optionset').on 'click', cm.getModal
+  $('.js-new-option').on 'click', cm.getModal
+  $('.js-edit-option').on 'click', cm.getModal
+  $('body').on 'click', '.js-confirm-optionset', cm.getModal
+  $('body').on 'click', '.js-confirm-option', cm.getModal
+
+  $('body').on 'click', '.js-delete-optionset', deleteRequest
+  $('body').on 'click', '.js-delete-option', deleteRequest
+  $('body').on 'click', '.js-upload-image', triggerFile
+  $('body').on 'click', '.js-optionset-images', triggerFile
+
+  $('body').on 'change', '#image_files', fileUpload
+  $('body').on 'change', '#optionset_images', fileUpload
+  $('body').on 'submit', '.modal form', formSubmit
+  $('body').on 'click', '.js-option-prev, .js-option-next', submitProxy
+
+  $('#option_sets .panel').on 'shown.bs.collapse hide.bs.collapse', toggleButtons
+  $('.panel-collapse').on 'show.bs.collapse hide.bs.collapse', savePanel
+
+  # initialize all tooltips
+  $('[data-toggle="tooltip"]').tooltip()

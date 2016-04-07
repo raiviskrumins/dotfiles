@@ -1,0 +1,481 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/AmberEngine/api/lib"
+)
+
+// Up is executed when this migration is applied
+func Up_20150708130510(txn *sql.Tx) {
+	// Rename the thickness field for various sub-components.
+	txn.Exec("ALTER TABLE door_sub_component RENAME COLUMN thickness TO door_depth;")
+	txn.Exec("ALTER TABLE pillow_sub_component RENAME COLUMN thickness TO pillow_depth;")
+	txn.Exec("ALTER TABLE shelf_sub_component RENAME COLUMN thickness TO height;")
+
+	// Add new fields to manufacturer table and migrate in data for the Profile Complete timestamp.
+	txn.Exec("ALTER TABLE manufacturer ADD COLUMN phone_extension character varying;")
+	txn.Exec("ALTER TABLE manufacturer ADD COLUMN date_profile_complete timestamp without time zone;")
+
+	// Add the canopy fields to the suspension-point component.
+	txn.Exec("ALTER TABLE suspension_point_component ADD COLUMN canopy_depth " +
+		"double precision, ADD COLUMN canopy_width double precision, ADD COLUMN " +
+		"canopy_height double precision, ADD COLUMN wire_length double precision;")
+
+	// Bring in the new shipping-method fields (to replace `ships_via`)
+	txn.Exec("ALTER TABLE shipping_information_component ADD COLUMN " +
+		"standard boolean, ADD COLUMN freight boolean, ADD COLUMN " +
+		"white_glove boolean, ADD COLUMN drop_ship boolean, ADD COLUMN " +
+		"shipping_notes character varying;")
+
+	// Gonna migrate the data from `ships_via` into the corresponding shipping
+	// method field (that was just created above).
+	// To do this, first collect all current `ships_via` data for each component...
+	shippingInfoRows, err := txn.Query("SELECT component_data_id, ships_via FROM " +
+		"shipping_information_component WHERE ships_via IS NOT NULL;")
+	defer shippingInfoRows.Close()
+
+	if err != nil {
+		fmt.Println("An error occurred while attempting to grab ships_via data " +
+			"from the shipping_information_component table!")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	updateQueries := make([]string, 0)
+
+	// For each selected row, construct a update-SQL query to set TRUE  the
+	// corresponding shipping method field, and append the query into our slice.
+	for shippingInfoRows.Next() {
+		var id int
+		var via string
+		err := shippingInfoRows.Scan(&id, &via)
+		if err != nil {
+			fmt.Println("Error occurred while reading rows for shipping info.")
+			os.Exit(1)
+		}
+
+		// Our fields cannot have spaces in them. Replace with underscore.
+		via = strings.Replace(via, " ", "_", -1)
+		updateSql := "UPDATE shipping_information_component SET %s=true WHERE " +
+			"component_data_id = %d;"
+		updateQueries = append(updateQueries, fmt.Sprintf(updateSql, via, id))
+	}
+
+	for _, query := range updateQueries {
+		txn.Exec(query)
+	}
+
+	txn.Exec("ALTER TABLE shipping_information_component DROP COLUMN ships_via;")
+
+	// Setup shipping_information_sub_component
+	txn.Exec("CREATE TABLE shipping_information_sub_component ( " +
+		"component_data_id integer NOT NULL, product_id integer " +
+		"NOT NULL, parent_component_id integer, parent_table_name " +
+		"character varying, weight double precision, width double " +
+		"precision, height double precision, box_depth double " +
+		"precision)")
+
+	// Create and assign a Sequence for the component_data_id
+	txn.Exec("CREATE SEQUENCE shipping_information_sub_component_component_data_id_seq " +
+		"START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;")
+
+	txn.Exec("ALTER TABLE shipping_information_sub_component_component_data_id_seq OWNER TO doodle;")
+
+	txn.Exec("ALTER SEQUENCE shipping_information_sub_component_component_data_id_seq " +
+		"OWNED BY shipping_information_sub_component.component_data_id;")
+
+	txn.Exec("ALTER TABLE ONLY shipping_information_sub_component ALTER COLUMN " +
+		"component_data_id SET DEFAULT nextval('shipping_information_sub_component_component_data_id_seq'::regclass);")
+
+	// Setup Foreign & Primary Key constraints for the Shipping Info sub-component.
+	txn.Exec("ALTER TABLE ONLY shipping_information_sub_component ADD " +
+		"CONSTRAINT fk_shipping_information_sub_component_product_id_product_entity " +
+		"FOREIGN KEY (product_id) REFERENCES product_entity(id) ON DELETE " +
+		"CASCADE")
+
+	txn.Exec("ALTER TABLE ONLY shipping_information_sub_component ADD " +
+		"CONSTRAINT fk_shipping_information_sub_component_shipping_information_comp " +
+		"FOREIGN KEY (parent_component_id) REFERENCES " +
+		"shipping_information_component(component_data_id);")
+
+	txn.Exec("ALTER TABLE ONLY shipping_information_sub_component ADD " +
+		"CONSTRAINT pk_shipping_information_sub_component PRIMARY KEY " +
+		"(component_data_id);")
+
+	txn.Exec("CREATE INDEX ix_shipping_information_sub_component_product_id " +
+		"ON shipping_information_sub_component USING btree (product_id);")
+
+	// Create entry in the component table for the new shipping sub component.
+	txn.Exec("INSERT INTO component (component_name, class_name, table_name," +
+		"parent_name) VALUES ('shipping_information_sub', 'ShippingInformationSubComponent', " +
+		"'shipping_information_sub_component', 'shipping_information');")
+
+	// Move the packaged_* fields' data into the shipping info sub-component table.
+	selectSql := "SELECT component_data_id AS parent_component_id, product_id, packaged_weight AS weight, " +
+		"packaged_width AS width, packaged_height AS height, packaged_depth as box_depth FROM " +
+		"shipping_information_component WHERE coalesce (packaged_weight, " +
+		"packaged_width, packaged_height, packaged_depth) IS NOT NULL"
+	insertSql := "INSERT INTO shipping_information_sub_component (parent_component_id, " +
+		"product_id, weight, width, height, box_depth) (%s);"
+	txn.Exec(fmt.Sprintf(insertSql, selectSql))
+
+	// Drop the packaged_* columns now that the data has been migrated.
+	txn.Exec("ALTER TABLE shipping_information_component DROP COLUMN " +
+		"packaged_weight, DROP COLUMN packaged_width, DROP COLUMN " +
+		"packaged_height, DROP COLUMN packaged_depth;")
+
+	// Add Game table into the assemblage
+	txn.Exec("INSERT INTO assemblage (assemblage_name, description) values " +
+		"('casegood_table_game', 'Game table');")
+
+	// Insert rows into the assemblage_components table with the assemblage ID
+	// of the Game Table and the component ID based off of each of the
+	// component names provided below.
+	commonComponents := []string{
+		"ManufacturerComponent",
+		"CollectionComponent",
+		"IdentityComponent",
+		"CategoryComponent",
+		"DescriptionComponent",
+		"AuditComponent",
+		"OverallDimensionsComponent",
+		"VisibilityComponent",
+		"WeightComponent",
+		"InstructionsComponent",
+		"OrderingInformationComponent",
+		"ShippingInformationComponent",
+		"PricingComponent",
+		"ConstructionInformationComponent",
+		"OptionComponent",
+		"ImageComponent",
+		"TagComponent",
+		"PromotionalTagsComponent",
+		"PedestalComponent",
+	}
+
+	for index, value := range commonComponents {
+		commonComponents[index] = "'" + value + "'"
+	}
+
+	selectSql = "SELECT assemblage.id AS assemblage_id, component.id AS component_id " +
+		"FROM assemblage, component WHERE assemblage.assemblage_name = 'casegood_table_game' " +
+		"AND component.class_name IN (" + lib.Join(",", commonComponents...) + ")"
+	txn.Exec(fmt.Sprintf("INSERT INTO assemblage_components (assemblage_id, component_id) (%s);", selectSql))
+
+	// Remove headboard component from casegood headboard.
+	txn.Exec("DELETE FROM assemblage_components WHERE assemblage_id IN (SELECT " +
+		"id FROM assemblage WHERE assemblage_name='casegood_headboard') " +
+		"AND component_id IN (SELECT id FROM component WHERE class_name='" +
+		"HeadboardComponent');")
+
+	// Remove Leather from Youth Bench and Bed
+	txn.Exec("DELETE FROM assemblage_components WHERE assemblage_id IN (SELECT " +
+		"id FROM assemblage WHERE assemblage_name IN ('youth_bench', 'youth_bed')) " +
+		"AND component_id IN (SELECT id FROM component WHERE class_name = 'LeatherComponent');")
+
+	// Add the Pillow component to a bunch of things...
+	assemblages := []string{
+		"upholstery_chair",
+		"upholstery_chair_arm_chair",
+		"upholstery_chair_side_chair",
+		"upholstery_chair_lounge_chair",
+		"upholstery_chair_desk_chair",
+		"upholstery_chair_wing_chair",
+		"upholstery_chair_chaise_lounge",
+		"upholstery_ottoman",
+		"upholstery_bench",
+		"casegood_chair",
+		"casegood_chair_arm_chair",
+		"casegood_chair_side_chair",
+	}
+	for index, value := range assemblages {
+		assemblages[index] = "'" + value + "'"
+	}
+
+	selectSql = "SELECT assemblage.id AS assemblage_id, component.id AS " +
+		"component_id FROM assemblage, component WHERE component.class_name " +
+		"= 'PillowComponent' AND assemblage.assemblage_name IN (" + lib.Join(", ", assemblages) + ")"
+
+	txn.Exec(fmt.Sprintf("INSERT INTO assemblage_components (assemblage_id, component_id) (%s);", selectSql))
+
+	// Add Table leaf to Table Dining
+	selectSql = "SELECT assemblage.id AS assemblage_id, component.id AS component_id " +
+		"FROM assemblage, component WHERE assemblage.assemblage_name IN (" +
+		"'casegood_table_dining', 'outdoor_table_dining') AND component.class_name " +
+		"= 'TableLeafComponent'"
+	txn.Exec(fmt.Sprintf("INSERT INTO assemblage_components (assemblage_id, component_id) (%s);", selectSql))
+
+	txn.Exec("INSERT INTO table_leaf_component (product_id) (SELECT id FROM " +
+		"product_entity WHERE assemblage_id IN (SELECT id FROM assemblage WHERE " +
+		"assemblage_name IN ('casegood_table_dining', 'outdoor_table_dining')));")
+
+	// Add a new ENUM type
+	enumOptions := []string{
+		"none",
+		"each",
+		"yard",
+		"sq_ft",
+		"sq_yard",
+		"pair",
+		"set",
+		"foot",
+		"single_roll",
+		"souble_roll",
+	}
+
+	for index, value := range enumOptions {
+		enumOptions[index] = "'" + value + "'"
+	}
+
+	txn.Exec("CREATE TYPE ordering_information_unit_types AS ENUM (" + lib.Join(", ", enumOptions...) + ")")
+
+	// Data has to be migrated to be able to change the TYPE of the the `unit` field.
+	// To do so, rename the current column to become `unit_old` and create `unit` with
+	// the correct type.
+	txn.Exec("ALTER TABLE ordering_information_component RENAME COLUMN unit TO unit_old;")
+	txn.Exec("ALTER TABLE ordering_information_component ADD COLUMN unit ordering_information_unit_types;")
+
+	// Strip the single-quotes from ENUM values.
+	for index, value := range enumOptions {
+		enumOptions[index] = value[1 : len(value)-1]
+	}
+
+	// Now, where we have data in the `unit_old` field and the data is one of the
+	// possible ENUM values, copy the data into the newly re-created `unit` field.
+	var orderingInfoRows *sql.Rows
+	orderingInfoRows, err = txn.Query("SELECT component_data_id, unit_old FROM ordering_information_component " +
+		"WHERE LENGTH(unit_old) > 0;")
+	defer orderingInfoRows.Close()
+
+	if err != nil {
+		fmt.Println("Error selecting 'unit' data from the ordering_information_component table!")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	updateQueries = make([]string, 0)
+
+	for orderingInfoRows.Next() {
+		var id int
+		var unit string
+		err := orderingInfoRows.Scan(&id, &unit)
+		if err != nil {
+			fmt.Println("Error occurred while reading rows for ordering  info.")
+			os.Exit(1)
+		}
+
+		// Lower the "unit" string, and replace spaces with underscores in
+		// order to match the ENUM values.
+		unit = strings.ToLower(strings.Replace(unit, " ", "_", -1))
+
+		// For each ENUM value, if the current `unit` value matches, create an
+		// UPDATE query and append to our slice.
+		for _, enum := range enumOptions {
+			if unit == enum {
+				updateSql := "UPDATE ordering_information_component SET unit='%s' WHERE " +
+					"component_data_id = %d;"
+				updateQueries = append(updateQueries, fmt.Sprintf(updateSql, unit, id))
+				break
+			}
+		}
+	}
+
+	for _, sql := range updateQueries {
+		txn.Exec(sql)
+	}
+
+	// Drop the `unit_old` field now that the data has been migrated.
+	txn.Exec("ALTER TABLE ordering_information_component DROP COLUMN unit_old;")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20150708130510(txn *sql.Tx) {
+	// Migrate the data for the `unit` from being an ENUM-type field to a
+	// CHARACTER VARYING-type field. Then delete the type.
+	txn.Exec("ALTER TABLE ordering_information_component ADD COLUMN unit_old " +
+		"character varying;")
+	txn.Exec("UPDATE ordering_information_component SET unit_old = unit WHERE " +
+		"component_data_id = component_data_id;")
+	txn.Exec("ALTER TABLE ordering_information_component DROP COLUMN unit;")
+	txn.Exec("ALTER TABLE ordering_information_component RENAME COLUMN unit_old TO unit;")
+	txn.Exec("DROP TYPE ordering_information_unit_types;")
+
+	// Rename various columns to become "thickness"
+	txn.Exec("ALTER TABLE door_sub_component RENAME COLUMN door_depth TO thickness;")
+	txn.Exec("ALTER TABLE pillow_sub_component RENAME COLUMN pillow_depth TO thickness;")
+	txn.Exec("ALTER TABLE shelf_sub_component RENAME COLUMN height TO thickness;")
+
+	txn.Exec("ALTER TABLE manufacturer DROP COLUMN phone_extension;")
+	txn.Exec("ALTER TABLE manufacturer DROP COLUMN date_profile_complete;")
+
+	// Drop the canopy fields to the susopen point component.
+	txn.Exec("ALTER TABLE suspension_point_component DROP COLUMN canopy_depth, " +
+		"DROP COLUMN canopy_width, DROP COLUMN canopy_height, DROP COLUMN wire_length;")
+
+	// Bring back the packaged_* fields for the shipping info component.
+	txn.Exec("ALTER TABLE shipping_information_component ADD COLUMN " +
+		"packaged_weight double precision, ADD COLUMN packaged_width double " +
+		"precision, ADD COLUMN packaged_height double precision, ADD COLUMN " +
+		"packaged_depth double precision, ADD COLUMN ships_via character varying;")
+
+	// For each Shipping info component with `ships_via` data, grab the shipping
+	// method type and create a query which will set the corresponding ship-method
+	// field to TRUE.
+	shippingInfoRows, err := txn.Query("SELECT component_data_id, coalesce(drop_ship, FALSE), " +
+		"coalesce(freight, FALSE), coalesce(standard, FALSE), coalesce(white_glove, " +
+		"FALSE) FROM shipping_information_component WHERE " +
+		"coalesce(drop_ship, freight, standard, white_glove) IS NOT NULL;")
+	defer shippingInfoRows.Close()
+
+	if err != nil {
+		fmt.Println("Could not select shipping method data from the shipping " +
+			"info component table!")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	updateQueries := make([]string, 0)
+
+	for shippingInfoRows.Next() {
+		var (
+			id          int
+			drop_ship   bool
+			freight     bool
+			standard    bool
+			white_glove bool
+			via         string
+		)
+
+		err := shippingInfoRows.Scan(&id, &drop_ship, &freight, &standard, &white_glove)
+
+		if err != nil {
+			fmt.Println("Error occurred while reading the shipping methods data!")
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		switch {
+		case drop_ship:
+			via = "drop ship"
+			break
+		case freight:
+			via = "freight"
+			break
+		case standard:
+			via = "standard"
+			break
+		case white_glove:
+			via = "white glove"
+			break
+		}
+
+		// Replace spaces in the ships_via to become underscores. Create the SQL
+		// and append it to our slice.
+		updateSql := "UPDATE shipping_information_component SET ships_via = '%s' " +
+			"WHERE component_data_id = %d;"
+		updateQueries = append(updateQueries, fmt.Sprintf(updateSql, via, id))
+	}
+
+	// Execute each of our stored UPDATE statements for the Shipping Info components.
+	for _, query := range updateQueries {
+		txn.Exec(query)
+	}
+
+	txn.Exec("ALTER TABLE shipping_information_component DROP COLUMN drop_ship, " +
+		"DROP COLUMN freight, DROP COLUMN standard, DROP COLUMN white_glove, " +
+		"DROP COLUMN shipping_notes;")
+
+	// Bring in the packagd-dimensions to be inserted into the new
+	// Shipping Info sub-component.
+	selectSql := "SELECT component_data_id, product_id, weight, " +
+		"width, height, box_depth FROM " +
+		"shipping_information_sub_component WHERE coalesce (weight, " +
+		"width, height, box_depth) IS NOT NULL"
+	updateSql := "UPDATE shipping_information_component SET packaged_weight = " +
+		"src.weight, packaged_width = src.width, packaged_height = src.height, " +
+		"packaged_depth = src.box_depth FROM (%s) src WHERE " +
+		"shipping_information_component.component_data_id = src.component_data_id;"
+
+	txn.Exec(fmt.Sprintf(updateSql, selectSql))
+
+	// Remove foreign and primary key constraints, and the index.
+	txn.Exec("ALTER TABLE ONLY shipping_information_sub_component DROP " +
+		"CONSTRAINT fk_shipping_information_sub_component_product_id_product_entity;")
+
+	txn.Exec("ALTER TABLE ONLY shipping_information_sub_component DROP " +
+		"CONSTRAINT fk_shipping_information_sub_component_shipping_information_comp;")
+
+	txn.Exec("ALTER TABLE ONLY shipping_information_sub_component DROP " +
+		"CONSTRAINT pk_shipping_information_sub_component;")
+
+	txn.Exec("DROP INDEX ix_shipping_information_sub_component_product_id;")
+
+	// Remove remaining information to drop the shipping-info sub-component table.
+	txn.Exec("DELETE FROM component WHERE component_name='shipping_information_sub' " +
+		"AND parent_name='shipping_information';")
+
+	txn.Exec("DROP TABLE shipping_information_sub_component;")
+
+	txn.Exec("DELETE FROM component WHERE component_name = 'shipping_information_sub'")
+
+	// Add headboard component to casegood headboard.
+	selectSql = "SELECT assemblage.id AS assemblage_id, component.id AS " +
+		"component_id FROM assemblage, component WHERE assemblage.assemblage_name " +
+		"= 'casegood_headboard' AND component.class_name = 'HeadboardComponent'"
+
+	txn.Exec(fmt.Sprintf("INSERT INTO assemblage_components (assemblage_id, component_id) (%s);", selectSql))
+
+	// Delete Game Table
+	txn.Exec("DELETE FROM assemblage_components WHERE assemblage_id IN (SELECT " +
+		"id FROM assemblage WHERE assemblage_name = 'casegood_table_game');")
+
+	txn.Exec("DELETE FROM assemblage WHERE assemblage_name = 'casegood_table_game';")
+
+	// Delete Table Leaf stuff
+
+	txn.Exec("DELETE FROM assemblage_components WHERE assemblage_id IN (SELECT id FROM " +
+		"assemblage WHERE assemblage_name IN ('casegood_table_dining', 'outdoor_table_dining')) " +
+		"AND component_id IN (SELECT id FROM component WHERE class_name = 'TableLeafComponent');")
+
+	txn.Exec("DELETE FROM table_leaf_component WHERE product_id IN (SELECT id FROM " +
+		"product_entity WHERE assemblage_id IN (SELECT id FROM assemblage WHERE " +
+		"assemblage_name IN ('casegood_table_dining', 'outdoor_table_dining')));")
+
+	// Add Leather to select Youth
+	selectSql = "SELECT assemblage.id AS assemblage_id, component.id AS component_id " +
+		"FROM assemblage, component WHERE assemblage.assemblage_name IN ('youth_bench', " +
+		"'youth_bed') AND component.class_name = 'LeatherComponent'"
+	txn.Exec(fmt.Sprintf("INSERT INTO assemblage_components (assemblage_id, component_id) (%s);", selectSql))
+
+	// Remove the Pillow component to a bunch of things...
+	assemblages := []string{
+		"upholstery_chair",
+		"upholstery_chair_arm_chair",
+		"upholstery_chair_side_chair",
+		"upholstery_chair_lounge_chair",
+		"upholstery_chair_desk_chair",
+		"upholstery_chair_wing_chair",
+		"upholstery_chair_chaise_lounge",
+		"upholstery_ottoman",
+		"upholstery_bench",
+		"casegood_chair",
+		"casegood_chair_arm_chair",
+		"casegood_chair_side_chair",
+	}
+	for index, value := range assemblages {
+		assemblages[index] = "'" + value + "'"
+	}
+
+	selectSql = "SELECT assemblage.id AS assemblage_id, component.id AS " +
+		"component_id FROM assemblage, component WHERE component.class_name " +
+		"= 'PillowComponent' AND assemblage.assemblage_name IN (" + lib.Join(",", assemblages...) + ")"
+
+	txn.Exec("DELETE FROM assemblage_components WHERE assemblage_id IN (SELECT " +
+		"id FROM assemblage WHERE assemblage_name IN (" + lib.Join(", ", assemblages...) + " )) " +
+		"AND component_id IN (SELECT id FROM component WHERE class_name = 'PillowComponent');")
+
+}

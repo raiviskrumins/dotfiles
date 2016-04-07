@@ -1,0 +1,12 @@
+package pqdb
+
+import (
+	"github.com/AmberEngine/api/config"
+	"github.com/AmberEngine/api/logit"
+)
+
+func init() {
+	l := logit.Default("pqdb")
+	l.FilePath = config.String("logs", "pqdb")
+	logit.Set(l)
+}

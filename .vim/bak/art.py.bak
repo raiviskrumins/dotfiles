@@ -1,0 +1,152 @@
+"""art.py - API Request Tool (for generating signed-JSON payloads).
+
+The ART tool is used to easily create signed-JSON payloads from data JSON
+object, the desired API URL, and the public & private keys. A curl command
+can be generated instead of the payload by specifying a HTTP method.
+"""
+
+import argparse
+import base64
+import datetime
+import hashlib
+import json
+
+
+def generate_time():
+    """Generate a formatted timestamp for the current time.
+
+    Generate a timestamp in the format that is expected by the API. This
+    format is as follows:
+        <year>-<month>-<day>T<hour>:<minute>:<second>.<microsecond>
+        The year, month, day are all in their digit format.
+    """
+    now = datetime.datetime.now()
+    timestamp = now.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+    return timestamp
+
+
+def main():
+    """ Generate a signed-JSON payload (or cURL command)."""
+
+    # Create a cmd-line parser and grab all provided arguments if possible.
+    program_parser = setup_parser()
+    arguments = program_parser.parse_args()
+
+    # If no JSON data was provided, use an empty JSON object.
+    data = arguments.json
+    if len(data) == 0:
+        data = "{}"
+
+    payload = {
+        "data": json.loads(data),
+        "headers": {"Content-Type": "application/json"},
+        "public_key": arguments.public,
+        "timestamp": generate_time(),
+        "url": arguments.url,
+    }
+    
+    # Generate an unsigned JSON string of our paylaod. Must be sorted!
+    if arguments.golang:
+        unsigned_json = json.dumps(
+            payload, sort_keys=True, separators=(',',':')
+        )
+    else:
+        unsigned_json = json.dumps(payload, sort_keys=True)
+
+    # Generate a sha256 hash of the unsigned JSON string appened with the
+    # private key. This is base64-encoded to create the payload's signature.
+    sha256_string = hashlib.sha256(
+        unsigned_json + str(arguments.private)
+    ).hexdigest()
+
+    signature = base64.b64encode(sha256_string)
+
+    # Add the signature back into the payload and generate a signed JSON
+    # payload for an API request.
+    payload["signature"] = signature
+    if arguments.golang:
+        signed_json = json.dumps(
+            payload, sort_keys=True, separators=(',',':')
+        )
+    else:
+        signed_json = json.dumps(payload, sort_keys=True)
+
+    # If we did not specify a HTTP method for creating a cURL command, just
+    # print  the signed JSON payload. Otherwise, print out the payload as
+    # part of an API cURL request.
+    if len(arguments.method) == 0:
+        print(signed_json)
+    else:
+        cmd = 'curl -H "Content-Type: application/json" -X %s -d \'%s\' %s'
+        cmd = cmd % (arguments.method.upper(), signed_json, arguments.url)
+        print(cmd)
+
+
+def setup_parser():
+    """Setup and return a command-line argument parser."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "A request tool which can generate a signed-JSON "
+            "payload, or create a ready-to-run cURL command "
+            "for a specific API resource."
+        )
+    )
+
+    parser.add_argument(
+        "--public",
+        action="store",
+        help="provide a user's API public-key.",
+        dest="public",
+        required=True
+    )
+    parser.add_argument(
+        "--private",
+        action="store",
+        help="provide a user's API private-key.",
+        dest="private",
+        required=True
+    )
+    parser.add_argument(
+        "-u",
+        "--url",
+        action="store",
+        help="specify a valid, full URL to an API resource.",
+        dest="url",
+        required=True
+    )
+    parser.add_argument(
+        "-c",
+        "--curl",
+        action="store",
+        default="",
+        help=(
+            "provide an HTTP method to generate a "
+            "cURL command for the API resource."
+        ),
+        dest="method",
+        required=False
+    )
+    parser.add_argument(
+        "-j",
+        "--json",
+        action="store",
+        default="{}",
+        help="specify a valid JSON object to be used as the data payload.",
+        dest="json",
+        required=False
+    )
+    parser.add_argument(
+        "-g",
+        '--golang',
+        action='store_true',
+        default=False,
+        help="a flag to generate a payload for the Golang version of the API.",
+        dest="golang",
+        required=False
+    )
+
+    return parser
+
+if __name__ == "__main__":
+    main()

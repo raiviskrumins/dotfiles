@@ -1,0 +1,37 @@
+package routes
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/justinas/alice"
+)
+
+// DefineFakeKeyRoutes maps the various possible HTTP methods + route paths to the
+// available Fake Key resource functions defined.
+func DefineFakeRoutes(router *lib.Router, ctx *RouteAppContext, handlers alice.Chain) {
+	router.Get("/400", handlers.ThenFunc(ctx.FourHundred))
+	router.Get("/401", handlers.ThenFunc(ctx.FourHundredAndOne))
+	router.Get("/404", handlers.ThenFunc(ctx.FourOhFour))
+	router.Get("/HellNaw", handlers.ThenFunc(ctx.HellNaw))
+}
+
+func (c *RouteAppContext) FourHundred(w http.ResponseWriter, r *http.Request) {
+	panic(oops.BadRequest("Game over. Please insert 4 coins to continue."))
+}
+
+func (c *RouteAppContext) FourHundredAndOne(w http.ResponseWriter, r *http.Request) {
+	panic(oops.Unauthorized("Droids arnt welcomed here."))
+}
+
+func (c *RouteAppContext) FourOhFour(w http.ResponseWriter, r *http.Request) {
+	panic(oops.NotFound("Your shit ain't here"))
+}
+
+func (c *RouteAppContext) HellNaw(w http.ResponseWriter, r *http.Request) {
+	panic(errors.New("Blah blah"))
+	panic(123)
+	panic("This is a string")
+}

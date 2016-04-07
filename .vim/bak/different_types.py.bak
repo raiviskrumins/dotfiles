@@ -1,0 +1,60 @@
+from random import randint
+
+import jsonify.classes
+
+
+class Car:
+    make = ""
+    model = ""
+    year = 2015
+    __vin = 000000000
+
+    def __init__(self, make, model, year=2015):
+        self.make = make
+        self.model = model
+        self.year = year
+
+        self.__vin = randint(1000, 9999)
+
+    def print_info(self):
+        make = self.make
+        model = self.model
+        year = self.year
+        vin = self.__vin
+
+        output = "Make: %s, Model: %s, Year: %i, VIN: %s"
+        print(output % (make, model, year, vin))
+
+
+class All_Car(Car, jsonify.classes.All):
+    pass
+
+
+class PublicOnly_Car(Car, jsonify.classes.PublicOnly):
+    pass
+
+
+class Specified_Car(Car, jsonify.classes.Specified):
+    def __init__(self, *args, **kwargs):
+        Car.__init__(self, *args, **kwargs)
+        jsonify.classes.Specified.__init__(self, "model", "year")
+
+
+def main():
+    vehicle = All_Car("Ford", "Fushion")
+    print("=" * 10 + "All attributes" + "=" * 10)
+    vehicle.print_info()
+    print("%s\n\n" % vehicle.json)
+
+    print("=" * 10 + "Public attributes only" + "=" * 10)
+    vehicle = PublicOnly_Car("Chevy", "Cruze", 2011)
+    vehicle.print_info()
+    print("%s\n\n" % vehicle.json)
+
+    print("=" * 10 + "Specified attributes only" + "=" * 10)
+    vehicle = Specified_Car("Dodge", "Charger", 2008)
+    vehicle.print_info()
+    print(vehicle.json)
+
+if __name__ == "__main__":
+    main()

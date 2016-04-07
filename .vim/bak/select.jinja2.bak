@@ -1,0 +1,76 @@
+{% from 'macros.jinja2' import collection_name, export_progress %}
+
+{% extends 'index.jinja2' %}
+
+{% block javascript %}
+{{super()}}
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/export.min.js')|cache_update }}"></script>
+{% endblock %}
+
+{% block content_main %}
+<div class="col-md-12">
+  {% if request.referrer and 'templates' in request.referrer or session.mapping_id %}
+  <div class="row">
+    <div class="col-md-12">
+      {{ export_progress(['Select Retailer', 'Select Products', 'Confirm Products', 'Export'], 1) }}
+    </div>
+  </div>
+  {% else %}
+  <div class="row">
+    <div class="col-md-12">
+      {{ export_progress(['Select Products', 'Confirm Products', 'Export'], 0) }}
+    </div>
+  </div>
+  {% endif %}
+    <span class="count hidden">{{ count }}</span>
+    <div class="toolbar row">
+        <div class="col-md-4">
+            <input type="text" class="form-control js-product-search" placeholder="Enter SKU or Product Name">
+        </div>
+        <div class="col-md-4">
+            <select class="form-control js-collection-select">
+                <option value="">By collection...</option>
+                {% for collection in g.collections %}
+                <option value="{{ collection.id }}">{{ collection.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <select class="form-control js-category-select">
+                <option value="">By category...</option>
+                {% for category in categories %}
+                <option value="{{ category|lower }}">{{ category|title or 'Uncategorized' }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <table class="table" id="export_table">
+        <tr>
+            <th width="10%"></th>
+            <th class="sortable" data-sort="manufacturer_sku" data-direction="desc" width="15%">SKU <span class="caret"></span></th>
+            <th class="sortable" data-sort="name" data-direction="desc" width="65%">Item Name <span class="caret"></span></th>
+            <th width="0"></th>
+            <th class="sortable" data-sort="select" data-direction="desc" width="10%"><a href="#" class="master-select-button js-master-select"></a> <span class="caret"></span></th>
+        </tr>
+        <tr class="js-loading-row">
+          <td colspan="5" class="text-center loading">
+              <img src="{{ url_for('static', filename='img/AmberCirclesAnimated.gif') }}">
+          </td>
+        </tr>
+    </table>
+    <div class="form-footer">
+        <div class="footer-wrapper">
+            <form action="{{ url_for('export_view.prepare') }}" method="POST" id="form_start_export" class="clearfix">
+                <input type="hidden" id="product_ids" name="product_ids">
+                {% if count %}<a href="#" class="btn btn-primary pull-right js-start-export">Next</a>
+                {% else %}<a href="{{ url_for('export_view.export_index') }}" class="btn btn-primary pull-right">Back</a>{% endif %}
+                <p class="selected-message pull-left"><i><span class="js-selected-count">0</span> Selected</i></p>
+                <p class="empty-warning text-danger pull-right">Please select at least one product to proceed.</p>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block footer %}{% endblock %}

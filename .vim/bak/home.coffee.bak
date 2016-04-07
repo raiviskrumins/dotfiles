@@ -1,0 +1,10 @@
+(($) ->
+  app = Sammy ->
+    @.use(plugins.Modals)
+    @.use(plugins.Forms)
+    @.use(plugins.FixModalButtonColors)
+
+    @.get '#/', (ctx) ->
+      return
+
+)(jQuery)

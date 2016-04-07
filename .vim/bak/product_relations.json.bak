@@ -1,0 +1,293 @@
+{
+    "create-option-set-relation": [
+        {
+            "product_id": 35606,
+            "option_set_id": 39,
+            "payload": {
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "product.json:instance"
+            }
+        },
+        {
+            "product_id": -1,
+            "option_set_id": 2,
+            "payload": {
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        },
+        {
+            "product_id": 31660,
+            "option_set_id": -1,
+            "payload": {
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "delete-option-set-relation": [
+        {
+            "product_id": 35945,
+            "option_set_id": 6,
+            "payload": {
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {}
+        },
+        {
+            "product_id": -1,
+            "option_set_id": 6,
+            "payload": {
+                "public_key": "@b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        },
+        {
+            "product_id": 36345,
+            "option_set_id": -1,
+            "payload": {
+                "public_key": "#b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "create-sales-channel-relation-by-manufacturer": [
+        {
+            "manufacturer_id": 18,
+            "sales_channel_id": 12,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {}
+        },
+        {
+            "manufacturer_id": 18,
+            "sales_channel_id": -1,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        },
+        {
+            "manufacturer_id": -1,
+            "sales_channel_id": 12,
+            "payload": {
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "delete-sales-channel-relation-by-manufacturer": [
+        {
+            "manufacturer_id": 18,
+            "sales_channel_id": 12,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {}
+        },
+        {
+            "manufacturer_id": 18,
+            "sales_channel_id": -1,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        },
+        {
+            "manufacturer_id": -1,
+            "sales_channel_id": 12,
+            "payload": {
+                "public_key": "#b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "create-sales-channel-relation": [
+        {
+            "product_id": 2775,
+            "sales_channel_id": 12,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {}
+        },
+        {
+            "product_id": 2775,
+            "sales_channel_id": -1,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        },
+        {
+            "product_id": -1,
+            "sales_channel_id": 12,
+            "payload": {
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "delete-sales-channel-relation": [
+        {
+            "product_id": 2775,
+            "sales_channel_id": 12,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {}
+        },
+        {
+            "product_id": 2775,
+            "sales_channel_id": -1,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        },
+        {
+            "product_id": -1,
+            "sales_channel_id": 12,
+            "payload": {
+                "public_key": "#b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "create-collection-relation": [
+        {
+            "product_id": 2753,
+            "collection_id": 409,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {}
+        },
+        {
+            "product_id": 2753,
+            "collection_id": -1,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        },
+        {
+            "product_id": -1,
+            "collection_id": 409,
+            "payload": {
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "update-collection-relation": [
+        {
+            "product_id": 2772,
+            "collection_id": 410,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {}
+        },
+        {
+            "product_id": 2772,
+            "collection_id": -1,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        },
+        {
+            "product_id": -1,
+            "collection_id": 410,
+            "payload": {
+                "public_key": "#b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "delete-collection-relation": [
+        {
+            "product_id": 2753,
+            "collection_id": 410,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {}
+        },
+        {
+            "product_id": 2753,
+            "collection_id": -1,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        },
+        {
+            "product_id": -1,
+            "collection_id": 410,
+            "payload": {
+                "public_key": "#b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ]
+}

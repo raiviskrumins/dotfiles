@@ -1,0 +1,87 @@
+@import "_fonts";
+@import "_variables";
+@import "_typography";
+@import "_overrides";
+@import "_elements";
+
+
+html, body {
+  height: 100%;
+  font-size: 15px;
+}
+
+.wrapper {
+  margin-bottom: -101px;
+  min-height: 100%;
+  background-image: url('../img/rebrand/amber/ambercircles.svg');
+  background-repeat: no-repeat;
+  background-position: 80% 65%;
+  background-size: 280px 280px;
+}
+
+header {
+  border-bottom: 1px solid $outline-color;
+  height: $error-header-height;
+  line-height: $error-header-height;
+  padding: 0 20px;
+
+  img {
+    width: 200px;
+    margin: 20px 0;
+  }
+
+  ul {
+    list-style: none;
+
+    li {
+      display: inline-block;
+      margin-left: 20px;
+      font-weight: 300;
+
+      a, a:hover {
+        color: $text-color;
+      }
+    }
+  }
+}
+
+.push {
+  height: $error-footer-height;
+}
+
+footer {
+  color: $text-color;
+  height: $error-footer-height;
+  border-top: 1px solid $outline-color;
+
+  p {
+    line-height: $error-footer-height;
+    margin: 0;
+  }
+
+  a {
+    color: $text-color;
+    margin-left: 30px;
+  }
+}
+
+h1.xl-text {
+  font-size: 80px;
+  font-family: 'DINOT';
+  font-weight: 100;
+  margin: 50px 0;
+  letter-spacing: 0px;
+}
+
+h2 {
+  text-transform: uppercase;
+  font-family: 'DINOT';
+  font-weight: 400;
+  font-size: 18px;
+}
+
+.btn {
+  text-transform: uppercase;
+  font-family: 'DINOT';
+  margin-top: 20px;
+}

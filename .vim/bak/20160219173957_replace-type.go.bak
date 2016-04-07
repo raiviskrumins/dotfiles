@@ -1,0 +1,21 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+)
+
+// Up is executed when this migration is applied
+func Up_20160219173957(txn *sql.Tx) {
+	tables := []string{"api_key", "option", "bulb_component", "glass_component", "leather_component", "shade_component"}
+	cols := []string{"api_key_type", "option_type", "bulb_type", "glass_type", "leather_type", "shade_type"}
+	for i, _ := range tables {
+		s := fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO kind;", tables[i], cols[i])
+		txn.Exec(s)
+	}
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160219173957(txn *sql.Tx) {
+
+}

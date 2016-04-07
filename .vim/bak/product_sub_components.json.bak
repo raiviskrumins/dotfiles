@@ -1,0 +1,342 @@
+{
+    "box": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "depth": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_component_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_table_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "weight": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "door": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "depth": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "opening": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_component_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_table_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "drawer": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "depth": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_component_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_table_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "image": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "caption": {
+            "type": "string",
+            "nullable": true
+        },
+        "category": {
+            "type": "string",
+            "regex": ".+"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "default": {
+            "type": "bool"
+        },
+        "full_size": {
+            "type": "string",
+            "regex": "^http",
+            "nullable": true
+        },
+        "large_size": {
+            "type": "string",
+            "regex": "^http",
+            "nullable": true
+        },
+        "medium_size": {
+            "type": "string",
+            "regex": "^http",
+            "nullable": true
+        },
+        "thumbnail_size": {
+            "type": "string",
+            "regex": "^http",
+            "nullable": true
+        },
+        "parent_component_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_table_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        }
+    },
+    "option_set": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_component_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_table_name": {
+            "type": "string"
+        },
+        "option_set_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        }
+    },
+    "option": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "name": {
+            "type": "string",
+            "nullable": true
+        },
+        "number": {
+            "type": "float",
+            "nullable": true
+        },
+        "description": {
+            "type": "string",
+            "nullable": true
+        },
+        "image": {
+            "type": "string"
+        },
+        "default": {
+            "type": "bool"
+        },
+        "surchase": {
+            "type": "float",
+            "nullable": true
+        }
+    },
+    "shelf": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "depth": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_component_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_table_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    }
+}

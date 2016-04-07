@@ -1,0 +1,77 @@
+
+-- +goose Up
+-- SQL in section 'Up' is executed when this migration is applied
+ALTER TABLE door_sub_component
+    ADD COLUMN door_depth double precision,
+    DROP COLUMN thickness;
+
+ALTER TABLE manufacturer ADD COLUMN phone_extension character varying;
+
+ALTER TABLE pillow_sub_component
+    ADD COLUMN pillow_depth double precision,
+    DROP COLUMN thickness;
+
+ALTER TABLE shelf_sub_component
+    ADD COLUMN height double precision,
+    DROP COLUMN thickness;
+
+ALTER TABLE shipping_information_component
+    ADD COLUMN standard boolean,
+    ADD COLUMN freight boolean,
+    ADD COLUMN white_glove boolean,
+    ADD COLUMN drop_ship boolean,
+    DROP COLUMN packaged_weight,
+    DROP COLUMN packaged_width,
+    DROP COLUMN packaged_height,
+    DROP COLUMN packaged_depth;
+
+CREATE TABLE shipping_information_sub_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_component_id integer,
+    parent_table_name character varying,
+    weight double precision,
+    width double precision,
+    height double precision,
+    box_depth double precision
+);
+
+ALTER TABLE suspension_point_component
+    ADD COLUMN canopy_depth double precision,
+    ADD COLUMN canopy_height double precision,
+    ADD COLUMN canopy_width double precision,
+    ADD COLUMN wire_length double precision;
+
+-- +goose Down
+-- SQL section 'Down' is executed when this migration is rolled back
+ALTER TABLE door_sub_component
+    ADD COLUMN thickness double precision,
+    DROP COLUMN door_depth;
+
+ALTER TABLE manufacturer DROP COLUMN phone_extension;
+
+ALTER TABLE pillow_sub_component
+    ADD COLUMN thickness double precision,
+    DROP COLUMN pillow_depth;
+
+ALTER TABLE shelf_sub_component
+    ADD COLUMN thickness double precision,
+    DROP COLUMN height;
+
+ALTER TABLE shipping_information_component
+    ADD COLUMN packaged_weight double precision,
+    ADD COLUMN packaged_width double precision,
+    ADD COLUMN packaged_height double precision,
+    ADD COLUMN packaged_depth double precision,
+    DROP COLUMN standard,
+    DROP COLUMN freight,
+    DROP COLUMN white_glove,
+    DROP COLUMN drop_ship;
+
+DROP TABLE shipping_information_sub_component;
+
+ALTER TABLE suspension_point_component
+    DROP COLUMN canopy_depth,
+    DROP COLUMN canopy_height,
+    DROP COLUMN canopy_width,
+    DROP COLUMN wire_length;

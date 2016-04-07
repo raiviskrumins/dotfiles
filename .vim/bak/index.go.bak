@@ -1,0 +1,265 @@
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/config"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/models"
+	"gopkg.in/olivere/elastic.v2"
+)
+
+func main() {
+	dbNameParam := "database"
+	elasticIndexParam := "index"
+
+	if len(os.Args) > 1 && os.Args[1] == "test" {
+		elasticIndexParam = "test-" + elasticIndexParam
+		dbNameParam = "test-" + dbNameParam
+	}
+
+	dbType := config.String("sql", "type")
+	dbUser := config.String("sql", "user")
+	dbName := config.String("sql", dbNameParam)
+	dbPassword := config.String("sql", "password")
+	dbSSLMode := config.String("sql", "ssl-mode")
+
+	elasticHost := config.String("es", "host")
+	elasticPort := config.String("es", "port")
+	elasticIndexName := config.String("es", elasticIndexParam)
+
+	dbConnectString := fmt.Sprintf("user=%s dbname=%s password=%s, sslmode=%s", dbUser, dbName, dbPassword, dbSSLMode)
+	db, err := app.Open(dbType, dbConnectString)
+	if err != nil {
+		panic(err)
+	}
+
+	es := &app.ES{elasticHost, elasticPort, elasticIndexName}
+	e := BuildProductIndex(db, es)
+	if e != nil {
+		panic(e)
+	}
+}
+
+// BuildProductIndex - function for creating a product index through Elastic
+func BuildProductIndex(db *app.DB, es *app.ES) error {
+	client, e := es.Client()
+	if e != nil {
+		return e
+	}
+
+	exists, err := client.IndexExists(es.IndexName).Do()
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		_, err = client.DeleteIndex(es.IndexName).Do()
+		if err != nil {
+			return err
+		}
+	}
+
+	body := `{
+        "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 0,
+            "analysis": {
+                "filter": {
+                    "synonym": {
+                        "type": "synonym",
+                        "synonyms": [
+                            "sofa, couch",
+                            "coffee table, cocktail table",
+                            "kitchen, dining",
+                            "end table, side table",
+                            "window treatment, drapery, curtain",
+                            "fabric, textile",
+                            "flush mount, ceiling mount",
+                            "throw, blanket",
+                            "book end, bookend",
+                            "art, picture",
+                            "kid, youth",
+                            "artwork, art work"
+                        ]
+                    }
+                },
+                "analyzer": {
+                    "case_insensitive_sort": {
+                        "tokenizer": "keyword",
+                        "filter": ["lowercase"]
+                    },
+                    "synonym": {
+                        "tokenizer": "standard",
+                        "filter": [
+                            "lowercase",
+                            "porter_stem",
+                            "stop",
+                            "synonym"
+                        ]
+                    },
+                    "english": {
+                        "tokenizer": "standard",
+                        "filter": ["lowercase", "porter_stem"]
+                    }
+                }
+            }
+        },
+        "mappings": {
+            "go-product": {
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string",
+                        "fields": {
+                            "synonym": {
+                                "type": "string",
+                                "analyzer": "synonym"
+                            },
+                            "stemming": {
+                                "type": "string",
+                                "analyzer": "english"
+                            },
+                            "raw": {
+                                "type": "string",
+                                "analyzer": "case_insensitive_sort"
+                            }
+                        }
+                    },
+					"date_updated": {
+						"type": "date"
+					},
+                    "manufacturer_name": {
+                        "type": "string"
+                    },
+                    "manufacturer_sku": {
+                        "type": "string"
+                    },
+					"manufacturer_id": {
+						"type": "integer"
+					},
+					"manufacturer_active": {
+						"type": "boolean"
+					},
+					"active": {
+						"type": "boolean"
+					},
+					"meets_posting_requirements": {
+						"type": "boolean"
+					},
+					"category": {
+						"type": "string"
+					},
+                    "description": {
+                        "type": "string",
+                        "fields": {
+                            "synonym": {
+                                "type": "string",
+                                "analyzer": "synonym"
+                            },
+                            "stemming": {
+                                "type": "string",
+                                "analyzer": "english"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }`
+
+	_, err = client.CreateIndex(es.IndexName).BodyString(body).Do()
+	if err != nil {
+		return err
+	}
+
+	rows, err := db.Query(`
+        SELECT p.id,
+		i.product_name,
+		i.manufacturer_sku,
+		d.primary_description,
+		m.manufacturer_name,
+		m.id,
+		m.active,
+		v.active,
+		v.meets_posting_requirements,
+		a.date_updated,
+		c.primary_category
+        FROM product_entity AS p
+        LEFT JOIN identity_component AS i ON p.id = i.product_id
+        LEFT JOIN description_component AS d ON p.id = d.product_id
+		LEFT JOIN visibility_component AS v ON p.id = v.product_id
+		LEFT JOIN audit_component AS a ON p.id = a.product_id
+		LEFT JOIN category_component AS c ON p.id = c.product_id
+        LEFT JOIN manufacturer_component AS mc ON p.id = mc.product_id
+        LEFT JOIN manufacturer AS m ON mc.manufacturer_id = m.id
+    `)
+
+	if err != nil {
+		return err
+	}
+
+	defer rows.Close()
+
+	bulkRequest := client.Bulk()
+
+	for rows.Next() {
+		var sp models.SearchProduct
+		var pID, pName, pManufacturerSKU, pDescription, pManufacturerName, pManufacturerID, pManufacturerActive, pActive, pMeetsPostingRequirements, pCategory []byte
+
+		var tf lib.TimeField
+		err := rows.Scan(
+			&pID,
+			&pName,
+			&pManufacturerSKU,
+			&pDescription,
+			&pManufacturerName,
+			&pManufacturerID,
+			&pManufacturerActive,
+			&pActive,
+			&pMeetsPostingRequirements,
+			&tf,
+			&pCategory,
+		)
+		if err != nil {
+			return err
+		}
+		sp.ID = string(pID)
+		sp.Name = string(pName)
+		sp.ManufacturerSKU = string(pManufacturerSKU)
+		sp.Description = string(pDescription)
+		sp.ManufacturerName = string(pManufacturerName)
+		sp.ManufacturerID = string(pManufacturerID)
+		sp.ManufacturerActive = string(pManufacturerActive)
+		sp.Active = string(pActive)
+		sp.MeetsPostingRequirements = string(pMeetsPostingRequirements)
+		sp.Category = string(pCategory)
+
+		if tf.Valid == true {
+			sp.DateUpdated = tf.Time
+		}
+
+		index := elastic.NewBulkIndexRequest().
+			Index(es.IndexName).
+			Type("go-product").
+			Id(sp.ID).
+			Doc(sp)
+		bulkRequest.Add(index)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return err
+	}
+
+	_, err = bulkRequest.Do()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

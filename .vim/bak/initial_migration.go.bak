@@ -1,0 +1,3351 @@
+package main
+
+import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"strings"
+	"unicode/utf8"
+
+	"encoding/json"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/config"
+	"github.com/AmberEngine/api/lib"
+)
+
+func componentExistanceClause(compName string) string {
+	sql := " JOIN product_entity ON product_entity.id = " + compName + "_component.product_id WHERE product_entity.assemblage_id IN (SELECT assemblage_id FROM assemblage_components WHERE component_id IN (SELECT id FROM component WHERE name = '" + compName + "'))"
+	return sql
+}
+
+func createStructure(db *app.DB) error {
+	sqlFile, err := ioutil.ReadFile("api_final.sql")
+	if err != nil {
+		return err
+	}
+	sqlString := string(sqlFile)
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	sqlStmtSlice := strings.Split(sqlString, ";\r")
+
+	for _, q := range sqlStmtSlice {
+		_, err := tx.Exec(q)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return nil
+}
+
+func stripNBSpace(input string) string {
+	var n []rune
+	for i, w := 0, 0; i < len(input); i += w {
+		r, width := utf8.DecodeRuneInString(input[i:])
+		if r == '\xa0' {
+			r = ' '
+		}
+		w = width
+		n = append(n, r)
+	}
+	return string(n)
+}
+
+func copyManufacturer(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, name, bio, url, logo_url, date_added, date_updated, updated_by_api_key, active, city, email, facebook_url, google_plus_url, legal, linkedin_url, phone, pinterest_url, restock_fee, return_period, returnable, state, street_address_1, street_address_2, twitter_url, zipcode, featured, date_profile_complete, extension, real FROM manufacturer`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var mfr struct {
+			ID                  lib.IntField    `json:"id" primary:"true"`
+			Name                lib.StringField `db:"manufacturer_name" json:"name"`
+			Bio                 lib.StringField `json:"bio"`
+			URL                 lib.StringField `json:"url"`
+			LogoURL             lib.StringField `json:"logo_url"`
+			DateAdded           lib.TimeField   `json:"date_added"`
+			DateUpdated         lib.TimeField   `json:"date_updated"`
+			DateProfileComplete lib.TimeField   `json:"date_profile_complete"`
+			UpdateByAPIKey      lib.StringField `json:"updated_by_api_key"`
+			Active              lib.BoolField   `json:"active"`
+			City                lib.StringField `json:"city"`
+			Email               lib.StringField `json:"email"`
+			FacebookURL         lib.StringField `json:"facebook_url"`
+			GooglePlusURL       lib.StringField `json:"google_plus_url"`
+			Legal               lib.StringField `json:"legal"`
+			LinkedInURL         lib.StringField `json:"linkedin_url"`
+			Phone               lib.StringField `json:"phone"`
+			Extension           lib.StringField `json:"phone_extension"`
+			PinterestURL        lib.StringField `json:"pinterest_url"`
+			RestockFee          lib.FloatField  `json:"restock_fee"`
+			ReturnPeriod        lib.IntField    `json:"return_period"`
+			Returnable          lib.BoolField   `json:"returnable"`
+			State               lib.StringField `db:"address_state" json:"state"`
+			StreetAddress1      lib.StringField `json:"street_address_1"`
+			StreetAddress2      lib.StringField `json:"street_address_2"`
+			TwitterURL          lib.StringField `json:"twitter_url"`
+			ZipCode             lib.StringField `json:"zipcode"`
+			Featured            lib.BoolField   `json:"featured"`
+			Real                lib.BoolField   `json:"real"`
+		}
+		err = rows.Scan(&mfr.ID, &mfr.Name, &mfr.Bio, &mfr.URL, &mfr.LogoURL, &mfr.DateAdded, &mfr.DateUpdated, &mfr.UpdateByAPIKey, &mfr.Active, &mfr.City, &mfr.Email, &mfr.FacebookURL, &mfr.GooglePlusURL, &mfr.Legal, &mfr.LinkedInURL, &mfr.Phone, &mfr.PinterestURL, &mfr.RestockFee, &mfr.ReturnPeriod, &mfr.Returnable, &mfr.State, &mfr.StreetAddress1, &mfr.StreetAddress2, &mfr.TwitterURL, &mfr.ZipCode, &mfr.Featured, &mfr.DateProfileComplete, &mfr.Extension, &mfr.Real)
+		if err != nil {
+			return err
+		}
+
+		mfr.Real.Set(!mfr.Real.Bool)
+		_, err = db.Exec(`INSERT INTO manufacturer (id, manufacturer_name, active, bio, date_added, date_updated, updated_by_api_key, date_profile_complete, email, featured, legal, logo_url, restock_fee, return_period, returnable, street_address_1, street_address_2, city, address_state, zipcode, phone, phone_extension, facebook_url, google_plus_url, linkedin_url, pinterest_url, twitter_url, url, internal) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)`, mfr.ID, mfr.Name, mfr.Active, mfr.Bio, mfr.DateAdded, mfr.DateUpdated, mfr.UpdateByAPIKey, mfr.DateProfileComplete, mfr.Email, mfr.Featured, mfr.Legal, mfr.LogoURL, mfr.RestockFee, mfr.ReturnPeriod, mfr.Returnable, mfr.StreetAddress1, mfr.StreetAddress2, mfr.City, mfr.State, mfr.ZipCode, mfr.Phone, mfr.Extension, mfr.FacebookURL, mfr.GooglePlusURL, mfr.LinkedInURL, mfr.PinterestURL, mfr.TwitterURL, mfr.URL, mfr.Real)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyManufacturerImage(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, manufacturer_id, caption, url, "default" FROM manufacturer_image`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var mfrImg struct {
+			ID             lib.IntField    `json:"id" primary:"true"`
+			ManufacturerID lib.IntField    `json:"manufacturer_id"`
+			Default        lib.BoolField   `db:"manufacturer_image_default" json:"default"`
+			Caption        lib.StringField `json:"caption"`
+			URL            lib.StringField `json:"url"`
+		}
+		err = rows.Scan(&mfrImg.ID, &mfrImg.ManufacturerID, &mfrImg.Caption, &mfrImg.URL, &mfrImg.Default)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO manufacturer_image (id, manufacturer_id, caption, url, manufacturer_image_default) VALUES ($1, $2, $3, $4, $5)`, mfrImg.ID, mfrImg.ManufacturerID, mfrImg.Caption, mfrImg.URL, mfrImg.Default)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyCollection(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, manufacturer_id, description, designed_by, "name" FROM collection`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var col struct {
+			ID             lib.IntField    `json:"id" primary:"true"`
+			ManufacturerID lib.IntField    `json:"manufacturer_id"`
+			Name           lib.StringField `json:"name" db:"collection_name"`
+			Description    lib.StringField `json:"description"`
+			DesignedBy     lib.StringField `json:"designed_by"`
+		}
+		err = rows.Scan(&col.ID, &col.ManufacturerID, &col.Description, &col.DesignedBy, &col.Name)
+		if err != nil {
+			return err
+		}
+		_, err = db.Exec(`INSERT INTO collection (id, manufacturer_id, description, designed_by, collection_name) VALUES ($1, $2, $3, $4, $5)`, col.ID, col.ManufacturerID, col.Description, col.DesignedBy, col.Name)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyOptionSet(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, manufacturer_id, "name", set_type FROM option_set`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var optSet struct {
+			ID             lib.IntField
+			ManufacturerID lib.IntField
+			Name           lib.StringField
+			Type           lib.StringField
+		}
+		err = rows.Scan(&optSet.ID, &optSet.ManufacturerID, &optSet.Name, &optSet.Type)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO option_set (id, manufacturer_id, option_set_name, kind) VALUES ($1, $2, $3, $4)`, optSet.ID, optSet.ManufacturerID, optSet.Name, optSet.Type)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyOption(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, "name", "default", image, description, number, option_set_id, surcharge FROM finish_option`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var opt struct {
+			ID          lib.IntField    `json:"id" primary:"true"`
+			OptionSetID lib.IntField    `json:"option_set_id"`
+			Name        lib.StringField `json:"name" db:"option_name"`
+			Number      lib.StringField `json:"number" db:"option_number"`
+			Description lib.StringField `json:"description"`
+			Default     lib.BoolField   `json:"default" db:"option_default"`
+			Image       lib.StringField `json:"image"`
+			Surcharge   lib.IntField    `json:"surcharge"`
+			Kind        lib.StringField `json:"kind"`
+		}
+
+		err = rows.Scan(&opt.ID, &opt.Name, &opt.Default, &opt.Image, &opt.Description, &opt.Number, &opt.OptionSetID, &opt.Surcharge)
+		if err != nil {
+			return err
+		}
+
+		opt.Kind.Set("finish")
+		_, err = db.Exec(`INSERT INTO option (option_name, option_default, image, description, option_number, option_set_id, surcharge, kind) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, opt.Name, opt.Default, opt.Image, opt.Description, opt.Number, opt.OptionSetID, opt.Surcharge, opt.Kind)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyOptionHardware(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, finish, height, width, depth, diameter, name, "default", image, description, number, option_set_id, surcharge FROM hardware_option`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var opt struct {
+			ID          lib.IntField
+			Finish      lib.StringField
+			Height      lib.FloatField
+			Width       lib.FloatField
+			Depth       lib.FloatField
+			Diameter    lib.FloatField
+			Name        lib.StringField
+			Default     lib.BoolField
+			Image       lib.StringField
+			Description lib.StringField
+			Number      lib.StringField
+			OptionSetID lib.IntField
+			Surcharge   lib.IntField
+			Kind        lib.StringField
+		}
+
+		err = rows.Scan(&opt.ID, &opt.Finish, &opt.Height, &opt.Width, &opt.Depth, &opt.Diameter, &opt.Name, &opt.Default, &opt.Image, &opt.Description, &opt.Number, &opt.OptionSetID, &opt.Surcharge)
+		if err != nil {
+			return err
+		}
+
+		opt.Kind.Set("hardware")
+		var idRes int
+		err := db.QueryRow(`INSERT INTO option (option_name, option_default, image, description, option_number, option_set_id, surcharge, kind) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`, opt.Name, opt.Default, opt.Image, opt.Description, opt.Number, opt.OptionSetID, opt.Surcharge, opt.Kind).Scan(&idRes)
+		if err != nil {
+			return err
+		}
+		_, err = db.Exec(`INSERT INTO option_hardware (option_id, finish, height, width, option_hardware_depth, diameter) VALUES ($1, $2, $3, $4, $5, $6)`, idRes, opt.Finish, opt.Height, opt.Width, opt.Depth, opt.Diameter)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyOptionLeather(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, leather_type, pattern_number, hide_size, average_thickness, finish, performance, flammability, cleaning_instructions, name, "default", image, description, number, option_set_id, surcharge FROM leather_option`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var opt struct {
+			ID                   lib.IntField
+			LeatherType          lib.StringField
+			PatternNumber        lib.StringField
+			HideSize             lib.FloatField
+			AverageThickness     lib.FloatField
+			Finish               lib.StringField
+			Performance          lib.StringField
+			Flammability         lib.StringField
+			CleaningInstructions lib.StringField
+			Name                 lib.StringField
+			Default              lib.BoolField
+			Image                lib.StringField
+			Description          lib.StringField
+			Number               lib.StringField
+			OptionSetID          lib.IntField
+			Surcharge            lib.IntField
+			Kind                 lib.StringField
+		}
+
+		err = rows.Scan(&opt.ID, &opt.LeatherType, &opt.PatternNumber, &opt.HideSize, &opt.AverageThickness, &opt.Finish, &opt.Performance, &opt.Flammability, &opt.CleaningInstructions, &opt.Name, &opt.Default, &opt.Image, &opt.Description, &opt.Number, &opt.OptionSetID, &opt.Surcharge)
+		if err != nil {
+			return err
+		}
+
+		opt.Kind.Set("leather")
+		var idRes int
+		err := db.QueryRow(`INSERT INTO option (option_name, option_default, image, description, option_number, option_set_id, surcharge, kind) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`, opt.Name, opt.Default, opt.Image, opt.Description, opt.Number, opt.OptionSetID, opt.Surcharge, opt.Kind).Scan(&idRes)
+		if err != nil {
+			return err
+		}
+		_, err = db.Exec(`INSERT INTO option_leather (option_id, leather_type, pattern_number, hide_size, average_thickness, finish, performance, flammability, cleaning_instructions) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, idRes, opt.LeatherType, opt.PatternNumber, opt.HideSize, opt.AverageThickness, opt.Finish, opt.Performance, opt.Flammability, opt.CleaningInstructions)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyOptionNailhead(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, finish, height, width, depth, diameter, name, "default", image, description, number, option_set_id, surcharge FROM nailhead_option`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var opt struct {
+			ID          lib.IntField
+			Finish      lib.StringField
+			Height      lib.FloatField
+			Width       lib.FloatField
+			Depth       lib.FloatField
+			Diameter    lib.FloatField
+			Name        lib.StringField
+			Default     lib.BoolField
+			Image       lib.StringField
+			Description lib.StringField
+			Number      lib.StringField
+			OptionSetID lib.IntField
+			Surcharge   lib.IntField
+			Kind        lib.StringField
+		}
+
+		err = rows.Scan(&opt.ID, &opt.Finish, &opt.Height, &opt.Width, &opt.Depth, &opt.Diameter, &opt.Name, &opt.Default, &opt.Image, &opt.Description, &opt.Number, &opt.OptionSetID, &opt.Surcharge)
+		if err != nil {
+			return err
+		}
+
+		opt.Kind.Set("nailhead")
+		var idRes int
+		err := db.QueryRow(`INSERT INTO option (option_name, option_default, image, description, option_number, option_set_id, surcharge, kind) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`, opt.Name, opt.Default, opt.Image, opt.Description, opt.Number, opt.OptionSetID, opt.Surcharge, opt.Kind).Scan(&idRes)
+		if err != nil {
+			return err
+		}
+		_, err = db.Exec(`INSERT INTO option_nailhead (option_id, finish, height, width, option_nailhead_depth, diameter) VALUES ($1, $2, $3, $4, $5, $6)`, idRes, opt.Finish, opt.Height, opt.Width, opt.Depth, opt.Diameter)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyOptionTextile(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, "content", weave_type, width, treatment, usage, grade, pattern_number, vertical_repeat, horizontal_repeat, direction, color, scale, design_type, martindale, wyzenbeek, flammability, cleaning_instructions, name, "default", image, description, number, option_set_id, surcharge FROM textile_option`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var opt struct {
+			ID                   lib.IntField
+			Content              lib.StringField
+			WeaveType            lib.StringField
+			Width                lib.FloatField
+			Treatment            lib.StringField
+			Usage                lib.StringField
+			Grade                lib.StringField
+			PatternNumber        lib.StringField
+			VerticalRepeat       lib.FloatField
+			HorizontalRepeat     lib.FloatField
+			Direction            lib.StringField
+			Color                lib.StringField
+			Scale                lib.StringField
+			DesignType           lib.StringField
+			Martindale           lib.StringField
+			Wyzenbeek            lib.StringField
+			Flammability         lib.StringField
+			CleaningInstructions lib.StringField
+			Name                 lib.StringField
+			Default              lib.BoolField
+			Image                lib.StringField
+			Description          lib.StringField
+			Number               lib.StringField
+			OptionSetID          lib.IntField
+			Surcharge            lib.IntField
+			Kind                 lib.StringField
+		}
+
+		err = rows.Scan(&opt.ID, &opt.Content, &opt.WeaveType, &opt.Width, &opt.Treatment, &opt.Usage, &opt.Grade, &opt.PatternNumber, &opt.VerticalRepeat, &opt.HorizontalRepeat, &opt.Direction, &opt.Color, &opt.Scale, &opt.DesignType, &opt.Martindale, &opt.Wyzenbeek, &opt.Flammability, &opt.CleaningInstructions, &opt.Name, &opt.Default, &opt.Image, &opt.Description, &opt.Number, &opt.OptionSetID, &opt.Surcharge)
+		if err != nil {
+			return err
+		}
+
+		opt.Kind.Set("textile")
+		var idRes int
+		err := db.QueryRow(`INSERT INTO option (option_name, option_default, image, description, option_number, option_set_id, surcharge, kind) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`, opt.Name, opt.Default, opt.Image, opt.Description, opt.Number, opt.OptionSetID, opt.Surcharge, opt.Kind).Scan(&idRes)
+		if err != nil {
+			return err
+		}
+		_, err = db.Exec(`INSERT INTO option_textile (option_id, cleaning_instructions, color, design_type, direction, flammability, grade, horizontal_repeat, martindale, option_content, option_scale,  option_usage, pattern_number, treatment, vertical_repeat, weave_type, width, wyzenbeek) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`, idRes, opt.CleaningInstructions, opt.Color, opt.DesignType, opt.Direction, opt.Flammability, opt.Grade, opt.HorizontalRepeat, opt.Martindale, opt.Content, opt.Scale, opt.Usage, opt.PatternNumber, opt.Treatment, opt.VerticalRepeat, opt.WeaveType, opt.Width, opt.Wyzenbeek)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyOptionTrim(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, color, height, width, depth, diameter, content, trim_type, name, "default", image, description, number, option_set_id, surcharge FROM trim_option`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var opt struct {
+			ID          lib.IntField
+			Color       lib.StringField
+			Height      lib.FloatField
+			Width       lib.FloatField
+			Depth       lib.FloatField
+			Diameter    lib.FloatField
+			Content     lib.StringField
+			TrimType    lib.StringField
+			Name        lib.StringField
+			Default     lib.BoolField
+			Image       lib.StringField
+			Description lib.StringField
+			Number      lib.StringField
+			OptionSetID lib.IntField
+			Surcharge   lib.IntField
+			Kind        lib.StringField
+		}
+
+		err = rows.Scan(&opt.ID, &opt.Color, &opt.Height, &opt.Width, &opt.Depth, &opt.Diameter, &opt.Content, &opt.TrimType, &opt.Name, &opt.Default, &opt.Image, &opt.Description, &opt.Number, &opt.OptionSetID, &opt.Surcharge)
+		if err != nil {
+			return err
+		}
+
+		opt.Kind.Set("trim")
+		var idRes int
+		err := db.QueryRow(`INSERT INTO option (option_name, option_default, image, description, option_number, option_set_id, surcharge, kind) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`, opt.Name, opt.Default, opt.Image, opt.Description, opt.Number, opt.OptionSetID, opt.Surcharge, opt.Kind).Scan(&idRes)
+		if err != nil {
+			return err
+		}
+		_, err = db.Exec(`INSERT INTO option_trim (option_id, height, width, option_trim_depth, color, content, diameter, trim_type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, idRes, opt.Height, opt.Width, opt.Depth, opt.Color, opt.Content, opt.Diameter, opt.TrimType)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copySalesChannel(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, name, bio, url, logo_url, phone, email, street_address_1, street_address_2, city, state, zipcode, facebook_url, twitter_url, google_plus_url, linkedin_url, pinterest_url, api_key_id, visible, isolated_image, other_image, setting_image, extension FROM sales_channel`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sc struct {
+			ID             lib.IntField `json:"id" primary:"true"`
+			Name           lib.StringField
+			Bio            lib.StringField
+			Url            lib.StringField
+			LogoUrl        lib.StringField
+			Phone          lib.StringField
+			Email          lib.StringField
+			StreetAddress1 lib.StringField
+			StreetAddress2 lib.StringField
+			City           lib.StringField
+			State          lib.StringField
+			Zipcode        lib.StringField
+			FacebookUrl    lib.StringField
+			TwitterUrl     lib.StringField
+			GooglePlusUrl  lib.StringField
+			LinkedinUrl    lib.StringField
+			PinterestUrl   lib.StringField
+			ApiKeyID       lib.IntField
+			Visible        lib.BoolField
+			IsolatedImage  lib.BoolField
+			OtherImage     lib.BoolField
+			SettingImage   lib.BoolField
+			Extension      lib.StringField
+		}
+		err = rows.Scan(&sc.ID, &sc.Name, &sc.Bio, &sc.Url, &sc.LogoUrl, &sc.Phone, &sc.Email, &sc.StreetAddress1, &sc.StreetAddress2, &sc.City, &sc.State, &sc.Zipcode, &sc.FacebookUrl, &sc.TwitterUrl, &sc.GooglePlusUrl, &sc.LinkedinUrl, &sc.PinterestUrl, &sc.ApiKeyID, &sc.Visible, &sc.IsolatedImage, &sc.OtherImage, &sc.SettingImage, &sc.Extension)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO sales_channel (id, api_key_id, visible, sales_channel_name, bio, logo_url, email, street_address_1, street_address_2, city, address_state, zipcode, phone, phone_extension, facebook_url, google_plus_url, linkedin_url, pinterest_url, twitter_url, url, isolated_image, other_image, setting_image) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`, sc.ID, sc.ApiKeyID, sc.Visible, sc.Name, sc.Bio, sc.LogoUrl, sc.Email, sc.StreetAddress1, sc.StreetAddress2, sc.City, sc.State, sc.Zipcode, sc.Phone, sc.Extension, sc.FacebookUrl, sc.GooglePlusUrl, sc.LinkedinUrl, sc.PinterestUrl, sc.TwitterUrl, sc.Url, sc.IsolatedImage, sc.OtherImage, sc.SettingImage)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`UPDATE sales_channel SET visible = 'false' WHERE sales_channel_name <> 'Discover'`)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copySalesChannelImage(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, sales_channel_id, caption, url FROM sales_channel_image`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var scImg struct {
+			ID             lib.IntField
+			SalesChannelID lib.IntField
+			Caption        lib.StringField
+			URL            lib.StringField
+		}
+		err = rows.Scan(&scImg.ID, &scImg.SalesChannelID, &scImg.Caption, &scImg.URL)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO sales_channel_image (id, sales_channel_id, caption, url) VALUES ($1, $2, $3, $4)`, scImg.ID, scImg.SalesChannelID, scImg.Caption, scImg.URL)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copySalesChannelPreference(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, manufacturer_id, sales_channel_id, active, description_description, identity_name, pricing_dealer_price, pricing_minimum_internet_price, pricing_msrp, pricing_trade_price, pricing_wholesale FROM sales_channel_preference`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var scPref struct {
+			ID                          lib.IntField
+			ManufacturerID              lib.IntField
+			SalesChannelID              lib.IntField
+			Active                      lib.BoolField
+			DescriptionDescription      lib.StringField
+			IdentityName                lib.StringField
+			PricingDealerPrice          lib.BoolField
+			PricingMinimumInternetPrice lib.BoolField
+			PricingMsrp                 lib.BoolField
+			PricingTradePrice           lib.BoolField
+			PricingWholesale            lib.BoolField
+		}
+		err = rows.Scan(&scPref.ID, &scPref.ManufacturerID, &scPref.SalesChannelID, &scPref.Active, &scPref.DescriptionDescription, &scPref.IdentityName, &scPref.PricingDealerPrice, &scPref.PricingMinimumInternetPrice, &scPref.PricingMsrp, &scPref.PricingTradePrice, &scPref.PricingWholesale)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO sales_channel_preference (id, manufacturer_id, sales_channel_id, active, description_description, identity_name, pricing_dealer_price, pricing_minimum_internet_price, pricing_msrp, pricing_trade_price, pricing_wholesale) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, scPref.ID, scPref.ManufacturerID, scPref.SalesChannelID, scPref.Active, scPref.DescriptionDescription, scPref.IdentityName, scPref.PricingDealerPrice, scPref.PricingMinimumInternetPrice, scPref.PricingMsrp, scPref.PricingTradePrice, scPref.PricingWholesale)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyAPIKey(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT api_key.id, api_key.name, public, private, manufacturer_id, sales_channel_id, type FROM api_key`)
+	if err != nil {
+		return err
+	}
+	var cmID int64
+	defer rows.Close()
+	for rows.Next() {
+		var apiKey struct {
+			ID             lib.IntField
+			Name           lib.StringField
+			Public         lib.StringField
+			Private        lib.StringField
+			ManufacturerID lib.IntField
+			SalesChannelID lib.IntField
+			Type           lib.StringField
+			Role           lib.StringField
+		}
+		err = rows.Scan(&apiKey.ID, &apiKey.Name, &apiKey.Public, &apiKey.Private, &apiKey.ManufacturerID, &apiKey.SalesChannelID, &apiKey.Type)
+		if err != nil {
+			return err
+		}
+
+		if apiKey.Name.String == "channel-manager" {
+			cmID = apiKey.ID.Int64
+		}
+		apiKey.Role.Set("ManufacturerUser")
+		_, err = db.Exec(`INSERT INTO api_key (id, api_key_name, kind, public, private, manufacturer_id, sales_channel_id, role_name) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, apiKey.ID, apiKey.Name, apiKey.Type, apiKey.Public, apiKey.Private, apiKey.ManufacturerID, apiKey.SalesChannelID, apiKey.Role)
+		if err != nil {
+			return err
+		}
+	}
+	roleRows, err := oldDB.Query(`SELECT api_key.id, api_key.type, role.name FROM api_key LEFT JOIN roles ON roles.api_key_id = api_key.id LEFT JOIN role ON role.id = roles.role_id`)
+	if err != nil {
+		return err
+	}
+	defer roleRows.Close()
+	for roleRows.Next() {
+		var apiKey struct {
+			ID   lib.IntField
+			Type lib.StringField
+			Role lib.StringField
+		}
+		err = roleRows.Scan(&apiKey.ID, &apiKey.Type, &apiKey.Role)
+		if err != nil {
+			return err
+		}
+
+		if apiKey.Type.String == "user_key" {
+			switch apiKey.Role.String {
+			case "channel_manager_admin":
+				apiKey.Role.Set("ChannelManagerAdmin")
+			case "sales_channel":
+				apiKey.Role.Set("SalesChannel")
+			case "discover_admin":
+				apiKey.Role.Set("DiscoverAdmin")
+			case "mfr_user":
+				apiKey.Role.Set("ManufacturerUser")
+			case "sales_channel_user":
+				apiKey.Role.Set("SalesChannelUser")
+
+			}
+		} else {
+			if apiKey.ID.Int64 == cmID {
+				apiKey.Role.Set("ChannelManagerAdmin")
+			} else {
+				apiKey.Role.Set("APIClient")
+			}
+		}
+
+		_, err = db.Exec(`UPDATE api_key SET role_name = $1 WHERE id = $2`, apiKey.Role, apiKey.ID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyAPILog(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT api_log.id, timestamp, ip, api_key.public, uri, payload_action, http_method FROM api_log LEFT JOIN api_key ON api_key.public = api_log.api_key ORDER BY api_log.id DESC LIMIT 5000`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var apiLog struct {
+			ID            lib.IntField
+			Timestamp     lib.TimeField
+			IP            lib.StringField
+			APIKey        lib.StringField
+			URI           lib.StringField
+			PayloadAction lib.StringField
+			HttpMethod    lib.StringField
+		}
+		err = rows.Scan(&apiLog.ID, &apiLog.Timestamp, &apiLog.IP, &apiLog.APIKey, &apiLog.URI, &apiLog.PayloadAction, &apiLog.HttpMethod)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO api_log (id, log_timestamp, client_ip, public_key, uri, payload_action, http_method) VALUES ($1, $2, $3, $4, $5, $6, $7)`, apiLog.ID, apiLog.Timestamp, apiLog.IP, apiLog.APIKey, apiLog.URI, apiLog.PayloadAction, apiLog.HttpMethod)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyEvent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT event.id, event_name, message, object_id, object_type, api_key.public, event_datetime FROM event LEFT JOIN api_key ON api_key.public = event.api_key `)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var event struct {
+			ID            lib.IntField
+			EventName     lib.StringField
+			Message       lib.StringField
+			ObjectID      lib.IntField
+			ObjectType    lib.StringField
+			APIKey        lib.StringField
+			EventDatetime lib.TimeField
+		}
+		err = rows.Scan(&event.ID, &event.EventName, &event.Message, &event.ObjectID, &event.ObjectType, &event.APIKey, &event.EventDatetime)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO event (id, api_key, event_datetime, event_name, message, object_id, object_kind) VALUES ($1, $2, $3, $4, $5, $6, $7)`, event.ID, event.APIKey, event.EventDatetime, event.EventName, event.Message, event.ObjectID, event.ObjectType)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyCategory(db, oldDB *app.DB) error {
+	cats := [][]interface{}{
+		[]interface{}{"accessory", "accessory", nil, nil},
+		[]interface{}{"accessory_bedding", "accessory", "bedding", nil},
+		[]interface{}{"accessory_bookcase", "accessory", "bookcase", nil},
+		[]interface{}{"accessory_bookends", "accessory", "bookends", nil},
+		[]interface{}{"accessory_bowl", "accessory", "bowl", nil},
+		[]interface{}{"accessory_box", "accessory", "box", nil},
+		[]interface{}{"accessory_candleholder", "accessory", "candleholder", nil},
+		[]interface{}{"accessory_clock", "accessory", "clock", nil},
+		[]interface{}{"accessory_coatrack", "accessory", "coatrack", nil},
+		[]interface{}{"accessory_easel", "accessory", "easel", nil},
+		[]interface{}{"accessory_fire", "accessory", "fire", nil},
+		[]interface{}{"accessory_fire_elements", "accessory", "fire", "elements"},
+		[]interface{}{"accessory_fire_indoor", "accessory", "fire", "indoor"},
+		[]interface{}{"accessory_miscellaneous", "accessory", "miscellaneous", nil},
+		[]interface{}{"accessory_picture_frame", "accessory", "picture frame", nil},
+		[]interface{}{"accessory_pillow", "accessory", "pillow", nil},
+		[]interface{}{"accessory_planter", "accessory", "planter", nil},
+		[]interface{}{"accessory_screen", "accessory", "screen", nil},
+		[]interface{}{"accessory_sculpture", "accessory", "sculpture", nil},
+		[]interface{}{"accessory_slipcover", "accessory", "slipcover", nil},
+		[]interface{}{"accessory_throw", "accessory", "throw", nil},
+		[]interface{}{"accessory_trunk", "accessory", "trunk", nil},
+		[]interface{}{"accessory_tray", "accessory", "tray", nil},
+		[]interface{}{"accessory_umbrella", "accessory", "umbrella", nil},
+		[]interface{}{"accessory_vase", "accessory", "vase", nil},
+		[]interface{}{"accessory_wall", "accessory", "wall", nil},
+		[]interface{}{"accessory_wall_art", "accessory", "wall", "art"},
+		[]interface{}{"accessory_wall_clocks", "accessory", "wall", "clocks"},
+		[]interface{}{"accessory_wall_mirrors", "accessory", "wall", "mirrors"},
+		[]interface{}{"base_entity", "base entity", nil, nil},
+		[]interface{}{"casegood", "casegood", nil, nil},
+		[]interface{}{"casegood_accent_chest", "casegood", "accent chest", nil},
+		[]interface{}{"casegood_armoire", "casegood", "armoire", nil},
+		[]interface{}{"casegood_bed", "casegood", "bed", nil},
+		[]interface{}{"casegood_bench", "casegood", "bench", nil},
+		[]interface{}{"casegood_buffet", "casegood", "buffet", nil},
+		[]interface{}{"casegood_chair", "casegood", "chair", nil},
+		[]interface{}{"casegood_chair_arm_chair", "casegood", "chair", "arm chair"},
+		[]interface{}{"casegood_chair_desk_chair", "casegood", "chair", "desk chair"},
+		[]interface{}{"casegood_chair_side_chair", "casegood", "chair", "side chair"},
+		[]interface{}{"casegood_chest_drawers", "casegood", "chest drawers", nil},
+		[]interface{}{"casegood_desk", "casegood", "desk", nil},
+		[]interface{}{"casegood_dresser", "casegood", "dresser", nil},
+		[]interface{}{"casegood_etagere", "casegood", "etagere", nil},
+		[]interface{}{"casegood_headboard", "casegood", "headboard", nil},
+		[]interface{}{"casegood_media", "casegood", "media", nil},
+		[]interface{}{"casegood_nightstand", "casegood", "nightstand", nil},
+		[]interface{}{"casegood_sideboard", "casegood", "sideboard", nil},
+		[]interface{}{"casegood_stool", "casegood", "stool", nil},
+		[]interface{}{"casegood_stool_bar", "casegood", "stool", "bar"},
+		[]interface{}{"casegood_stool_counter", "casegood", "stool", "counter"},
+		[]interface{}{"casegood_stool_other", "casegood", "stool", "other"},
+		[]interface{}{"casegood_table", "casegood", "table", nil},
+		[]interface{}{"casegood_table_cocktail", "casegood", "table", "cocktail"},
+		[]interface{}{"casegood_table_dining", "casegood", "table", "dining"},
+		[]interface{}{"casegood_table_game", "casegood", "table", "game"},
+		[]interface{}{"casegood_table_side", "casegood", "table", "side"},
+		[]interface{}{"casegood_table_sofa", "casegood", "table", "sofa"},
+		[]interface{}{"lighting", "lighting", nil, nil},
+		[]interface{}{"lighting_ceiling", "lighting", "ceiling", nil},
+		[]interface{}{"lighting_ceiling_chandelier", "lighting", "ceiling", "chandelier"},
+		[]interface{}{"lighting_ceiling_flush_mount", "lighting", "ceiling", "flush mount"},
+		[]interface{}{"lighting_ceiling_pendant", "lighting", "ceiling", "pendant"},
+		[]interface{}{"lighting_floor", "lighting", "floor", nil},
+		[]interface{}{"lighting_table", "lighting", "table", nil},
+		[]interface{}{"lighting_wall", "lighting", "wall", nil},
+		[]interface{}{"outdoor", "outdoor", nil, nil},
+		[]interface{}{"outdoor_chair", "outdoor", "chair", nil},
+		[]interface{}{"outdoor_chair_dining_chair", "outdoor", "chair", "dining chair"},
+		[]interface{}{"outdoor_chair_lounge_chair", "outdoor", "chair", "lounge chair"},
+		[]interface{}{"outdoor_fire_pit", "outdoor", "fire pit", nil},
+		[]interface{}{"outdoor_loveseat", "outdoor", "loveseat", nil},
+		[]interface{}{"outdoor_sectional", "outdoor", "sectional", nil},
+		[]interface{}{"outdoor_sofa", "outdoor", "sofa", nil},
+		[]interface{}{"outdoor_stool", "outdoor", "stool", nil},
+		[]interface{}{"outdoor_stool_bar", "outdoor", "stool", "bar"},
+		[]interface{}{"outdoor_stool_counter", "outdoor", "stool", "counter"},
+		[]interface{}{"outdoor_table", "outdoor", "table", nil},
+		[]interface{}{"outdoor_table_bistro", "outdoor", "table", "bistro"},
+		[]interface{}{"outdoor_table_cocktail", "outdoor", "table", "cocktail"},
+		[]interface{}{"outdoor_table_dining", "outdoor", "table", "dining"},
+		[]interface{}{"outdoor_table_side", "outdoor", "table", "side"},
+		[]interface{}{"textiles", "textiles", nil, nil},
+		[]interface{}{"textiles_fabric", "textiles", "fabric", nil},
+		[]interface{}{"textiles_leather", "textiles", "leather", nil},
+		[]interface{}{"textiles_rug", "textiles", "rug", nil},
+		[]interface{}{"textiles_wall_covering", "textiles", "wall covering", nil},
+		[]interface{}{"upholstery", "upholstery", nil, nil},
+		[]interface{}{"upholstery_bench", "upholstery", "bench", nil},
+		[]interface{}{"upholstery_chair", "upholstery", "chair", nil},
+		[]interface{}{"upholstery_chair_arm_chair", "upholstery", "chair", "arm chair"},
+		[]interface{}{"upholstery_chair_chaise_lounge", "upholstery", "chair", "chaise lounge"},
+		[]interface{}{"upholstery_chair_desk_chair", "upholstery", "chair", "desk chair"},
+		[]interface{}{"upholstery_chair_lounge_chair", "upholstery", "chair", "lounge chair"},
+		[]interface{}{"upholstery_chair_side_chair", "upholstery", "chair", "side chair"},
+		[]interface{}{"upholstery_chair_wing_chair", "upholstery", "chair", "wing chair"},
+		[]interface{}{"upholstery_loveseat", "upholstery", "loveseat", nil},
+		[]interface{}{"upholstery_ottoman", "upholstery", "ottoman", nil},
+		[]interface{}{"upholstery_sectional", "upholstery", "sectional", nil},
+		[]interface{}{"upholstery_sofa", "upholstery", "sofa", nil},
+		[]interface{}{"upholstery_upholstered_bed", "upholstery", "upholstered bed", nil},
+		[]interface{}{"upholstery_upholstered_headboard", "upholstery", "upholstered headboard", nil},
+		[]interface{}{"youth", "youth", nil, nil},
+		[]interface{}{"youth_armoire", "youth", "armoire", nil},
+		[]interface{}{"youth_bed", "youth", "bed", nil},
+		[]interface{}{"youth_bench", "youth", "bench", nil},
+		[]interface{}{"youth_chair", "youth", "chair", nil},
+		[]interface{}{"youth_chair_arm_chair", "youth", "chair", "arm chair"},
+		[]interface{}{"youth_chair_lounge_chair", "youth", "chair", "lounge chair"},
+		[]interface{}{"youth_chair_side_chair", "youth", "chair", "side chair"},
+		[]interface{}{"youth_changing_table", "youth", "changing table", nil},
+		[]interface{}{"youth_chest_drawer", "youth", "chest drawer", nil},
+		[]interface{}{"youth_crib", "youth", "crib", nil},
+		[]interface{}{"youth_dresser", "youth", "dresser", nil},
+		[]interface{}{"youth_linens", "youth", "linens", nil},
+		[]interface{}{"youth_nightstand", "youth", "nightstand", nil},
+		[]interface{}{"youth_sideboard", "youth", "sideboard", nil},
+		[]interface{}{"youth_table", "youth", "table", nil},
+		[]interface{}{"youth_table_side_table", "youth", "table", "side table"},
+	}
+	for _, cat := range cats {
+		_, err := db.Exec(`INSERT INTO category (id, category_primary, secondary, tertiary) VALUES ($1, $2, $3, $4)`, cat[0], cat[1], cat[2], cat[3])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyAssemblage(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, name, description FROM assemblage`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var assemblage struct {
+			ID          lib.IntField
+			Name        lib.StringField
+			Description lib.StringField
+		}
+		err = rows.Scan(&assemblage.ID, &assemblage.Name, &assemblage.Description)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO assemblage (id, assemblage_name, description) VALUES ($1, $2, $3)`, assemblage.ID, assemblage.Name, assemblage.Description)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyComponent(db, oldDB *app.DB) error {
+	comps := [][]interface{}{
+		[]interface{}{1, "visibility", "VisibilityComponent", "visibility_component", nil},
+		[]interface{}{3, "shelf", "ShelfComponent", "shelf_component", "shelves"},
+		[]interface{}{4, "pricing", "PricingComponent", "pricing_component", nil},
+		[]interface{}{5, "doors", "DoorsComponent", "doors_component", nil},
+		[]interface{}{6, "shelves", "ShelvesComponent", "shelves_component", nil},
+		[]interface{}{7, "audit", "AuditComponent", "audit_component", nil},
+		[]interface{}{8, "option_sets", "OptionSetsComponent", "option_sets_component", nil},
+		[]interface{}{9, "durability", "DurabilityComponent", "durability_component", nil},
+		[]interface{}{10, "instruction", "InstructionComponent", "instruction_component", nil},
+		[]interface{}{11, "suspension_point", "SuspensionPointComponent", "suspension_point_component", nil},
+		[]interface{}{12, "manufacturer", "ManufacturerComponent", "manufacturer_component", nil},
+		[]interface{}{13, "cushions", "CushionsComponent", "cushions_component", nil},
+		[]interface{}{14, "pillows", "PillowsComponent", "pillows_component", nil},
+		[]interface{}{15, "base", "BaseComponent", "base_component", nil},
+		[]interface{}{16, "arm", "ArmComponent", "arm_component", nil},
+		[]interface{}{17, "textile", "TextileComponent", "textile_component", nil},
+		[]interface{}{18, "overall_dimension", "OverallDimensionComponent", "overall_dimension_component", nil},
+		[]interface{}{19, "cushion", "CushionComponent", "cushion_component", "cushions"},
+		[]interface{}{20, "images", "ImagesComponent", "images_component", nil},
+		[]interface{}{21, "door", "DoorComponent", "door_component", "doors"},
+		[]interface{}{22, "construction_information", "ConstructionInformationComponent", "construction_information_component", nil},
+		[]interface{}{23, "drawer", "DrawerComponent", "drawer_component", "drawers"},
+		[]interface{}{24, "side_rail", "SideRailComponent", "side_rail_component", nil},
+		[]interface{}{25, "description", "DescriptionComponent", "description_component", nil},
+		[]interface{}{26, "headboard", "HeadboardComponent", "headboard_component", nil},
+		[]interface{}{27, "identity", "IdentityComponent", "identity_component", nil},
+		[]interface{}{28, "weight", "WeightComponent", "weight_component", nil},
+		[]interface{}{29, "interior_dimension", "InteriorDimensionComponent", "interior_dimension_component", nil},
+		[]interface{}{30, "glass", "GlassComponent", "glass_component", nil},
+		[]interface{}{31, "seat", "SeatComponent", "seat_component", nil},
+		[]interface{}{32, "collection", "CollectionComponent", "collection_component", nil},
+		[]interface{}{33, "footboard", "FootboardComponent", "footboard_component", nil},
+		[]interface{}{34, "shipping_information", "ShippingInformationComponent", "shipping_information_component", nil},
+		[]interface{}{35, "pedestal", "PedestalComponent", "pedestal_component", nil},
+		[]interface{}{36, "ordering_information", "OrderingInformationComponent", "ordering_information_component", nil},
+		[]interface{}{37, "image", "ImageComponent", "image_component", "images"},
+		[]interface{}{38, "leather", "LeatherComponent", "leather_component", nil},
+		[]interface{}{39, "table_leaves", "TableLeavesComponent", "table_leaves_component", nil},
+		[]interface{}{40, "footrest", "FootrestComponent", "footrest_component", nil},
+		[]interface{}{41, "option_set", "OptionSetComponent", "option_set_component", "option_sets"},
+		[]interface{}{42, "drawers", "DrawersComponent", "drawers_component", nil},
+		[]interface{}{43, "electrical", "ElectricalComponent", "electrical_component", nil},
+		[]interface{}{44, "shade", "ShadeComponent", "shade_component", nil},
+		[]interface{}{45, "flame", "FlameComponent", "flame_component", nil},
+		[]interface{}{46, "frame", "FrameComponent", "frame_component", nil},
+		[]interface{}{47, "pillow", "PillowComponent", "pillow_component", "pillows"},
+		[]interface{}{48, "pattern", "PatternComponent", "pattern_component", nil},
+		[]interface{}{49, "fiber", "FiberComponent", "fiber_component", nil},
+		[]interface{}{51, "table_leaf", "TableLeafComponent", "table_leaf_component", "table_leaves"},
+		[]interface{}{52, "bulb", "BulbComponent", "bulb_component", nil},
+		[]interface{}{53, "category", "CategoryComponent", "category_component", nil},
+		[]interface{}{54, "promotional_tag", "PromotionalTagComponent", "promotional_tag_component", nil},
+		[]interface{}{56, "box", "BoxComponent", "box_component", "shipping_information"},
+		[]interface{}{57, "feature", "FeatureComponent", "feature_component", "description"},
+		[]interface{}{58, "com_col", "COMCOLComponent", "com_col_component", nil},
+		[]interface{}{59, "keyword", "KeywordComponent", "keyword_component", nil},
+	}
+	for _, comp := range comps {
+		_, err := db.Exec(`INSERT INTO component (id, component_name, class_name, table_name, parent_name) VALUES ($1, $2, $3, $4, $5)`, comp[0], comp[1], comp[2], comp[3], comp[4])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyAssemblageComponent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT assemblage_id, component_id FROM assemblage_components`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var assComp struct {
+			AssemblageID lib.IntField
+			ComponentID  lib.IntField
+		}
+		err = rows.Scan(&assComp.AssemblageID, &assComp.ComponentID)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO assemblage_components (assemblage_id, component_id) VALUES ($1, $2)`, assComp.AssemblageID, assComp.ComponentID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyMultiValue(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, value_type, value, component FROM multi_value`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var mv struct {
+			ID        lib.IntField
+			ValueType lib.StringField
+			Value     lib.StringField
+			Component lib.StringField
+		}
+		err = rows.Scan(&mv.ID, &mv.ValueType, &mv.Value, &mv.Component)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO multi_value (id, component, label, value_type) VALUES ($1, $2, $3, $4)`, mv.ID, mv.Component, mv.Value, mv.ValueType)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyProductEntity(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT id, assemblage_id FROM product_entity`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var mv struct {
+			ID           lib.IntField
+			AssemblageID lib.IntField
+		}
+		err = rows.Scan(&mv.ID, &mv.AssemblageID)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO product_entity (id, assemblage_id) VALUES ($1, $2)`, mv.ID, mv.AssemblageID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copySalesChannelProduct(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT sales_channel_id, product_id FROM sales_channel_product`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var mv struct {
+			SalesChannelID lib.IntField
+			ProductID      lib.IntField
+		}
+		err = rows.Scan(&mv.SalesChannelID, &mv.ProductID)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO sales_channel_product (sales_channel_id, product_id) VALUES ($1, $2)`, mv.SalesChannelID, mv.ProductID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyMultiValues(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT  id, product_id, multi_value_id FROM multi_values`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var mv struct {
+			ID           lib.IntField
+			ProductID    lib.IntField
+			MultiValueID lib.IntField
+		}
+		err = rows.Scan(&mv.ID, &mv.ProductID, &mv.MultiValueID)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO multi_values (id, multi_value_id, product_id) VALUES ($1, $2, $3)`, mv.ID, mv.MultiValueID, mv.ProductID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyArmComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("arm")
+	rows, err := oldDB.Query(`SELECT component_data_id, arm_height, arm_style, product_id FROM arm_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ArmHeight       lib.FloatField
+			ArmStyle        lib.StringField
+			ProductID       lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ArmHeight, &c.ArmStyle, &c.ProductID)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO arm_component (component_data_id, product_id, arm_style, height) VALUES ($1, $2, $3, $4)`, c.ComponentDataID, c.ProductID, c.ArmStyle, c.ArmHeight)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyAuditComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("audit")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, date_added, date_updated, api_key.public FROM audit_component LEFT JOIN api_key on api_key.public = audit_component.updated_by_api_key` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			DateAdded       lib.TimeField
+			DateUpdated     lib.TimeField
+			UpdatedByAPIKey lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.DateAdded, &c.DateUpdated, &c.UpdatedByAPIKey)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO audit_component (component_data_id, product_id, date_added, date_updated, updated_by_api_key) VALUES ($1, $2, $3, $4, $5)`, c.ComponentDataID, c.ProductID, c.DateAdded, c.DateUpdated, c.UpdatedByAPIKey)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyBaseComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("base")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, base_height, base_diameter, base_depth, base_width FROM base_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			BaseHeight      lib.FloatField
+			BaseDiameter    lib.FloatField
+			BaseDepth       lib.FloatField
+			BaseWidth       lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.BaseHeight, &c.BaseDiameter, &c.BaseDepth, &c.BaseWidth)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO base_component (component_data_id, product_id, height, width, base_depth, diameter) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, c.BaseHeight, c.BaseWidth, c.BaseDepth, c.BaseDiameter)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyBulbComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("bulb")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, bulb_type, bulb_base, bulb_qty, bulb_wattage FROM bulb_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			BulbType        lib.StringField
+			BulbBase        lib.StringField
+			BulbQty         lib.IntField
+			BulbWattage     lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.BulbType, &c.BulbBase, &c.BulbQty, &c.BulbWattage)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO bulb_component (component_data_id, product_id, base, kind, quantity, wattage) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, c.BulbBase, c.BulbType, c.BulbQty, c.BulbWattage)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyCategoryComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("category")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, category, primary_sub_category, secondary_sub_category FROM category_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID      lib.IntField
+			ProductID            lib.IntField
+			Category             lib.StringField
+			PrimarySubCategory   lib.StringField
+			SecondarySubCategory lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Category, &c.PrimarySubCategory, &c.SecondarySubCategory)
+		if err != nil {
+			return err
+		}
+		if c.Category.String == "none" {
+			c.Category.String = ""
+			c.Category.Valid = false
+		}
+		if c.PrimarySubCategory.String == "none" {
+			c.PrimarySubCategory.String = ""
+			c.PrimarySubCategory.Valid = false
+		}
+		if c.SecondarySubCategory.String == "none" {
+			c.SecondarySubCategory.String = ""
+			c.SecondarySubCategory.Valid = false
+		}
+
+		_, err = db.Exec(`INSERT INTO category_component (component_data_id, product_id, primary_category, secondary_category, tertiary_category) VALUES ($1, $2, $3, $4, $5)`, c.ComponentDataID, c.ProductID, c.Category, c.PrimarySubCategory, c.SecondarySubCategory)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyCollectionComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("collection")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, collection_id FROM collection_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			CollectionID    lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.CollectionID)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO collection_component (component_data_id, product_id, collection_id) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.CollectionID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyComColComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("com_col")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, com, col FROM com_col_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			COM             lib.FloatField
+			COL             lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.COM, &c.COL)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO com_col_component (component_data_id, product_id, col, com) VALUES ($1, $2, $3, $4)`, c.ComponentDataID, c.ProductID, c.COL, c.COM)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyConstructionInformationComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("construction_information")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, material, joinery_type, finish FROM construction_information_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Material        lib.StringField
+			JoineryType     lib.StringField
+			Finish          lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Material, &c.JoineryType, &c.Finish)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO construction_information_component (component_data_id, product_id, assembly_required, finish, joinery_type, material) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, nil, c.Finish, c.JoineryType, c.Material) //TODO assembly_required
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyCushionsComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("cushion")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, quantity FROM cushion_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Quantity        lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Quantity)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO cushions_component (component_data_id, product_id, quantity) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.Quantity)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyDoorsComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("door")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, quantity FROM door_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Quantity        lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Quantity)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO doors_component (component_data_id, product_id, quantity) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.Quantity)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyDrawersComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("drawer")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, quantity FROM drawer_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Quantity        lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Quantity)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO drawers_component (component_data_id, product_id, quantity) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.Quantity)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyPillowsComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("pillow")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, quantity FROM pillow_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Quantity        lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Quantity)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO pillows_component (component_data_id, product_id, quantity) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.Quantity)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyShelvesComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("shelf")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, quantity FROM shelf_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Quantity        lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Quantity)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO shelves_component (component_data_id, product_id, quantity) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.Quantity)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyTableLeavesComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("table_leaf")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, quantity FROM table_leaf_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Quantity        lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Quantity)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO table_leaves_component (component_data_id, product_id, quantity) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.Quantity)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyDescriptionComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("description")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, retail_description, designer_description, description, alternate_description FROM description_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID      lib.IntField
+			ProductID            lib.IntField
+			RetailDescription    lib.StringField
+			DesignerDescription  lib.StringField
+			Description          lib.StringField
+			AlternateDescription lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.RetailDescription, &c.DesignerDescription, &c.Description, &c.AlternateDescription)
+		if err != nil {
+			return err
+		}
+
+		c.Description.Set(stripNBSpace(c.Description.String))
+		c.AlternateDescription.Set(stripNBSpace(c.AlternateDescription.String))
+		c.DesignerDescription.Set(stripNBSpace(c.DesignerDescription.String))
+		c.RetailDescription.Set(stripNBSpace(c.RetailDescription.String))
+		_, err = db.Exec(`INSERT INTO description_component (component_data_id, product_id, primary_description, alternate, designer, retail) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, c.Description, c.AlternateDescription, c.DesignerDescription, c.RetailDescription)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyDurabilityComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("durability")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, martindale, wyzenbeek, flammability FROM durability_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Martindale      lib.StringField
+			Wyzenbeek       lib.StringField
+			Flammability    lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Martindale, &c.Wyzenbeek, &c.Flammability)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO durability_component (component_data_id, product_id, flammability, martindale, wyzenbeek) VALUES ($1, $2, $3, $4, $5)`, c.ComponentDataID, c.ProductID, c.Flammability, c.Martindale, c.Wyzenbeek)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyElectricalComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("electrical")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, switch_type, voltage, exterior_use FROM electrical_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			SwitchType      lib.StringField
+			Voltage         lib.IntField
+			ExteriorUse     lib.BoolField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.SwitchType, &c.Voltage, &c.ExteriorUse)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO electrical_component (component_data_id, product_id, exterior_use, switch_type, voltage) VALUES ($1, $2, $3, $4, $5)`, c.ComponentDataID, c.ProductID, c.ExteriorUse, c.SwitchType, c.Voltage)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyFiberComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("fiber")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, pile, construction FROM fiber_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Pile            lib.StringField
+			Construction    lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Pile, &c.Construction)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO fiber_component (component_data_id, product_id, construction, pile) VALUES ($1, $2, $3, $4)`, c.ComponentDataID, c.ProductID, c.Construction, c.Pile)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyFlameComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("flame")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, fuel_type, burner_capacity, burning_time, heat_output, minimum_room_size FROM flame_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			FuelType        lib.StringField
+			BurnerCapacity  lib.FloatField
+			BurningTime     lib.FloatField
+			HeatOutput      lib.FloatField
+			MinimumRoomSize lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.FuelType, &c.BurnerCapacity, &c.BurningTime, &c.HeatOutput, &c.MinimumRoomSize)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO flame_component (component_data_id, product_id, burner_capacity, burning_time, fuel_type, heat_output, minimum_room_size) VALUES ($1, $2, $3, $4, $5, $6, $7)`, c.ComponentDataID, c.ProductID, c.BurnerCapacity, c.BurningTime, c.FuelType, c.HeatOutput, c.MinimumRoomSize)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyFootboardComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("footboard")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, footboard_height, footboard_width, footboard_depth, floor_clearance FROM footboard_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			FootboardHeight lib.FloatField
+			FootboardWidth  lib.FloatField
+			FootboardDepth  lib.FloatField
+			FloorClearance  lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.FootboardHeight, &c.FootboardWidth, &c.FootboardDepth, &c.FloorClearance)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO footboard_component (component_data_id, product_id, height, width, footboard_depth, floor_clearance) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, c.FootboardHeight, c.FootboardWidth, c.FootboardDepth, c.FloorClearance)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyFootrestComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("footrest")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, footrest_height FROM footrest_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			FootrestHeight  lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.FootrestHeight)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO footrest_component (component_data_id, product_id, height) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.FootrestHeight)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyFrameComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("frame")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, frame_height, back_rail_height FROM frame_component ` + j + ` AND product_id IS NOT NULL`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			FrameHeight     lib.FloatField
+			BackRailHeight  lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.FrameHeight, &c.BackRailHeight)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO frame_component (component_data_id, product_id, height, back_rail_height) VALUES ($1, $2, $3, $4)`, c.ComponentDataID, c.ProductID, c.FrameHeight, c.BackRailHeight)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyGlassComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("glass")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, glass_type FROM glass_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			GlassType       lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.GlassType)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO glass_component (component_data_id, product_id, kind) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.GlassType)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyHeadboardComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("headboard")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, headboard_height, headboard_width, headboard_depth, floor_clearance FROM headboard_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			HeadboardHeight lib.FloatField
+			HeadboardWidth  lib.FloatField
+			HeadboardDepth  lib.FloatField
+			FloorClearance  lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.HeadboardHeight, &c.HeadboardWidth, &c.HeadboardDepth, &c.FloorClearance)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO headboard_component (component_data_id, product_id, height, width, headboard_depth, floor_clearance) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, c.HeadboardHeight, c.HeadboardWidth, c.HeadboardDepth, c.FloorClearance)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyIdentityComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("identity")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, name, manufacturer_sku, source_url, alternate_name, upc FROM identity_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Name            lib.StringField
+			ManufacturerSKU lib.StringField
+			SourceURL       lib.StringField
+			AlternateName   lib.StringField
+			UPC             lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Name, &c.ManufacturerSKU, &c.SourceURL, &c.AlternateName, &c.UPC)
+		if err != nil {
+			return err
+		}
+
+		c.Name.Set(stripNBSpace(c.Name.String))
+		c.AlternateName.Set(stripNBSpace(c.AlternateName.String))
+		c.ManufacturerSKU.Set(stripNBSpace(c.ManufacturerSKU.String))
+		_, err = db.Exec(`INSERT INTO identity_component (component_data_id, product_id, product_name, alternate_name, sku, source_url, upc) VALUES ($1, $2, $3, $4, $5, $6, $7)`, c.ComponentDataID, c.ProductID, c.Name, c.AlternateName, c.ManufacturerSKU, c.SourceURL, c.UPC)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyImagesComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("image")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id FROM image_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO images_component (component_data_id, product_id) VALUES ($1, $2)`, c.ComponentDataID, c.ProductID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyInstructionComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("instructions")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, cleaning_directions, installation_directions, assembly_required FROM instructions_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID        lib.IntField
+			ProductID              lib.IntField
+			CleaningDirections     lib.StringField
+			InstallationDirections lib.StringField
+			AssemblyRequired       lib.BoolField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.CleaningDirections, &c.InstallationDirections, &c.AssemblyRequired)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO instruction_component (component_data_id, product_id, cleaning_directions, installation_directions) VALUES ($1, $2, $3, $4)`, c.ComponentDataID, c.ProductID, c.CleaningDirections, c.InstallationDirections)
+		if err != nil {
+			return err
+		}
+		_, err = db.Exec(`UPDATE construction_information_component SET assembly_required = $1 WHERE product_id = $2`, c.AssemblyRequired, c.ProductID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyInteriorDimensionComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("interior_dimension")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, interior_depth, interior_height, interior_width FROM interior_dimension_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			InteriorDepth   lib.FloatField
+			InteriorHeight  lib.FloatField
+			InteriorWidth   lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.InteriorDepth, &c.InteriorHeight, &c.InteriorWidth)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO interior_dimension_component (component_data_id, product_id, height, width, interior_depth) VALUES ($1, $2, $3, $4, $5)`, c.ComponentDataID, c.ProductID, c.InteriorHeight, c.InteriorWidth, c.InteriorDepth)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyLeatherComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("leather")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, leather_type, pattern_number, hide_size, finish FROM leather_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			LeatherType     lib.StringField
+			PatternNumber   lib.StringField
+			HideSize        lib.FloatField
+			Finish          lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.LeatherType, &c.PatternNumber, &c.HideSize, &c.Finish)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO leather_component (component_data_id, product_id, finish, hide_size, kind, pattern_number) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, c.Finish, c.HideSize, c.LeatherType, c.PatternNumber)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyManufacturerComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("manufacturer")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, manufacturer_id FROM manufacturer_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			ManufacturerID  lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.ManufacturerID)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO manufacturer_component (component_data_id, product_id, manufacturer_id) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.ManufacturerID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyOptionSetsComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("option")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id FROM option_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO option_sets_component (component_data_id, product_id) VALUES ($1, $2)`, c.ComponentDataID, c.ProductID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyOrderingInformationComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("ordering_information")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, discontinued, quick_ship, minimum_quantity, stock, unit, warranty, lead_time_unit, lead_time, force_multiples FROM ordering_information_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Discontinued    lib.BoolField
+			QuickShip       lib.BoolField
+			MinimumQuantity lib.IntField
+			Stock           lib.FloatField
+			Unit            lib.StringField
+			Warranty        lib.StringField
+			LeadTimeUnit    lib.TimeField
+			LeadTime        lib.IntField
+			ForceMultiples  lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Discontinued, &c.QuickShip, &c.MinimumQuantity, &c.Stock, &c.Unit, &c.Warranty, &c.LeadTimeUnit, &c.LeadTime, &c.ForceMultiples)
+		if err != nil {
+			return err
+		}
+		if c.Unit.String == "none" {
+			c.Unit.String = ""
+			c.Unit.Valid = false
+		}
+		_, err = db.Exec(`INSERT INTO ordering_information_component (component_data_id, product_id, discontinued, force_multiples, lead_time, lead_time_unit, minimum_quantity, quick_ship, stock, unit, warranty) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, c.ComponentDataID, c.ProductID, c.Discontinued, c.ForceMultiples, c.LeadTime, c.LeadTimeUnit, c.MinimumQuantity, c.QuickShip, c.Stock, c.Unit, c.Warranty)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyOverallDimensionComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("overall_dimensions")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, width, height, depth, diameter FROM overall_dimensions_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Width           lib.FloatField
+			Height          lib.FloatField
+			Depth           lib.FloatField
+			Diameter        lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Width, &c.Height, &c.Depth, &c.Diameter)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO overall_dimension_component (component_data_id, product_id, width, height, overall_depth, diameter) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, c.Width, c.Height, c.Depth, c.Diameter)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyPatternComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("pattern")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, pattern_number, vertical_repeat, horizontal_repeat, direction, scale FROM pattern_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID  lib.IntField
+			ProductID        lib.IntField
+			PatternNumber    lib.StringField
+			VerticalRepeat   lib.FloatField
+			HorizontalRepeat lib.FloatField
+			Direction        lib.StringField
+			Scale            lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.PatternNumber, &c.VerticalRepeat, &c.HorizontalRepeat, &c.Direction, &c.Scale)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO pattern_component (component_data_id, product_id, direction, horizontal_repeat, pattern_number, pattern_scale, vertical_repeat) VALUES ($1, $2, $3, $4, $5, $6, $7)`, c.ComponentDataID, c.ProductID, c.Direction, c.HorizontalRepeat, c.PatternNumber, c.Scale, c.VerticalRepeat)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyPedestalComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("pedestal")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, pedestal_height, pedestal_diameter, pedestal_depth, pedestal_width FROM pedestal_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID  lib.IntField
+			ProductID        lib.IntField
+			PedestalHeight   lib.FloatField
+			PedestalDiameter lib.FloatField
+			PedestalDepth    lib.FloatField
+			PedestalWidth    lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.PedestalHeight, &c.PedestalDiameter, &c.PedestalDepth, &c.PedestalWidth)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO pedestal_component (component_data_id, product_id, height, width, pedestal_depth, diameter) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, c.PedestalHeight, c.PedestalWidth, c.PedestalDepth, c.PedestalDiameter)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyPricingComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("pricing")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, wholesale, msrp, minimum_internet_price, trade_price, dealer_price FROM pricing_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID      lib.IntField
+			ProductID            lib.IntField
+			Wholesale            lib.IntField
+			MSRP                 lib.IntField
+			MinimumInternetPrice lib.IntField
+			TradePrice           lib.IntField
+			DealerPrice          lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Wholesale, &c.MSRP, &c.MinimumInternetPrice, &c.TradePrice, &c.DealerPrice)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO pricing_component (component_data_id, product_id, dealer_price, minimum_internet_price, msrp, trade_price, wholesale) VALUES ($1, $2, $3, $4, $5, $6, $7)`, c.ComponentDataID, c.ProductID, c.DealerPrice, c.MinimumInternetPrice, c.MSRP, c.TradePrice, c.Wholesale)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyPromotionalTagComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("promotional_tags")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, new, best_seller, limited_stock, discontinued FROM promotional_tags_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			New             lib.BoolField
+			BestSeller      lib.BoolField
+			LimitedStock    lib.BoolField
+			Discontinued    lib.BoolField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.New, &c.BestSeller, &c.LimitedStock, &c.Discontinued)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO promotional_tag_component (component_data_id, product_id, best_seller, discontinued, limited_stock, new_product) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, c.BestSeller, c.Discontinued, c.LimitedStock, c.New)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copySeatComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("seat")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, seat_height, seat_depth, seat_width, seat_construction FROM seat_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID  lib.IntField
+			ProductID        lib.IntField
+			SeatHeight       lib.FloatField
+			SeatWidth        lib.FloatField
+			SeatDepth        lib.FloatField
+			SeatConstruction lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.SeatHeight, &c.SeatDepth, &c.SeatWidth, &c.SeatConstruction)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO seat_component (component_data_id, product_id, height, width, seat_depth, construction) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, c.SeatHeight, c.SeatWidth, c.SeatDepth, c.SeatConstruction)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyShadeComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("shade")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, shade_type, shade_height, shade_width, shade_depth, shade_diameter, material, shade_qty FROM shade_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			ShadeType       lib.StringField
+			ShadeHeight     lib.FloatField
+			ShadeWidth      lib.FloatField
+			ShadeDepth      lib.FloatField
+			ShadeDiameter   lib.FloatField
+			Material        lib.StringField
+			ShadeQty        lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.ShadeType, &c.ShadeHeight, &c.ShadeWidth, &c.ShadeDepth, &c.ShadeDiameter, &c.Material, &c.ShadeQty)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO shade_component (component_data_id, product_id, height, width, shade_depth, diameter, material, quantity, kind) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, c.ComponentDataID, c.ProductID, c.ShadeHeight, c.ShadeWidth, c.ShadeDepth, c.ShadeDiameter, c.Material, c.ShadeQty, c.ShadeType)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyShippingInformationComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("shipping_information")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, ships_from, volume, drop_ship, freight, standard, white_glove, shipping_notes, country_of_origin FROM shipping_information_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			ShipsFrom       lib.StringField
+			Volume          lib.FloatField
+			DropShip        lib.BoolField
+			Freight         lib.BoolField
+			Standard        lib.BoolField
+			WhiteGlove      lib.BoolField
+			ShippingNotes   lib.StringField
+			CountryOfOrigin lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.ShipsFrom, &c.Volume, &c.DropShip, &c.Freight, &c.Standard, &c.WhiteGlove, &c.ShippingNotes, &c.CountryOfOrigin)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO shipping_information_component (component_data_id, product_id, country_of_origin, drop_ship, freight, shipping_notes, ships_from, standard, volume, white_glove) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, c.ComponentDataID, c.ProductID, c.CountryOfOrigin, c.DropShip, c.Freight, c.ShippingNotes, c.ShipsFrom, c.Standard, c.Volume, c.WhiteGlove)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copySideRailComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("side_rail")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, side_rail_length, floor_clearance FROM side_rail_component ` + j + ` AND product_id IS NOT NULL`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			SideRailLength  lib.FloatField
+			FloorClearance  lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.SideRailLength, &c.FloorClearance)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO side_rail_component (component_data_id, product_id, floor_clearance, side_rail_length) VALUES ($1, $2, $3, $4)`, c.ComponentDataID, c.ProductID, c.FloorClearance, c.SideRailLength)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copySuspensionPointComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("suspension_point")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, support_type, canopy_diameter, minimum_hanging_length, maximum_hanging_length, chain_length, canopy_depth, canopy_height, canopy_width, wire_length FROM suspension_point_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID      lib.IntField
+			ProductID            lib.IntField
+			SupportType          lib.StringField
+			CanopyDiameter       lib.FloatField
+			MinimumHangingLength lib.FloatField
+			MaximumHangingLength lib.FloatField
+			ChainLength          lib.FloatField
+			CanopyDepth          lib.FloatField
+			CanopyHeight         lib.FloatField
+			CanopyWidth          lib.FloatField
+			WireLength           lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.SupportType, &c.CanopyDiameter, &c.MinimumHangingLength, &c.MaximumHangingLength, &c.ChainLength, &c.CanopyDepth, &c.CanopyHeight, &c.CanopyWidth, &c.WireLength)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO suspension_point_component (component_data_id, product_id, support_type, canopy_height, canopy_width, canopy_depth, canopy_diameter, chain_length, maximum_hanging_length, minimum_hanging_length, wire_length) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, c.ComponentDataID, c.ProductID, c.SupportType, c.CanopyHeight, c.CanopyWidth, c.CanopyDepth, c.CanopyDiameter, c.ChainLength, c.MaximumHangingLength, c.MinimumHangingLength, c.WireLength)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyTextileComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("textile")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, content, width, treatment, grade FROM textile_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Content         lib.StringField
+			Width           lib.FloatField
+			Treatment       lib.StringField
+			Grade           lib.StringField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Content, &c.Width, &c.Treatment, &c.Grade)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO textile_component (component_data_id, product_id, content, grade, treatment, width) VALUES ($1, $2, $3, $4, $5, $6)`, c.ComponentDataID, c.ProductID, c.Content, c.Grade, c.Treatment, c.Width)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyVisibilityComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("visibility")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, active, meets_posting_requirements FROM  visibility_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID          lib.IntField
+			ProductID                lib.IntField
+			Active                   lib.BoolField
+			MeetsPostingRequirements lib.BoolField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Active, &c.MeetsPostingRequirements)
+		if err != nil {
+			return err
+		}
+		if c.Active.Valid == false {
+			c.Active.Valid = true
+			c.Active.Set(false)
+		}
+
+		_, err = db.Exec(`INSERT INTO visibility_component (component_data_id, product_id, active, meets_posting_requirements) VALUES ($1, $2, $3, $4)`, c.ComponentDataID, c.ProductID, c.Active, c.MeetsPostingRequirements)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyWeightComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("weight")
+	rows, err := oldDB.Query(`SELECT component_data_id, product_id, weight FROM  weight_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			ProductID       lib.IntField
+			Weight          lib.FloatField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.ProductID, &c.Weight)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO weight_component (component_data_id, product_id, weight) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.Weight)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyBoxComponent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT shipping_information_sub_component.product_id, sub_component_data_id, shipping_information_component.component_data_id, packaged_weight, packaged_width, packaged_height, packaged_depth, description, package_quantity, packaged_volume FROM shipping_information_sub_component LEFT JOIN shipping_information_component ON shipping_information_component.product_id = shipping_information_sub_component.product_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ProductID                      lib.IntField
+			SubComponentDataID             lib.IntField
+			ShippingInformationComponentID lib.IntField
+			PackagedWeight                 lib.FloatField
+			PackagedWidth                  lib.FloatField
+			PackagedHeight                 lib.FloatField
+			PackagedDepth                  lib.FloatField
+			Description                    lib.StringField
+			PackageQuantity                lib.IntField
+			PackagedVolume                 lib.FloatField
+		}
+		err = rows.Scan(&c.ProductID, &c.SubComponentDataID, &c.ShippingInformationComponentID, &c.PackagedWeight, &c.PackagedWidth, &c.PackagedHeight, &c.PackagedDepth, &c.Description, &c.PackageQuantity, &c.PackagedVolume)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO box_component (component_data_id, product_id, parent_id, height, width, box_depth, quantity, volume, weight) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, c.SubComponentDataID, c.ProductID, c.ShippingInformationComponentID, c.PackagedHeight, c.PackagedWidth, c.PackagedDepth, c.PackageQuantity, c.PackagedVolume, c.PackagedWeight)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyCushionComponent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT cushion_sub_component.product_id, sub_component_data_id, cushion_component.component_data_id, cushion_fill, cushion_style, description, cushion_quantity, cushion_depth, cushion_height, cushion_width FROM cushion_sub_component LEFT JOIN cushion_component ON cushion_component.product_id = cushion_sub_component.product_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ProductID          lib.IntField
+			SubComponentDataID lib.IntField
+			CushionComponentID lib.IntField
+			CushionFill        lib.StringField
+			CushionStyle       lib.StringField
+			Description        lib.StringField
+			CushionQuantity    lib.IntField
+			CushionDepth       lib.FloatField
+			CushionHeight      lib.FloatField
+			CushionWidth       lib.FloatField
+		}
+		err = rows.Scan(&c.ProductID, &c.SubComponentDataID, &c.CushionComponentID, &c.CushionFill, &c.CushionStyle, &c.Description, &c.CushionQuantity, &c.CushionDepth, &c.CushionHeight, &c.CushionWidth)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO cushion_component (component_data_id, product_id, parent_id, height, width, cushion_depth, cushion_style, fill, quantity) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, c.SubComponentDataID, c.ProductID, c.CushionComponentID, c.CushionHeight, c.CushionWidth, c.CushionDepth, c.CushionStyle, c.CushionFill, c.CushionQuantity)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyDoorComponent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT door_sub_component.product_id, sub_component_data_id, door_component.component_data_id, door_width, door_thickness, door_height, door_opening, description, door_quantity FROM door_sub_component LEFT JOIN door_component ON door_component.product_id = door_sub_component.product_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ProductID          lib.IntField
+			SubComponentDataID lib.IntField
+			DoorComponentID    lib.IntField
+			DoorWidth          lib.FloatField
+			DoorDepth          lib.FloatField
+			DoorHeight         lib.FloatField
+			DoorOpening        lib.FloatField
+			Description        lib.StringField
+			DoorQuantity       lib.IntField
+		}
+		err = rows.Scan(&c.ProductID, &c.SubComponentDataID, &c.DoorComponentID, &c.DoorWidth, &c.DoorDepth, &c.DoorHeight, &c.DoorOpening, &c.Description, &c.DoorQuantity)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO door_component (component_data_id, product_id, parent_id, height, width, depth, opening, quantity) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, c.SubComponentDataID, c.ProductID, c.DoorComponentID, c.DoorHeight, c.DoorWidth, c.DoorDepth, c.DoorOpening, c.DoorQuantity)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyDrawerComponent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT drawer_sub_component.product_id, sub_component_data_id, drawer_component.component_data_id, drawer_width, drawer_depth, drawer_height, description, drawer_quantity FROM drawer_sub_component LEFT JOIN drawer_component ON drawer_component.product_id = drawer_sub_component.product_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ProductID          lib.IntField
+			SubComponentDataID lib.IntField
+			DrawerComponentID  lib.IntField
+			DrawerWidth        lib.FloatField
+			DrawerDepth        lib.FloatField
+			DrawerHeight       lib.FloatField
+			Description        lib.StringField
+			DrawerQuantity     lib.IntField
+		}
+		err = rows.Scan(&c.ProductID, &c.SubComponentDataID, &c.DrawerComponentID, &c.DrawerWidth, &c.DrawerDepth, &c.DrawerHeight, &c.Description, &c.DrawerQuantity)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO drawer_component (component_data_id, product_id, parent_id, height, width, drawer_depth, quantity) VALUES ($1, $2, $3, $4, $5, $6, $7)`, c.SubComponentDataID, c.ProductID, c.DrawerComponentID, c.DrawerHeight, c.DrawerWidth, c.DrawerDepth, c.DrawerQuantity)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyPillowComponent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT pillow_sub_component.product_id, sub_component_data_id, pillow_component.component_data_id, pillow_width, pillow_height, pillow_thickness, description, pillow_quantity FROM pillow_sub_component LEFT JOIN pillow_component ON pillow_component.product_id = pillow_sub_component.product_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ProductID          lib.IntField
+			SubComponentDataID lib.IntField
+			PillowComponentID  lib.IntField
+			PillowWidth        lib.FloatField
+			PillowHeight       lib.FloatField
+			PillowThickness    lib.FloatField
+			Description        lib.StringField
+			PillowQuantity     lib.IntField
+		}
+		err = rows.Scan(&c.ProductID, &c.SubComponentDataID, &c.PillowComponentID, &c.PillowWidth, &c.PillowHeight, &c.PillowThickness, &c.Description, &c.PillowQuantity)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO pillow_component (component_data_id, product_id, parent_id, height, width, thickness, quantity) VALUES ($1, $2, $3, $4, $5, $6, $7)`, c.SubComponentDataID, c.ProductID, c.PillowComponentID, c.PillowHeight, c.PillowWidth, c.PillowThickness, c.PillowQuantity)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyShelfComponent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT shelf_sub_component.product_id, sub_component_data_id, shelf_component.component_data_id, shelf_width, shelf_thickness, shelf_depth, description, shelf_quantity FROM shelf_sub_component LEFT JOIN shelf_component ON shelf_component.product_id = shelf_sub_component.product_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ProductID          lib.IntField
+			SubComponentDataID lib.IntField
+			ShelfComponentID   lib.IntField
+			ShelfWidth         lib.FloatField
+			ShelfThickness     lib.FloatField
+			ShelfDepth         lib.FloatField
+			Description        lib.StringField
+			ShelfQuantity      lib.IntField
+		}
+		err = rows.Scan(&c.ProductID, &c.SubComponentDataID, &c.ShelfComponentID, &c.ShelfWidth, &c.ShelfThickness, &c.ShelfDepth, &c.Description, &c.ShelfQuantity)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO shelf_component (component_data_id, product_id, parent_id, width, shelf_depth, quantity, thickness) VALUES ($1, $2, $3, $4, $5, $6, $7)`, c.SubComponentDataID, c.ProductID, c.ShelfComponentID, c.ShelfWidth, c.ShelfDepth, c.ShelfQuantity, c.ShelfThickness)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyTableLeafComponent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT table_leaf_sub_component.product_id, sub_component_data_id, table_leaf_component.component_data_id, leaf_width, leaf_depth, description, leaf_quantity FROM table_leaf_sub_component LEFT JOIN table_leaf_component ON table_leaf_component.product_id = table_leaf_sub_component.product_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ProductID            lib.IntField
+			SubComponentDataID   lib.IntField
+			TableLeafComponentID lib.IntField
+			LeafWidth            lib.FloatField
+			LeafDepth            lib.FloatField
+			Description          lib.StringField
+			LeafQuantity         lib.IntField
+		}
+		err = rows.Scan(&c.ProductID, &c.SubComponentDataID, &c.TableLeafComponentID, &c.LeafWidth, &c.LeafDepth, &c.Description, &c.LeafQuantity)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO table_leaf_component (component_data_id, product_id, parent_id, width, leaf_depth, quantity) VALUES ($1, $2, $3, $4, $5, $6)`, c.SubComponentDataID, c.ProductID, c.TableLeafComponentID, c.LeafWidth, c.LeafDepth, c.LeafQuantity)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyFeatureComponent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT description_sub_component.product_id, sub_component_data_id, description_component.component_data_id, description_of_feature, description_sub_component.description FROM description_sub_component LEFT JOIN description_component ON description_component.product_id = description_sub_component.product_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ProductID              lib.IntField
+			SubComponentDataID     lib.IntField
+			DescriptionComponentID lib.IntField
+			DescriptionOfFeature   lib.StringField
+			Description            lib.StringField
+		}
+		err = rows.Scan(&c.ProductID, &c.SubComponentDataID, &c.DescriptionComponentID, &c.DescriptionOfFeature, &c.Description)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO feature_component (component_data_id, product_id, parent_id, description) VALUES ($1, $2, $3, $4)`, c.SubComponentDataID, c.ProductID, c.DescriptionComponentID, c.DescriptionOfFeature)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyImageComponent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT image_sub_component.product_id, sub_component_data_id, image_component.component_data_id, "default", category, caption, description, full_size, large, medium, thumbnail FROM image_sub_component LEFT JOIN image_component ON image_component.product_id = image_sub_component.product_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ProductID          lib.IntField
+			SubComponentDataID lib.IntField
+			ImageComponentID   lib.IntField
+			Default            lib.BoolField
+			Category           lib.StringField
+			Caption            lib.StringField
+			Description        lib.StringField
+			FullSize           lib.StringField
+			Large              lib.StringField
+			Medium             lib.StringField
+			Thumbnail          lib.StringField
+		}
+		err = rows.Scan(&c.ProductID, &c.SubComponentDataID, &c.ImageComponentID, &c.Default, &c.Category, &c.Caption, &c.Description, &c.FullSize, &c.Large, &c.Medium, &c.Thumbnail)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO image_component (component_data_id, product_id, parent_id, caption, description, category, default_image, full_size, large_size, medium_size, thumbnail_size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, c.SubComponentDataID, c.ProductID, c.ImageComponentID, c.Caption, c.Description, c.Category, c.Default, c.FullSize, c.Large, c.Medium, c.Thumbnail)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyOptionSetComponent(db, oldDB *app.DB) error {
+	rows, err := oldDB.Query(`SELECT option_set_sub_component.product_id, sub_component_data_id, option_component.component_data_id, option_set_id, description FROM option_set_sub_component LEFT JOIN option_component ON option_component.product_id = option_set_sub_component.product_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ProductID            lib.IntField
+			SubComponentDataID   lib.IntField
+			OptionSetComponentID lib.IntField
+			OptionSetID          lib.IntField
+			Description          lib.StringField
+		}
+		err = rows.Scan(&c.ProductID, &c.SubComponentDataID, &c.OptionSetComponentID, &c.OptionSetID, &c.Description)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO option_set_component (component_data_id, product_id, parent_id, option_set_id) VALUES ($1, $2, $3, $4)`, c.SubComponentDataID, c.ProductID, c.OptionSetComponentID, c.OptionSetID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyKeywordComponent(db, oldDB *app.DB) error {
+	j := componentExistanceClause("keywords")
+	rows, err := oldDB.Query(`SELECT component_data_id, keywords, product_id FROM keywords_component` + j)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ComponentDataID lib.IntField
+			Keywords        lib.StringSliceField
+			ProductID       lib.IntField
+		}
+		err = rows.Scan(&c.ComponentDataID, &c.Keywords, &c.ProductID)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO keyword_component (component_data_id, product_id, Keywords) VALUES ($1, $2, $3)`, c.ComponentDataID, c.ProductID, c.Keywords)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyExportMapping(db, portalDB *app.DB) error {
+	rows, err := portalDB.Query(`SELECT id, "name", retailer FROM export_mapping`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ID       lib.IntField
+			Name     lib.StringField
+			Retailer lib.StringField
+		}
+		err = rows.Scan(&c.ID, &c.Name, &c.Retailer)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`INSERT INTO export_mapping (id, export_mapping_name, retailer) VALUES ($1, $2, $3)`, c.ID, c.Name, c.Retailer)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyExport(db, portalDB *app.DB) error {
+	rows, err := portalDB.Query(`SELECT id, user_email, user_manufacturer_id, partial_product_data, url, date_created, date_exported, mapping_id, message, status FROM export`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c struct {
+			ID                 lib.IntField
+			UserEmail          lib.StringField
+			UserManufacturerID lib.IntField
+			ProductIDs         lib.StringField
+			URL                lib.StringField
+			DateCreated        lib.TimeField
+			DateExported       lib.TimeField
+			MappingID          lib.IntField
+			Message            lib.StringField
+			Status             lib.StringField
+		}
+		err = rows.Scan(&c.ID, &c.UserEmail, &c.UserManufacturerID, &c.ProductIDs, &c.URL, &c.DateCreated, &c.DateExported, &c.MappingID, &c.Message, &c.Status)
+		if err != nil {
+			return err
+		}
+
+		var partialProds []map[string]interface{}
+		var prodIDs []int64
+		err = json.Unmarshal([]byte(c.ProductIDs.String), &partialProds)
+		if err != nil {
+			return err
+		}
+		for _, v := range partialProds {
+			prodIDs = append(prodIDs, int64(v["id"].(float64)))
+		}
+		bites, err := json.Marshal(prodIDs)
+		if err != nil {
+			return err
+		}
+		productIDsString := string(bites)
+
+		_, err = db.Exec(`INSERT INTO export (id, user_email, user_manufacturer_id, product_ids, url, date_created, date_exported, mapping_id, message, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, c.ID, c.UserEmail, c.UserManufacturerID, productIDsString, c.URL, c.DateCreated, c.DateExported, c.MappingID, c.Message, c.Status)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateAllTheData(db, oldDB, portalDB *app.DB) error {
+	fmt.Println("Create initial structure")
+	err := createStructure(db)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Structure created")
+
+	//manufacturer
+	fmt.Println("manufacturer")
+	err = copyManufacturer(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//manufacturer_image
+	fmt.Println("manufacturer_image")
+	err = copyManufacturerImage(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//collection
+	fmt.Println("collection")
+	err = copyCollection(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//option_set
+	fmt.Println("option_set")
+	err = copyOptionSet(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//option
+	fmt.Println("option")
+	err = copyOption(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//option_hardware
+	fmt.Println("option_hardware")
+	err = copyOptionHardware(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//option_leather
+	fmt.Println("option_leather")
+	err = copyOptionLeather(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//option_nailhead
+	fmt.Println("option_nailhead")
+	err = copyOptionNailhead(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//option_textile
+	fmt.Println("option_textile")
+	err = copyOptionTextile(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//option_trim
+	fmt.Println("option_trim")
+	err = copyOptionTrim(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//sales_channel
+	fmt.Println("sales_channel")
+	err = copySalesChannel(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//sales_channel_image
+	fmt.Println("sales_channel_image")
+	err = copySalesChannelImage(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//sales_channel_preference
+	fmt.Println("sales_channel_preference")
+	err = copySalesChannelPreference(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//api_key
+	fmt.Println("api_key")
+	err = copyAPIKey(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//api_log
+	fmt.Println("api_log")
+	err = copyAPILog(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//event
+	fmt.Println("event")
+	err = copyEvent(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//category
+	fmt.Println("category")
+	err = copyCategory(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//assemblage
+	fmt.Println("assemblage")
+	err = copyAssemblage(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//component
+	fmt.Println("component")
+	err = copyComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//assemblage_components
+	fmt.Println("assemblage_components")
+	err = copyAssemblageComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//multi_value
+	fmt.Println("multi_value")
+	err = copyMultiValue(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//product_entity
+	fmt.Println("product_entity")
+	err = copyProductEntity(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//keyword_component
+	fmt.Println("keyword_component")
+	err = copyKeywordComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//sales_channel_product
+	fmt.Println("sales_channel_product")
+	err = copySalesChannelProduct(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//multi_values
+	fmt.Println("multi_values")
+	err = copyMultiValues(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//arm_component
+	fmt.Println("arm_component")
+	err = copyArmComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//audit_component
+	fmt.Println("audit_component")
+	err = copyAuditComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//base_component
+	fmt.Println("base_component")
+	err = copyBaseComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//bulb_component
+	fmt.Println("bulb_component")
+	err = copyBulbComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//category_component
+	fmt.Println("category_component")
+	err = copyCategoryComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//collection_component
+	fmt.Println("collection_component")
+	err = copyCollectionComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//com_col_component
+	fmt.Println("com_col_component")
+	err = copyComColComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//construction_information_component
+	fmt.Println("construction_information_component")
+	err = copyConstructionInformationComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//cushions_component
+	fmt.Println("cushions_component")
+	err = copyCushionsComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//doors_component
+	fmt.Println("doors_component")
+	err = copyDoorsComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//drawers_component
+	fmt.Println("drawers_component")
+	err = copyDrawersComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//pillows_component
+	fmt.Println("pillows_component")
+	err = copyPillowsComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//shelves_component
+	fmt.Println("shelves_component")
+	err = copyShelvesComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//table_leaves_component
+	fmt.Println("table_leaves_component")
+	err = copyTableLeavesComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//description_component
+	fmt.Println("description_component")
+	err = copyDescriptionComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//durability_component
+	fmt.Println("durability_component")
+	err = copyDurabilityComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//electrical_component
+	fmt.Println("electrical_component")
+	err = copyElectricalComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//fiber_component
+	fmt.Println("fiber_component")
+	err = copyFiberComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//flame_component
+	fmt.Println("flame_component")
+	err = copyFlameComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//footboard_component
+	fmt.Println("footboard_component")
+	err = copyFootboardComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//footrest_component
+	fmt.Println("footrest_component")
+	err = copyFootrestComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//frame_component
+	fmt.Println("frame_component")
+	err = copyFrameComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//glass_component
+	fmt.Println("glass_component")
+	err = copyGlassComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//headboard_component
+	fmt.Println("headboard_component")
+	err = copyHeadboardComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//identity_component
+	fmt.Println("identity_component")
+	err = copyIdentityComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//images_component
+	fmt.Println("images_component")
+	err = copyImagesComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//instruction_component
+	fmt.Println("instruction_component")
+	err = copyInstructionComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//interior_dimension_component
+	fmt.Println("interior_dimension_component")
+	err = copyInteriorDimensionComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//leather_component
+	fmt.Println("leather_component")
+	err = copyLeatherComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//manufacturer_component
+	fmt.Println("manufacturer_component")
+	err = copyManufacturerComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//option_sets_component
+	fmt.Println("option_sets_component")
+	err = copyOptionSetsComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//ordering_information_component
+	fmt.Println("ordering_information_component")
+	err = copyOrderingInformationComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//overall_dimension_component
+	fmt.Println("overall_dimension_component")
+	err = copyOverallDimensionComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//pattern_component
+	fmt.Println("pattern_component")
+	err = copyPatternComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//pedestal_component
+	fmt.Println("pedestal_component")
+	err = copyPedestalComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//pricing_component
+	fmt.Println("pricing_component")
+	err = copyPricingComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//promotional_tag_component
+	fmt.Println("promotional_tag_component")
+	err = copyPromotionalTagComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//seat_component
+	fmt.Println("seat_component")
+	err = copySeatComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//shade_component
+	fmt.Println("shade_component")
+	err = copyShadeComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//shipping_information_component
+	fmt.Println("shipping_information_component")
+	err = copyShippingInformationComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//side_rail_component
+	fmt.Println("side_rail_component")
+	err = copySideRailComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//suspension_point_component
+	fmt.Println("suspension_point_component")
+	err = copySuspensionPointComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//textile_component
+	fmt.Println("textile_component")
+	err = copyTextileComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//visibility_component
+	fmt.Println("visibility_component")
+	err = copyVisibilityComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//weight_component
+	fmt.Println("weight_component")
+	err = copyWeightComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//box_component
+	fmt.Println("box_component")
+	err = copyBoxComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//cushion_component
+	fmt.Println("cushion_component")
+	err = copyCushionComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//door_component
+	fmt.Println("door_component")
+	err = copyDoorComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//drawer_component
+	fmt.Println("drawer_component")
+	err = copyDrawerComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//pillow_component
+	fmt.Println("pillow_component")
+	err = copyPillowComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//shelf_component
+	fmt.Println("shelf_component")
+	err = copyShelfComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//table_leaf_component
+	fmt.Println("table_leaf_component")
+	err = copyTableLeafComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//feature_component
+	fmt.Println("feature_component")
+	err = copyFeatureComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//image_component
+	fmt.Println("image_component")
+	err = copyImageComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+	//option_set_component
+	fmt.Println("option_set_component")
+	err = copyOptionSetComponent(db, oldDB)
+	if err != nil {
+		return err
+	}
+
+	//export_mapping
+	fmt.Println("export_mapping")
+	err = copyExportMapping(db, portalDB)
+	if err != nil {
+		return err
+	}
+
+	//export
+	fmt.Println("export")
+	err = copyExport(db, portalDB)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ProvisionPostgres creates the testing postgres database
+func MigratePostgres() error {
+	configType := "sql"
+	dbType := config.String(configType, "type")
+	dbHost := config.String(configType, "host")
+	dbUser := config.String(configType, "user")
+	dbName := config.String(configType, "database")
+	dbPassword := config.String(configType, "password")
+	dbSSLMode := config.String(configType, "ssl-mode")
+	adminDBUser := os.Getenv("PG_DB_USER")
+	adminDBPassword := os.Getenv("PG_DB_PASSWORD")
+
+	if len(adminDBUser) == 0 {
+		adminDBUser = os.Getenv("LOGNAME")
+	}
+
+	adminDBConnectString := fmt.Sprintf("%s://%s:%s@%s/postgres?sslmode=%s", dbType, adminDBUser, adminDBPassword, dbHost, dbSSLMode)
+	adminDB, e := app.Open(dbType, adminDBConnectString)
+	if e != nil {
+		return e
+	}
+	defer adminDB.Close()
+
+	err := adminDB.Ping()
+	if err != nil {
+		return err
+	}
+
+	var adminDBSQLarray []string
+	adminDBSQLarray = append(adminDBSQLarray, fmt.Sprintf("CREATE USER %s;", dbUser))
+	adminDBSQLarray = append(adminDBSQLarray, fmt.Sprintf("ALTER USER %s WITH PASSWORD '%s' LOGIN CREATEDB SUPERUSER;", dbUser, dbPassword))
+	adminDBSQLarray = append(adminDBSQLarray, fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s';", dbName))
+	adminDBSQLarray = append(adminDBSQLarray, fmt.Sprintf("DROP DATABASE IF EXISTS %s;", dbName))
+	adminDBSQLarray = append(adminDBSQLarray, fmt.Sprintf("CREATE DATABASE %s WITH OWNER %s;", dbName, dbUser))
+	for _, adminDBSQL := range adminDBSQLarray {
+		fmt.Println(adminDBSQL)
+		_, err := adminDB.Exec(adminDBSQL)
+		if err != nil {
+			// Ignore error
+		}
+	}
+
+	apiDBConnectString := fmt.Sprintf("%s://%s:%s@%s/%s?sslmode=%s", dbType, dbUser, dbPassword, dbHost, dbName, dbSSLMode)
+	apiDB, e := app.Open(dbType, apiDBConnectString)
+	if e != nil {
+		return e
+	}
+	defer apiDB.Close()
+	oldDBHost := config.String(configType, "old_host")
+	oldDBUser := config.String(configType, "old_user")
+	oldDBPassword := config.String(configType, "old_password")
+	oldDBName := config.String(configType, "old_database")
+	oldAPIDBConnectString := fmt.Sprintf("%s://%s:%s@%s/%s?sslmode=%s", dbType, oldDBUser, oldDBPassword, oldDBHost, oldDBName, dbSSLMode)
+	oldAPIDB, e := app.Open(dbType, oldAPIDBConnectString)
+	if e != nil {
+		return e
+	}
+
+	portalDBHost := config.String(configType, "portal_host")
+	portalDBUser := config.String(configType, "portal_user")
+	portalDBPassword := config.String(configType, "portal_password")
+	portalDBName := config.String(configType, "portal_database")
+	portalDBConnectString := fmt.Sprintf("%s://%s:%s@%s/%s?sslmode=%s", dbType, portalDBUser, portalDBPassword, portalDBHost, portalDBName, dbSSLMode)
+	portalDB, e := app.Open(dbType, portalDBConnectString)
+	if e != nil {
+		return e
+	}
+	defer apiDB.Close()
+	defer oldAPIDB.Close()
+	defer portalDB.Close()
+
+	err = migrateAllTheData(apiDB, oldAPIDB, portalDB)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func main() {
+	fmt.Println("Start Migration")
+	err := MigratePostgres()
+	if err != nil {
+		panic(err)
+	}
+}

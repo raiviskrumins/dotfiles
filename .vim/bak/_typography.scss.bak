@@ -1,0 +1,91 @@
+@mixin uppercase_din() {
+  font-weight: 400;
+  text-transform: uppercase;
+  font-family: 'DINOT';
+  letter-spacing: 1px;
+}
+
+@mixin h3-style() {
+  font-size: 15px;
+  @include uppercase_din();
+}
+
+@mixin btn-style() {
+  font-size: 13px;
+  @include uppercase_din();
+}
+
+b {
+  font-weight: 500;
+}
+
+body {
+  font-weight: 300;
+  font-family: 'DINOT', Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 100;
+  color: $text-color;
+}
+
+h1 {
+  font-size: 22px;
+  font-weight: 100;
+  margin-bottom: 15px;
+}
+
+h2 {
+  font-family: 'DINOT';
+  font-weight: 300;
+  font-size: 23px;
+}
+
+h3 {
+  @include h3-style();
+}
+
+h4.modal-title {
+  @include h3-style();
+}
+
+a,
+a:hover,
+a:focus {
+  color: $btn-info;
+  outline: 0 !important;
+}
+
+/* DISCOVER PREVIEW */
+#productPreviewDiscover {
+  color: $discover-font-color;
+
+  .product-name {
+    text-transform: uppercase;
+    font-weight: 300;
+    color: $discover-font-color;
+  }
+
+  .info-type {
+    color: $discover-font-color;
+  }
+
+  .weighted {
+    font-weight: 400;
+  }
+
+  a,
+  a:hover,
+  a:focus {
+    color: $discover-link-color;
+    text-decoration: none;
+  }
+}
+
+/* ERRORS */
+
+.has-error .control-label,
+.has-error .radio,
+.has-error .checkbox,
+.has-error .radio-inline,
+.has-error .checkbox-inline {
+  color: $text-color;
+}

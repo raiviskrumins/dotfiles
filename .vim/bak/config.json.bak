@@ -1,0 +1,30 @@
+{
+    "sql": {
+        "type": "postgres",
+        "host": "localhost",
+        "user": "doodle",
+        "password": "",
+        "database": "api",
+        "test-database": "api_test",
+        "ssl-mode": "disable"
+    },
+    "mongo": {
+        "database": "api",
+        "test-database": "api_test",
+        "host": "127.0.0.1",
+        "port": "27017",
+        "user": "amber",
+        "password": ""
+    },
+    "es": {
+        "host": "localhost",
+        "port": "9200",
+        "index": "go-product-index",
+        "test-index": "go-test-product-index"
+    },
+    "port": 8080,
+    "log-errors": false,
+    "logs": {
+        "pqdb": "data.log"
+    }
+}

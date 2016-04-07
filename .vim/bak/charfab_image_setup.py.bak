@@ -1,0 +1,300 @@
+import base64
+from cStringIO import StringIO
+import csv
+import hashlib
+import json
+import pika
+import mimetypes
+import os
+import shutil
+import warnings
+import zipfile
+
+import argparse
+from boto.s3.connection import S3Connection
+from boto.s3.key import Key
+import xlrd
+import xlwt
+import xlutils.copy
+
+
+ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
+
+S3_ACCESS = 'AKIAJ3PRREKZCAHI25RQ'
+S3_SECRET = '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'
+
+
+def insert_row(row, sheet, sku, default, urls):
+    """Write a new row into the output workbook containing the imagery data.
+    The product unique ident, the default-boolean, the image type "other",
+    and then the four URLs (fullsize, small, med & large). 
+    """
+    sheet.write(row, 0, sku)
+
+    if default:
+        sheet.write(row, 1, "T")
+    else:
+        sheet.write(row, 1, "F")
+
+    sheet.write(row, 2, "other")
+
+    sheet.write(row, 4, urls[0])
+    sheet.write(row, 5, urls[1])
+    sheet.write(row, 6, urls[2])
+    sheet.write(row, 7, urls[3])
+
+def main():
+    # Setup the argument parser, and grab argument flags.
+    parser = setup_parser()
+    args = parser.parse_args()
+
+    if not os.path.isfile(args.input_path):
+        raise IOError("Input file: %s was not found!" % args.input_path)
+
+    if not os.path.isfile(args.zip_path):
+        raise IOError("Zip file: %s was not found!" % args.zip_path)
+
+    # If the output file already exists, delete it.
+    if os.path.isfile(args.output_path) and not args.dry_run:
+        try:
+            os.remove(args.output_path)
+        except OSError:
+            raise Exception("Unable to delete output file: %s" % args.output_path)
+
+
+    if args.verbrose:
+        print("Initializing program.")
+        print("Input: %s\nOutput: %s\nZip file: %s" % (args.input_path, args.output_path, args.zip_path))
+        print("**" + "=" * 50 + "**")
+
+    
+    workbooks = {
+        "source": xlrd.open_workbook(args.input_path),
+        "dest": None
+    }
+    workbooks["dest"] = xlutils.copy.copy(workbooks["source"])
+
+    worksheets = {
+        "data": workbooks["source"].sheet_by_index(0),
+        "images": workbooks["dest"].add_sheet("Images")
+    }
+    
+    
+    # Open the zipfile and get a list of all available images within it.
+    images_zipfile = zipfile.ZipFile(args.zip_path, "r")
+    images_in_zip = images_zipfile.namelist()
+
+    # List of all the images inserted into the new output workbook.
+    inserted_images = []
+    
+    class Counter:
+        def __init__(self):
+            self.current_count = 0
+
+        def increment(self):
+            self.current_count += 1
+    image_counter = Counter()
+
+
+    data_rows_count = worksheets["data"].nrows
+    for row in range(data_rows_count):
+        if args.verbrose:
+            percent = float(row + 1) / data_rows_count * 100
+            print("Row: %i of %i (%i%%)" % (row + 1, data_rows_count, percent))
+
+        # For each row, extract the data from the various columns.
+        sheet = worksheets["data"]
+        sku = sheet.cell(row, 2).value
+        thumbnail = sheet.cell(row, 92).value
+        ruler = sheet.cell(row, 93).value
+        large = sheet.cell(row, 94).value
+        couch = sheet.cell(row, 95).value
+
+        # A thumbnail must exist, as it is used as the default image.
+        if len(thumbnail) <0 or thumbnail not in images_in_zip:
+            raise Exception("Thumbnail %s could not be processed." % thumbnail)
+
+        # Attempt to insert and upload the images, if available.
+        # If the image is the thumbnail, we want it to become the default image.
+        for image in [thumbnail, ruler, large, couch]:
+            if not image:
+                continue
+            
+            if image not in images_in_zip:
+                raise Exception("The image: %s is not stored within the zip file!" % image)
+            
+            inserted_images.append(image)
+            urls = upload_image(
+                image,
+                images_zipfile.read(image),
+                args.dry_run,
+                args.no_upload
+            )
+            
+            if image == large:
+                print(urls[0])
+            elif image == ruler && not large:
+                print(urls[0])
+
+            insert_row(
+                image_counter.current_count,
+                worksheets["images"], 
+                sku, 
+                image == thumbnail,
+                urls
+            )
+
+            image_counter.increment()
+
+
+    if args.verbrose:
+        print("**" + "=" * 50 + "**")
+        print("Saving Excel workbook: %s" % args.output_path)
+
+    if not args.dry_run:
+        workbooks["dest"].save(args.output_path)
+
+    images_zipfile.close()
+
+    # Check to see if the number of unique images in the zip file matches 
+    # the number of unique images related to products. Warn the user if the
+    # counts don't match.
+    zipped_imgs_set = set(sorted(images_in_zip))
+    saved_imgs_set = set(sorted(inserted_images))
+    diff_num = len(list(zipped_imgs_set - saved_imgs_set))
+
+    if diff_num > 0:
+        warnings.warn("There are %i images from the zipfile not used!" % diff_num)
+
+    if args.verbrose:
+        print("Input: %s\nOutput: %s\nZip file: %s" % (args.input_path, args.output_path, args.zip_path))
+        print("Total images: %i" % image_counter.current_count)
+
+
+        print("Program finished.")
+
+
+
+def setup_parser():
+    # Setup Argument Parser for the application. Must provide the input, output
+    # and zip-file flags. All other flags are optional. Use -h for help.
+    parser = argparse.ArgumentParser(
+        description="Migration image URL locations for Charlotte Fabric's product data into a new Excel workbook."
+    )
+
+    parser.add_argument(
+        "-i",
+        "--input",
+        action="store",
+        dest="input_path",
+        help="Path to input Excel workbook.",
+        required=True
+    )
+
+    parser.add_argument(
+        "-o",
+        "--output",
+        action="store",
+        dest="output_path",
+        help="Path to save the output Excel workbook. An existing file will be deleted.",
+        required=True
+    )
+
+    parser.add_argument(
+        "-z",
+        "--zip-file",
+        action="store",
+        dest="zip_path",
+        help="Path to ziipfile containing all images (on the top-level directory).",
+        required=True
+    )
+
+    parser.add_argument(
+        "-n",
+        "--dry-run",
+        action="store_true", 
+        default=False,
+        dest="dry_run",
+        help="Perform a dry-run by not saving results into the provided output file."
+    )
+
+    parser.add_argument(
+        "--no-upload",
+        action="store_true", 
+        default=False,
+        dest="no_upload",
+        help="Do not upload images to S3 on non-dry-runs."
+    )
+ 
+    parser.add_argument(
+        "-v",
+        "--verbrose",
+        action="store_true", 
+        default=False,
+        dest="verbrose",
+        help="Provide verbrose messaging as the program runs."
+    )
+
+    return parser
+
+def upload_image(path, contents, dry_run=False, no_upload=False):
+    # Grab the mimetype and extract the file extension.
+    mime_type = mimetypes.MimeTypes().guess_type(path)[0]
+    extension = mime_type.rsplit("/", 1)[1]
+
+    md_hash = hashlib.md5()
+    md_hash.update(contents)
+
+    hexdigest = md_hash.hexdigest()[:16]
+
+    base_url = "http://amber-cm.s3.amazonaws.com/images/%s" % hexdigest
+
+    urls = []
+
+    urls.append("%s.%s" % (base_url, extension))
+    for size in [150, 300, 640]:
+        urls.append("%s_%i.%s" % (base_url, size, extension))
+
+    if dry_run or no_upload:
+        return urls
+
+    # Establish a connection to the S3 bucket to upload the images.
+    connection = S3Connection(S3_ACCESS, S3_SECRET)
+    bucket = connection.get_bucket('amber-cm')
+
+    key = Key(bucket)
+    key.key = 'images/%s.%s' % (hexdigest, extension)
+    headers = {'Content-Type': mime_type}
+    key.set_contents_from_string(contents, headers=headers)
+    key.make_public()
+
+    # Now, add the current image to to image-worker's queue.     
+    contents_buffer = StringIO(contents)
+    contents_string = base64.encodestring(contents_buffer.getvalue())
+
+    pika_conn = pika.BlockingConnection(
+        pika.ConnectionParameters(host='localhost')        
+    )
+
+    channel = pika_conn.channel()
+    channel.queue_declare(queue='image_queue', durable=True)
+
+    message = json.dumps({
+        'url': urls[0],
+        'image': contents_string
+    })
+
+    channel.basic_publish(
+        exchange='',
+        routing_key='image_queue',
+        body=message,
+        properties=pika.BasicProperties(delivery_mode=2)
+    )
+    
+    pika_conn.close()
+
+    return urls
+
+
+if __name__ == '__main__':
+    main()

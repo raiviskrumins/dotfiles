@@ -1,0 +1,280 @@
+{
+  "OwnerId": "072908064355",
+  "InstanceOwner": "iam_user",
+  "RegionName": "us-east-1",
+  "EnvType": "dev",
+  "VpcId": "vpc-24ff2a40",
+  "SecurityGroups": ["sg-4c16382a"],
+  "elasticsearch": {
+    "ImageName": "elasticsearch",
+    "InstanceType": "m3.medium",
+    "Repository": {},
+    "SecurityGroups": ["sg-44289821"],
+    "LoadBalancers": ["ElasticSearchLB"],
+    "RunFirst": [],
+    "Status": [
+      "service elasticsearch status"
+    ],
+    "Restart": [
+      "echo NEWLINE_COLOR=bright-yellow > /etc/profile.d/amberenv.sh",
+      "echo DELIMETER_COLOR=bright-yellow >> /etc/profile.d/amberenv.sh",
+      "echo TEXT_COLOR=bright-white >> /etc/profile.d/amberenv.sh",
+      "service elasticsearch restart"
+    ]
+  },
+  "postit-board": {
+    "ImageName": "DevFullStack",
+    "InstanceType": "m3.medium",
+    "VirtualEnv": "postit-board",
+    "AppConfig": "config.DevelopmentConfig",
+    "Repository": {
+      "Type": "git",
+      "Name": "postit-board"
+    },
+    "SecurityGroups": [
+      "sg-fa083d9c"
+    ],
+    "RunFirst": [
+      "pip install -r requirements-local.txt"
+    ],
+    "Status": [
+      "supervisorctl status postit-board"
+    ],
+    "Restart": [
+      "supervisorctl restart postit-board"
+    ]
+  },
+  "api": {
+    "ImageName": "DevFullStack",
+    "InstanceType": "m3.medium",
+    "VirtualEnv": "api",
+    "AppConfig": "config.DevelopmentConfig",
+    "DBName": "api",
+    "DBUser": "doodle",
+    "Repository": {
+      "Type": "git",
+      "Name": "api"
+    },
+    "SecurityGroups": [
+      "sg-3e143a58"
+    ],
+    "RunFirst": [
+      "pip --quiet --exists-action w install -r requirements.python.txt",
+      "go get github.com/LyricalSecurity/gigo",
+      "go install github.com/LyricalSecurity/gigo",
+      "gigo install -r requirements.go.txt",
+      "go install",
+      "go run scripts/utils/max_id.go",
+      "goose up || echo No migrations",
+      "go run scripts/index/index.go",
+      "mongo api --eval \"db.product_cache.remove({})\""
+    ],
+    "RefreshDB": [
+      "go run scripts/utils/max_id.go",
+      "goose up || echo No migrations",
+      "go run scripts/index/index.go",
+      "mongo api --eval \"db.product_cache.remove({})\""
+    ],
+    "Status": [],
+    "Restart": [
+      "service rabbitmq-server restart",
+      "supervisorctl stop export-worker-old:*",
+      "supervisorctl restart export-worker:*",
+      "service api restart"
+    ]
+  },
+  "amber-api": {
+    "ImageName": "DevFullStack",
+    "InstanceType": "m3.medium",
+    "VirtualEnv": "amber-api",
+    "AppConfig": "config.DevelopmentConfig",
+    "DBName": "doodle",
+    "DBUser": "doodle",
+    "Repository": {
+      "Type": "git",
+      "Name": "amber-api"
+    },
+    "SecurityGroups": [
+      "sg-3b19375d"
+    ],
+    "RunFirst": [
+      "pip --quiet --exists-action w install -r requirements-local.txt",
+      "python scripts/max_id.py",
+      "find . -type f -name \"*.pyc\" -exec rm -f {} \\;",
+      "python app.py db upgrade",
+      "python scripts/create_elastic_index.py",
+      "redis-cli info | grep ^db0 && redis-cli -n 0 flushdb || echo skipping redis db0",
+      "redis-cli info | grep ^db1 && redis-cli -n 1 flushdb || echo skipping redis db1",
+      "python scripts/update_product_caches.py"
+    ],
+    "RefreshDB": [
+      "python scripts/max_id.py",
+      "find . -type f -name \"*.pyc\" -exec rm -f {} \\;",
+      "python app.py db upgrade",
+      "python scripts/create_elastic_index.py",
+      "redis-cli info | grep ^db0 && redis-cli -n 0 flushdb || echo skipping redis db0",
+      "redis-cli info | grep ^db1 && redis-cli -n 1 flushdb || echo skipping redis db1",
+      "python scripts/update_product_caches.py"
+    ],
+    "Status": [
+      "service elasticsearch status",
+      "supervisorctl status amber-api"
+    ],
+    "Restart": [
+      "service elasticsearch restart",
+      "supervisorctl restart amber-api"
+    ]
+  },
+  "channel-manager": {
+    "ImageName": "DevFullStack",
+    "InstanceType": "m3.medium",
+    "VirtualEnv": "channel-manager",
+    "AppConfig": "config.DevelopmentConfig",
+    "DBName": "portal",
+    "DBUser": "doodle",
+    "LocalApi": "api",
+    "Repository": {
+      "Type": "git",
+      "Name": "channel-manager"
+    },
+    "SecurityGroups": [
+      "sg-ea153b8c", "sg-3b19375d"
+    ],
+    "RunFirst": [
+      "pip --quiet --exists-action w install -r requirements-local.txt",
+      "npm install",
+      "gulp",
+      "find . -type f -name \"*.pyc\" -exec rm -f {} \\;",
+      "python app.py db upgrade",
+      "redis-cli info | grep ^db2 && redis-cli -n 2 flushdb || echo skipping redis db2",
+      "python scripts/import_stripe_test_customers.py"
+    ],
+    "RefreshDB": [
+      "python scripts/max_ids.py",
+      "find . -type f -name \"*.pyc\" -exec rm -f {} \\;",
+      "python app.py db upgrade",
+      "redis-cli info | grep ^db2 && redis-cli -n 2 flushdb || echo skipping redis db2",
+      "python scripts/import_stripe_test_customers.py"
+    ],
+    "Status": [
+      "service elasticsearch status",
+      "service rabbitmq-server status",
+      "supervisorctl status channel-manager",
+      "supervisorctl status image-worker:*"
+    ],
+    "Restart": [
+      "supervisorctl stop channel-manager-old",
+      "supervisorctl stop image-worker-old:*",
+      "supervisorctl restart channel-manager",
+      "supervisorctl restart image-worker:*"
+    ]
+  },
+  "channel-manager-old": {
+    "ImageName": "DevFullStack",
+    "InstanceType": "m3.medium",
+    "VirtualEnv": "channel-manager-old",
+    "AppConfig": "config.OldDevelopmentConfig",
+    "DBName": "portal",
+    "DBUser": "doodle",
+    "LocalApi": "amber-api",
+    "Repository": {
+      "Type": "git",
+      "Name": "channel-manager"
+    },
+    "SecurityGroups": [
+      "sg-ea153b8c", "sg-3b19375d"
+    ],
+    "RunFirst": [
+      "pip --quiet --exists-action w install -r requirements-local.txt",
+      "npm install",
+      "gulp",
+      "python scripts/max_ids.py",
+      "find . -type f -name \"*.pyc\" -exec rm -f {} \\;",
+      "python app.py db upgrade",
+      "redis-cli info | grep ^db2 && redis-cli -n 2 flushdb || echo skipping redis db2",
+      "python scripts/import_stripe_test_customers.py"
+    ],
+    "RefreshDB": [
+      "python scripts/max_ids.py",
+      "find . -type f -name \"*.pyc\" -exec rm -f {} \\;",
+      "python app.py db upgrade",
+      "redis-cli info | grep ^db2 && redis-cli -n 2 flushdb || echo skipping redis db2",
+      "python scripts/import_stripe_test_customers.py"
+    ],
+    "Status": [
+      "service elasticsearch status",
+      "supervisorctl status amber-api",
+      "service rabbitmq-server status",
+      "supervisorctl status channel-manager-old",
+      "supervisorctl status image-worker-old:*",
+      "supervisorctl status export-worker-old:*"
+    ],
+    "Restart": [
+      "service rabbitmq-server restart",
+      "supervisorctl stop channel-manager",
+      "supervisorctl stop export-worker:*",
+      "supervisorctl stop image-worker:*",
+      "supervisorctl restart channel-manager-old",
+      "supervisorctl restart export-worker-old:*",
+      "supervisorctl restart image-worker-old:*"
+    ]
+  },
+  "amber-discover": {
+    "ImageName": "DevFullStack",
+    "InstanceType": "m3.medium",
+    "VirtualEnv": "amber-discover",
+    "AppConfig": "config.DevelopmentConfig",
+    "DBName": "discover",
+    "DBUser": "doodle",
+    "LocalApi": "amber-api",
+    "Repository": {
+      "Type": "git",
+      "Name": "amber-discover"
+    },
+    "SecurityGroups": [
+      "sg-69123c0f", "sg-3b19375d"
+    ],
+    "RunFirst": [
+      "pip --quiet --exists-action w install -r requirements-local.txt",
+      "npm install",
+      "gulp",
+      "python scripts/max_id.py",
+      "find . -type f -name \"*.pyc\" -exec rm -f {} \\;",
+      "python app.py db upgrade"
+    ],
+    "RefreshDB": [
+      "python scripts/max_id.py",
+      "find . -type f -name \"*.pyc\" -exec rm -f {} \\;",
+      "python app.py db upgrade"
+    ],
+    "Status": [
+      "supervisorctl status amber-discover"
+    ],
+    "Restart": [
+      "supervisorctl restart amber-discover"
+    ]
+  },
+  "AmberEngine.com": {
+    "ImageName": "DevFullStack",
+    "InstanceType": "m3.medium",
+    "VirtualEnv": "AmberEngine.com",
+    "Repository": {
+      "Type": "git",
+      "Name": "AmberEngine.com"
+    },
+    "SecurityGroups": [
+      "sg-62d2f804"
+    ],
+    "RunFirst": [
+      "pip --quiet --exists-action w install -r requirements.txt",
+      "npm install",
+      "gulp"
+    ],
+    "Status": [
+      "supervisorctl status AmberEngine.com"
+    ],
+    "Restart": [
+      "supervisorctl restart AmberEngine.com"
+    ]
+  }
+}

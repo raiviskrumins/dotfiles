@@ -1,0 +1,784 @@
+import unittest
+import unittest.mock as mock
+
+import io
+
+from flask.ext.testing import TestCase as FlaskTestCase
+from flask import session
+
+from amber_portal import app
+from amber_portal.views import registration
+from amber_portal.models import db
+
+from stripe import CardError
+
+EMAIL = 'dalecooper@fbi.com'
+NAME = 'Dale Cooper'
+PASSWORD = 'TheOwlsAreNotWhatTheySeem123'
+KEY = 'ABC123DEF456GHI789JKL'
+PUBLIC = '89a7sd8f9ashdjfhas89hasudas09'
+PRIVATE = 'dsfas90d723h8h9asdj923h89y3483'
+MFR_ID = '8'
+COUPON = 'coupon'
+COMPANY = 'FBI'
+ADDRESSCOUNTRY = 'United States'
+MANUFACTURERID = 808
+
+
+class RegistrationViewTests(FlaskTestCase):
+
+    def create_app(self):
+        app.config.from_object('config.TestingConfig')
+        return app
+
+    def setUp(self):
+        self.client = self.app.test_client()
+        self._ctx = self.app.test_request_context()
+        self._ctx.push()
+        db.create_all()
+
+    def tearDown(self):
+        db.session.remove()
+        db.drop_all()
+
+    @mock.patch('amber_portal.views.registration.redirect')
+    @mock.patch('amber_portal.views.registration.current_user')
+    def testSignupEmail(self, mock_curr_user, mock_redirect):
+        """ Test signup route if user is already logged in.
+        """
+        mock_user = mock.Mock()
+        mock_curr_user.return_value = mock_user
+        mock_user.email = EMAIL
+
+        registration.signup()
+
+        mock_redirect.assert_called_once_with('/dashboard')
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    @mock.patch('amber_portal.views.registration.CMUser.query')
+    @mock.patch('amber_portal.views.registration.SignUpForm')
+    def testSignupValidateUser(
+        self,
+        mock_su_form,
+        mock_cm_user_query,
+        mock_render_template
+    ):
+        """ Test signup route if validates and user already exists.
+        """
+        mock_form = mock.Mock()
+        mock_su_form.return_value = mock_form
+        mock_form.data = {}
+        mock_form.data['email'] = EMAIL
+
+        mock_form.validate_on_submit.return_value = True
+
+        cm_user = mock.Mock()
+        mock_cm_user_query.filter_by.return_value.first.return_value = cm_user
+
+        mock_form.email.errors.return_value = ['something']
+
+        registration.signup()
+        mock_render_template.assert_called_once_with(
+            'signup/signup.jinja2',
+            form=mock_form
+        )
+
+    @mock.patch('amber_portal.views.registration.url_for')
+    @mock.patch('amber_portal.views.registration.redirect')
+    @mock.patch('amber_portal.views.registration.CMUser.query')
+    @mock.patch('amber_portal.views.registration.SignUpForm')
+    def testSignupValidateNoUser(
+        self,
+        mock_su_form,
+        mock_cm_user_query,
+        mock_redirect,
+        mock_url_for
+    ):
+        """ Test signup route if validates and user does not exist.
+        """
+        mock_form = mock.Mock()
+        mock_su_form.return_value = mock_form
+        mock_form.data = {}
+        mock_form.data['email'] = EMAIL
+
+        with self.client.session_transaction() as session:
+            session['signup'] = mock_form.data
+
+        mock_form.validate_on_submit.return_value = True
+
+        mock_cm_user_query.filter_by.return_value.first.return_value = None
+
+        mock_redirect.return_value = u''
+
+        response = self.client.post('/signup')
+
+        mock_redirect.assert_called_once_with(
+            mock_url_for(
+                '.payment_get'
+            )
+        )
+
+        with self.client.session_transaction() as session:
+            self.assertEqual(session['signup'], mock_form.data)
+
+    @mock.patch('amber_portal.views.registration.stripe.Customer')
+    @mock.patch('amber_portal.views.registration.url_for')
+    @mock.patch('amber_portal.views.registration.redirect')
+    @mock.patch('amber_portal.views.registration.BillingForm')
+    @mock.patch('amber_portal.views.registration.stripe.Plan')
+    def testPaymentValidate(
+        self,
+        mock_stripe_plan,
+        mock_billing_form,
+        mock_redirect,
+        mock_url_for,
+        mock_stripe_cust
+    ):
+        """ Test payment route if form validates.
+        """
+        with self.client.session_transaction() as session:
+            session['signup'] = {}
+            session['signup']['email'] = EMAIL
+
+        stripe_plan_obj = mock.Mock()
+        mock_stripe_plan.all.return_value = stripe_plan_obj
+        stripe_plan_obj.api_key = ''
+
+        mock_form = mock.Mock()
+        mock_billing_form.return_value = mock_form
+        mock_form.street_address_1.data = ''
+        mock_form.street_address_2.data = ''
+        mock_form.city.data = ''
+        mock_form.state.data = ''
+        mock_form.province.data = ''
+        mock_form.zipcode.data = ''
+        mock_form.phone.data = ''
+        mock_form.plan.data = ''
+
+        expected_form_data = {
+            'address_city': '',
+            'address_line1': '',
+            'address_line2': '',
+            'address_state': '',
+            'address_zip': '',
+            'object': 'card'
+        }
+
+        mock_form.data = {
+            'number': '',
+            'name': '',
+            'exp_month': '',
+            'exp_year': '',
+            'cvc': ''
+        }
+
+        mock_form.validate_on_submit.return_value = True
+
+        mock_redirect.return_value = u''
+
+        stripe_cust_obj = mock.Mock()
+        mock_stripe_cust.create.return_value = stripe_cust_obj
+        stripe_cust_obj.sources.create.return_value = ''
+        stripe_cust_obj.id = '1234'
+
+        response = self.client.post('/signup/payment')
+
+        mock_redirect.assert_called_once_with(
+            mock_url_for(
+                '.confirm_payment'
+            )
+        )
+
+        with self.client.session_transaction() as session:
+            self.assertIn('address', session)
+            self.assertEqual(session['address'], expected_form_data)
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    @mock.patch('amber_portal.views.registration.stripe.Customer')
+    @mock.patch('amber_portal.views.registration.BillingForm')
+    @mock.patch('amber_portal.views.registration.stripe.Plan')
+    def testPaymentValidateException(
+        self,
+        mock_stripe_plan,
+        mock_billing_form,
+        mock_stripe_cust,
+        mock_render_template
+    ):
+        """ Test payment route which validates but throws an exception.
+        """
+        with self.client.session_transaction() as session:
+            session['signup'] = {}
+            session['signup']['email'] = EMAIL
+
+        stripe_plan_obj = mock.Mock()
+        mock_stripe_plan.retrieve.return_value = stripe_plan_obj
+        stripe_plan_obj.api_key = ''
+
+        mock_form = mock.Mock()
+        mock_billing_form.return_value = mock_form
+
+        mock_form.validate_on_submit.return_value = True
+
+        stripe_cust_obj = mock.Mock()
+        mock_stripe_cust.create.return_value = stripe_cust_obj
+
+        def stripe_cust_side_effect(source):
+            raise CardError(402, 'Fake credit card is invalid!', '')
+
+        stripe_cust_obj.sources.create.side_effect = stripe_cust_side_effect
+
+        mock_render_template.return_value = u''
+
+        response = self.client.post('/signup/payment')
+
+        mock_render_template.assert_called_once_with(
+            'signup/payment.jinja2',
+            form=mock_form,
+            plan=stripe_plan_obj
+        )
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    @mock.patch('amber_portal.views.registration.BillingForm')
+    @mock.patch('amber_portal.views.registration.stripe.Plan')
+    def testPaymentNotValid(
+        self,
+        mock_stripe_plan,
+        mock_billing_form,
+        mock_render_template
+    ):
+        """ Test payment route if form doesn't validate.
+        """
+        stripe_plan_obj = mock.Mock()
+        mock_stripe_plan.retrieve.return_value = stripe_plan_obj
+        stripe_plan_obj.api_key = ''
+
+        mock_form = mock.Mock()
+        mock_billing_form.return_value = mock_form
+
+        mock_form.validate_on_submit.return_value = False
+
+        registration.payment()
+
+        mock_render_template.assert_called_once_with(
+            'signup/payment.jinja2',
+            form=mock_form,
+            plan=stripe_plan_obj
+        )
+
+    def testValidateCouponNotXHR(self):
+        """ Test coupon validation route when not XHR
+        """
+        response = self.client.get('/signup/coupon/AMBERVEGAS')
+
+        self.assert404(response)
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    @mock.patch('amber_portal.views.registration.stripe.Coupon')
+    def testValidateCouponNoCoupon(
+        self,
+        mock_stripe_coupon,
+        mock_render_template
+    ):
+        """ Test coupon validation route with a coupon that does not exist.
+        """
+        TEMP_COUPON = ''
+
+        stripe_coupon_obj = None
+        mock_stripe_coupon.retrieve.return_value = stripe_coupon_obj
+
+        mock_render_template.return_value = u''
+
+        response = self.client.get(
+            '/signup/coupon/%s' % TEMP_COUPON,
+            headers=[('X-Requested-With', 'XMLHttpRequest')]
+        )
+
+        mock_render_template.assert_called_once_with(
+            'signup/coupon_text.jinja2',
+            coupon='empty'
+        )
+
+        with self.client.session_transaction() as session:
+            self.assertNotIn('coupon', session)
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    @mock.patch('amber_portal.views.registration.stripe.Coupon')
+    def testValidateCouponInvalidCoupon(
+        self,
+        mock_stripe_coupon,
+        mock_render_template
+    ):
+        """ Test coupon validation route with a coupon that does not exist.
+        """
+        TEMP_COUPON = 'BADCOUPON'
+
+        stripe_coupon_obj = None
+        mock_stripe_coupon.retrieve.return_value = stripe_coupon_obj
+
+        mock_render_template.return_value = u''
+
+        response = self.client.get(
+            '/signup/coupon/%s' % TEMP_COUPON,
+            headers=[('X-Requested-With', 'XMLHttpRequest')]
+        )
+
+        mock_render_template.assert_called_once_with(
+            'signup/coupon_text.jinja2',
+            coupon='invalid'
+        )
+
+        with self.client.session_transaction() as session:
+            self.assertNotIn('coupon', session)
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    def testValidateCoupon(
+        self,
+        mock_render_template
+    ):
+        """ Test coupon validation route. The only acceptable coupon is
+            AMBERVEGAS (for now).
+        """
+        TEMP_COUPON = 'AMBERVEGAS'
+
+        mock_render_template.return_value = u''
+
+        response = self.client.get(
+            '/signup/coupon/%s' % TEMP_COUPON,
+            headers=[('X-Requested-With', 'XMLHttpRequest')]
+        )
+
+        mock_render_template.assert_called_once_with(
+            'signup/coupon_text.jinja2',
+            coupon='ambervegas'
+        )
+
+        with self.client.session_transaction() as session:
+            self.assertEqual(session['coupon'], TEMP_COUPON)
+
+    @mock.patch('amber_portal.views.registration.url_for')
+    @mock.patch('amber_portal.views.registration.redirect')
+    @mock.patch('amber_portal.views.registration.PortalConnection')
+    @mock.patch('amber_portal.views.registration.APIKey')
+    @mock.patch('amber_portal.views.registration.login_user')
+    @mock.patch(
+        'amber_portal.views.registration.'
+        'amber_portal.signals.user_signals.registered.send'
+    )
+    @mock.patch('amber_portal.views.registration.db')
+    @mock.patch('amber_portal.views.registration.CMUser')
+    @mock.patch('amber_portal.views.registration.amber_api_connection')
+    @mock.patch('amber_portal.views.registration.stripe.Customer')
+    @mock.patch('amber_portal.views.registration.stripe.Plan')
+    def testConfirmPaymentPost(
+        self,
+        mock_stripe_plan,
+        mock_stripe_cust,
+        mock_api,
+        mock_cm_user,
+        mock_db,
+        mock_user_signal,
+        mock_login_user,
+        mock_api_key,
+        mock_portal_connection,
+        mock_redirect,
+        mock_url_for
+    ):
+        """ Test confirm_payment route if request is a POST.
+        """
+        with self.client.session_transaction() as session:
+            session['plan'] = ''
+            session['stripe_customer'] = ''
+            session['signup'] = {
+                'name': NAME,
+                'email': EMAIL,
+                'password': PASSWORD,
+                'company': COMPANY,
+                'address_country': ADDRESSCOUNTRY,
+                'confirm_password': PASSWORD,
+                'coupon': '',
+                'tos': ''
+            }
+            session['address'] = {}
+
+        expected_data = {
+            'name': COMPANY,
+            'country': ADDRESSCOUNTRY,
+            'email': EMAIL
+        }
+
+        expected_api_key_payload = {
+            'name': EMAIL,
+            'role_name': 'ManufacturerUser',
+            'manufacturer_id': MANUFACTURERID,
+            'kind': 'user_key'
+        }
+
+        stripe_plan_obj = mock.Mock()
+        mock_stripe_plan.retrieve.return_value = stripe_plan_obj
+
+        stripe_cust_obj = mock.Mock()
+        mock_stripe_cust.retrieve.return_value = stripe_cust_obj
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_user = mock.Mock()
+        mock_cm_user.return_value = mock_user
+        mock_user.name = NAME
+        mock_user.email = EMAIL
+        mock_user.manufacturer_id = MANUFACTURERID
+
+        mock_mfr = mock.MagicMock()
+        mock_mfr.pk.return_value = MANUFACTURERID
+        mock_client.Manufacturer.from_dict.return_value.save.return_value = \
+            mock_mfr
+        mock_mfr['name'] = 'manufacturer name'
+        mock_mfr['phone'] = '555-555-5555'
+        mock_mfr['url'] = 'http://www.manufacturer.com'
+
+        mock_api_key = mock.MagicMock()
+        mock_api_key.public = PUBLIC
+        mock_api_key.private = PRIVATE
+        mock_client.APIKey.from_dict.return_value.save.return_value = \
+            mock_api_key
+
+        mock_db.session = mock.Mock()
+
+        mock_redirect.return_value = ''
+
+        self.client.post('/signup/confirm')
+
+        mock_client.Manufacturer.from_dict.assert_called_once_with(
+            expected_data
+        )
+
+        mock_client.APIKey.from_dict.assert_called_once_with(
+            expected_api_key_payload
+        )
+
+        mock_redirect.assert_called_once_with(
+            mock_url_for(
+                '.create_profile'
+            )
+        )
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    @mock.patch('amber_portal.views.registration.stripe.Customer')
+    @mock.patch('amber_portal.views.registration.stripe.Plan')
+    def testConfirmPayment(
+        self,
+        mock_stripe_plan,
+        mock_stripe_cust,
+        mock_render_template
+    ):
+        """ Test confirm_payment route if request is not a POST.
+        """
+        with self.client.session_transaction() as session:
+            session['plan'] = ''
+            session['stripe_customer'] = ''
+
+        stripe_plan_obj = mock.Mock()
+        mock_stripe_plan.retrieve.return_value = stripe_plan_obj
+
+        stripe_cust_obj = mock.Mock()
+        mock_stripe_cust.retrieve.return_value = stripe_cust_obj
+
+        mock_render_template.return_value = u''
+
+        response = self.client.get('/signup/confirm')
+
+        mock_render_template.assert_called_once_with(
+            'signup/confirm.jinja2',
+            customer=stripe_cust_obj,
+            plan=stripe_plan_obj
+        )
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    @mock.patch('amber_portal.views.registration.stripe.Customer')
+    @mock.patch('amber_portal.views.registration.stripe.Plan')
+    def testConfirmPaymentWithCoupon(
+        self,
+        mock_stripe_plan,
+        mock_stripe_cust,
+        mock_render_template
+    ):
+        """ Test confirm_payment route if request is not a POST.
+        """
+        with self.client.session_transaction() as session:
+            session['plan'] = ''
+            session['stripe_customer'] = ''
+            session['coupon'] = ''
+
+        stripe_plan_obj = mock.Mock()
+        mock_stripe_plan.retrieve.return_value = stripe_plan_obj
+
+        stripe_cust_obj = mock.Mock()
+        mock_stripe_cust.retrieve.return_value = stripe_cust_obj
+
+        mock_render_template.return_value = u''
+
+        response = self.client.get('/signup/confirm')
+
+        mock_render_template.assert_called_once_with(
+            'signup/confirm.jinja2',
+            customer=stripe_cust_obj,
+            plan=stripe_plan_obj
+        )
+
+    @mock.patch('amber_portal.views.registration.url_for')
+    @mock.patch('amber_portal.views.registration.redirect')
+    @mock.patch('amber_portal.views.registration.ProfileForm')
+    @mock.patch('amber_portal.views.registration.current_user')
+    @mock.patch('amber_portal.views.registration.amber_api_connection')
+    def testCreateProfileValidWithImage(
+        self,
+        mock_api,
+        mock_current_user,
+        mock_profile_form,
+        mock_redirect,
+        mock_url_for
+    ):
+        """ Test create_profile route if form is valid and contains image data.
+        """
+        form_data = {
+            'address_country': 'united states',
+            'new_images': 'something.jpg,whatever.jpg'
+        }
+
+        expected_form_data = {
+            'country': 'united states'
+        }
+        session['address'] = {}
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_current_user.manufacturer_id = MFR_ID
+
+        mock_mfr = mock.MagicMock()
+        mock_client.Manufacturer.retrieve.return_value = mock_mfr
+
+        mock_form = mock.Mock()
+        mock_form.data = form_data
+        mock_profile_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = True
+        mock_form.new_images.data = 'something.jpg,whatever.jpg'
+
+        image_one = {
+            'manufacturer_id': MFR_ID,
+            'url': 'something.jpg',
+            'default': True,
+            'caption': ''
+        }
+
+        image_two = {
+            'manufacturer_id': MFR_ID,
+            'url': 'whatever.jpg',
+            'default': False,
+            'caption': ''
+        }
+
+        mock_redirect.return_value = ''
+
+        registration.create_profile()
+
+        self.assertItemsEqual(
+            mock_client.ManufacturerImage.from_dict.call_args_list,
+            [
+                mock.call(image_one),
+                mock.call(image_two)
+            ]
+        )
+
+        mock_redirect.assert_called_once_with(
+            mock_url_for(
+                '.upload_products'
+            )
+        )
+
+    @mock.patch('amber_portal.views.registration.url_for')
+    @mock.patch('amber_portal.views.registration.redirect')
+    @mock.patch('amber_portal.views.registration.ProfileForm')
+    @mock.patch('amber_portal.views.registration.current_user')
+    @mock.patch('amber_portal.views.registration.amber_api_connection')
+    def testCreateProfileValidWithNoImage(
+        self,
+        mock_api,
+        mock_current_user,
+        mock_profile_form,
+        mock_redirect,
+        mock_url_for
+    ):
+        """ Test create_profile route if form is valid and doesn't
+        contain image data.
+        """
+        form_data = {
+            'address_country': 'united states'
+        }
+
+        expected_form_data = {
+            'country': 'united states'
+        }
+        session['address'] = {}
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_current_user.manufacturer_id = MFR_ID
+
+        mock_mfr = mock.MagicMock()
+        mock_client.Manufacturer.retrieve.return_value = mock_mfr
+
+        mock_form = mock.Mock()
+        mock_form.data = form_data
+        mock_profile_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = True
+        mock_form.new_images.data = None
+
+        mock_redirect.return_value = u''
+
+        registration.create_profile()
+
+        mock_mfr.from_dict.assert_called_once_with(expected_form_data)
+
+        mock_mfr.from_dict.return_value.save.assert_called_once_with()
+
+        mock_redirect.assert_called_once_with(
+            mock_url_for(
+                '.upload_products'
+            )
+        )
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    @mock.patch('amber_portal.views.registration.ProfileForm')
+    @mock.patch('amber_portal.views.registration.current_user')
+    @mock.patch('amber_portal.views.registration.amber_api_connection')
+    def testCreateProfileNotValid(
+        self,
+        mock_api,
+        mock_current_user,
+        mock_profile_form,
+        mock_render_template
+    ):
+        """ Test create_profile route if from is not valid.
+        """
+        session['address'] = {}
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_current_user.manufacturer_id = MFR_ID
+
+        mock_mfr = mock.MagicMock()
+        mock_client.Manufacturer.retrieve.return_value = mock_mfr
+
+        mock_form = mock.Mock()
+        mock_form.data = None
+        mock_form.new_images.data = None
+        mock_profile_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = ''
+
+        registration.create_profile()
+
+        mock_render_template.assert_called_once_with(
+            'signup/profile.jinja2',
+            form=mock_form,
+            images=[]
+        )
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    def testUploadProducts(self, mock_render_template):
+        """ Test upload_products route.
+        """
+        registration.upload_products()
+
+        mock_render_template.assert_called_once_with('signup/products.jinja2')
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    @mock.patch(
+        'amber_portal.views.registration.'
+        'amber_portal.signals.user_signals.contact_me.send'
+    )
+    @mock.patch('amber_portal.views.registration.current_user')
+    def testContactMe(
+        self,
+        mock_current_user,
+        mock_user_signal,
+        mock_render_template
+    ):
+        """ Test contact_me route.
+        """
+        mock_current_user.name = NAME
+        mock_current_user.email = EMAIL
+
+        expected_email = {
+            'user_name': NAME,
+            'user_email': EMAIL
+        }
+
+        registration.contact_me()
+
+        mock_user_signal.assert_called_once_with(expected_email)
+
+        mock_render_template.assert_called_once_with(
+            'signup/contact-me.jinja2'
+        )
+
+    @mock.patch('amber_portal.views.registration.jsonify')
+    @mock.patch('amber_portal.views.registration.upload_image')
+    def testFileUpload(self, mock_upload_image, mock_jsonify):
+        """ Test file_upload route.
+        """
+        image = 'something.jpeg'
+        mock_upload_image.return_value = image
+
+        mock_jsonify.return_value = ''
+
+        resp = self.client.post(
+            '/signup/upload',
+            data={'img': (io.BytesIO(b'Some file'), 'my_image_file.jpg')}
+        )
+        self.assert200(
+            resp, 'No errors should have occurred for this request.'
+        )
+
+        self.assertTrue(mock_upload_image.called)
+
+        mock_jsonify.assert_called_once_with(
+            {'success': True, 'image_url': image}
+        )
+
+    @mock.patch('amber_portal.views.registration.render_template')
+    @mock.patch('amber_portal.views.registration.make_response')
+    def testLoading(
+        self,
+        mock_make_response,
+        mock_render_template
+    ):
+        """ Test loading route.
+        """
+        query_string = 'redirect=something'
+
+        mock_response = mock.Mock()
+        mock_make_response.return_value = mock_response
+
+        response = registration.loading()
+
+        self.assertEqual(response, mock_response)
+
+        mock_make_response.assert_called_once_with(
+            mock_render_template(
+                '/signup/loading.jinja2',
+                redirect='something'
+            )
+        )
+
+        mock_response.set_cookie.assert_called_once_with(
+            'new_user', value='true'
+        )
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -1,0 +1,373 @@
+import flask
+from amber_lib import errors
+
+from amber_portal.lib import get_current_user
+
+from .auth import authenticated, good_standing
+
+from flask import (
+    Blueprint,
+    flash,
+    jsonify,
+    redirect,
+    request,
+    render_template,
+    session,
+    url_for
+)
+
+from amber_portal.lib.s3 import upload_image
+from amber_portal.lib.utils import amber_api_connection
+from amber_portal.forms.options import (
+    OptionSetForm,
+    OptionForm,
+    generate_option_form,
+    remove_option_fields
+)
+
+app = flask.current_app
+
+current_user = get_current_user()
+
+options_view = Blueprint('options_view', __name__, template_folder='templates')
+
+
+@options_view.route('/options')
+@authenticated
+@good_standing
+def options_index():
+    api_conn = amber_api_connection()
+
+    try:
+        option_sets = api_conn.OptionSet.query()
+        if option_sets:
+            for option_set in option_sets:
+                if option_set.option_list:
+                    for option in option_set.option_list:
+                        option.name = '' if not option.name else option.name
+    except errors.NotFound:
+        option_sets = []
+
+    if 'panels' not in session:
+        session['panels'] = {}
+
+    return render_template('options/index.jinja2', sets=option_sets)
+
+
+@options_view.route('/options/new', methods=['GET', 'POST'])
+@authenticated
+@good_standing
+def set_new():
+    api_conn = amber_api_connection()
+    form = OptionSetForm()
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            data = form.data
+            images = data.pop('images')
+            data['manufacturer_id'] = current_user.manufacturer_id
+
+            option_set = api_conn.OptionSet.from_dict(data).save()
+
+            if 'option' not in session['panels']:
+                session['panels']['option'] = []
+
+            session['panels']['option'].append('option%s' % option_set.id)
+
+            if len(images) > 0:
+                image_list = images.split(',')
+
+                for image in image_list:
+                    option = api_conn.Option.from_dict(
+                        {
+                            'image': image,
+                            'kind': option_set.kind,
+                            'option_set_id': option_set.id
+                        }
+                    )
+                    option.save()
+
+                return jsonify({
+                    'success': True,
+                    'url': url_for(
+                        '.option_list_new',
+                        set_id=option_set.id,
+                        option_index=0
+                    )
+                })
+
+            return jsonify({'success': True})
+
+    return render_template('options/edit_option_set_modal.jinja2', form=form)
+
+
+@options_view.route(
+    '/options/<int:set_id>/edit',
+    methods=['GET', 'POST', 'DELETE']
+)
+@authenticated
+@good_standing
+def set_edit(set_id):
+    api_conn = amber_api_connection()
+    option_set = api_conn.OptionSet.retrieve(set_id)
+    data = option_set.to_dict()
+    form = OptionSetForm(**data)
+
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            data = form.data
+            del data['images']
+            option_set.update(data)
+            option_set.save()
+
+            return jsonify({'success': True})
+
+    if request.method == 'DELETE':
+        option_set.delete()
+
+        return jsonify({'success': True})
+
+    return render_template(
+        'options/edit_option_set_modal.jinja2',
+        form=form,
+        set=option_set
+    )
+
+
+@options_view.route('/options/<int:set_id>/confirm', methods=['GET'])
+@authenticated
+@good_standing
+def set_confirm(set_id):
+    return render_template(
+        'options/option_set_confirm_modal.jinja2',
+        set_id=set_id
+    )
+
+
+@options_view.route(
+    '/options/<int:set_id>/option/new',
+    methods=['GET', 'POST']
+)
+@authenticated
+@good_standing
+def option_new(set_id):
+    api_conn = amber_api_connection()
+    option_set = api_conn.OptionSet.retrieve(set_id)
+    form = generate_option_form(option_set.kind)
+
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            option_form = OptionForm(**form.data)
+            option = api_conn.Option
+            option.update(option_form.data).save()
+            extended_data = remove_option_fields(form.data)
+            if extended_data:
+                option.update({'extended_data': extended_data}).save()
+
+            flash(u'Option has been created.', 'success')
+
+            return redirect(url_for('.options_index'))
+
+    return render_template(
+        'options/new_option.jinja2',
+        form=form,
+        set=option_set
+    )
+
+
+@options_view.route(
+    '/options/<int:set_id>/option-list/<int:option_index>',
+    methods=['GET']
+)
+@authenticated
+@good_standing
+def option_list_new(set_id, option_index, form=None):
+    api_conn = amber_api_connection()
+    option_set = api_conn.OptionSet.retrieve(set_id)
+    option_list_len = 0
+    if option_set.option_list:
+        option_list_len = len(option_set.option_list)
+    if option_index >= option_list_len:
+        return redirect(url_for('.options_index'))
+
+    option = option_set.option_list[option_index]
+
+    form = generate_option_form(option_set.kind, option.to_dict())
+
+    return render_template(
+        'options/edit_option.jinja2',
+        form=form,
+        option=option,
+        set=option_set,
+        index=option_index
+    )
+
+
+@options_view.route(
+    '/options/<int:set_id>/option-list/<int:option_id>/save',
+    methods=['POST']
+)
+@authenticated
+@good_standing
+def option_list_new_save(set_id, option_id, next=None):
+    api_conn = amber_api_connection()
+    option_set = api_conn.OptionSet.retrieve(set_id)
+    form = generate_option_form(option_set.kind)
+
+    if form.validate_on_submit():
+        import pudb; pu.db
+        option = api_conn.Option.retrieve(option_id)
+        option_form = OptionForm(**form.data)
+        data = dict(**option_form.data)
+        form_data = dict(**form.data)
+        extended_data = remove_option_fields(form_data, option)
+        if extended_data:
+            data['extended_data'] = extended_data
+        option.update(data).save()
+
+        return redirect(
+            url_for(
+                '.option_list_new',
+                set_id=set_id,
+                option_index=request.args.get('next')
+            )
+        )
+    else:
+        option_index = int(request.args.get('next')) - 1
+        option = option_set.option_list[option_index]
+
+        return render_template(
+            'options/edit_option.jinja2',
+            form=form,
+            option=option,
+            set=option_set,
+            index=option_index
+        )
+
+
+@options_view.route(
+    '/optionset/<string:set_kind>/option/<int:option_id>/edit',
+    methods=['GET']
+)
+@authenticated
+@good_standing
+def option_edit(set_kind, option_id):
+    api_conn = amber_api_connection()
+    option = api_conn.Option.retrieve(option_id)
+
+    form = generate_option_form(set_kind, option.to_dict())
+
+    return render_template(
+        'options/edit_option.jinja2',
+        form=form,
+        set_kind=set_kind,
+        option=option
+    )
+
+
+@options_view.route(
+    '/optionset/<string:set_kind>/option/<int:option_id>/edit',
+    methods=['POST']
+)
+@authenticated
+@good_standing
+def option_save(set_kind, option_id):
+    api_conn = amber_api_connection()
+    option = api_conn.Option.retrieve(option_id)
+    form = generate_option_form(set_kind, option.to_dict())
+
+    if form.validate_on_submit():
+        option_form = OptionForm(**form.data)
+        data = dict(**option_form.data)
+        form_data = dict(**form.data)
+        extended_data = remove_option_fields(form_data, option)
+        if extended_data:
+            data['extended_data'] = extended_data
+        option.update(data).save()
+
+        flash(u'Option has been saved.', 'success')
+
+        return redirect(url_for('.options_index'))
+
+    return render_template(
+        'options/edit_option.jinja2',
+        form=form,
+        set_kind=set_kind,
+        option=option
+    )
+
+
+@options_view.route(
+    '/optionset/<string:set_kind>/option/<int:option_id>/delete',
+    methods=['DELETE']
+)
+@authenticated
+@good_standing
+def option_delete(set_kind, option_id):
+    api_conn = amber_api_connection()
+    api_conn.Option.retrieve(option_id).delete()
+
+    return jsonify({'success': True})
+
+
+@options_view.route(
+    '/optionset/<string:set_kind>/option/<int:option_id>/confirm',
+    methods=['GET']
+)
+@authenticated
+@good_standing
+def option_confirm(set_kind, option_id):
+    return render_template(
+        'options/option_confirm_modal.jinja2',
+        set_kind=set_kind,
+        option_id=option_id
+    )
+
+
+@options_view.route(
+    '/optionset/<string:set_kind>/option/<int:option_id>',
+    methods=['GET']
+)
+@authenticated
+@good_standing
+def option_get(set_kind, option_id):
+    api_conn = amber_api_connection()
+    option = api_conn.Option.retrieve(option_id)
+
+    return render_template('product/option_modal.jinja2', option=option)
+
+
+@options_view.route('/options/upload', methods=['POST'])
+@authenticated
+def upload():
+    s3_bucket = app.config['S3_BUCKET']
+
+    image = request.files['img']
+    image_url = upload_image(image, s3_bucket=s3_bucket)
+    return jsonify({'success': True, 'image_url': image_url})
+
+
+@options_view.route('/options/panels/add', methods=['PUT'])
+@authenticated
+def panels_add():
+    panel = request.json['panel']
+
+    if 'panels' not in session:
+        session['panels'] = {}
+
+    if 'option' not in session['panels']:
+        session['panels']['option'] = []
+
+    session['panels']['option'].append(panel)
+
+    return jsonify({'success': True})
+
+
+@options_view.route('/options/panels/remove', methods=['PUT'])
+@authenticated
+def panels_remove():
+    panel = request.json['panel']
+
+    if panel in session['panels']['option']:
+        session['panels']['option'].remove(panel)
+
+    return jsonify({'success': True})

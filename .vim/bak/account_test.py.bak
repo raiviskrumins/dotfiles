@@ -1,0 +1,2821 @@
+import mock
+
+import os
+import sys
+import json
+
+from _io import BytesIO
+import stripe
+from stripe.error import CardError
+
+import unittest
+
+from flask import g
+from flask.ext.testing import TestCase as FlaskTestCase
+
+from werkzeug.exceptions import NotFound
+sys.path.insert(
+    0, os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from amber_lib import AmberError
+from amber_portal import app
+from amber_portal.views import account as account_view
+
+
+MOCK_PLAN_ID = 'mock_plan'
+MOCK_CUSTOMER_ID = 'mock_customer'
+MOCK_MANUFACTURER_ID = 42
+MOCK_PHONE_NUMBER = '1234567890'
+
+
+class AccountViewTests(FlaskTestCase):
+
+    def create_app(self):
+        app.config.from_object('config.TestingConfig')
+        return app
+
+    def setUp(self):
+        self.client = self.app.test_client()
+        self._ctx = self.app.test_request_context()
+        self._ctx.push()
+
+    @mock.patch('amber_portal.views.account.render_template')
+    def testPaymentHistoryNoUser(self, mock_render_template):
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = None
+        g.user = mock_user
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.get('/account/payment_history')
+
+        mock_render_template.assert_called_once_with(
+            'settings/payment_history.jinja2',
+            invoices=None
+        )
+        self.assert200(resp)
+
+    @mock.patch('amber_portal.views.account.stripe.Invoice.all')
+    @mock.patch('amber_portal.views.account.render_template')
+    def testPaymentHistoryUserExists(
+            self,
+            mock_render_template,
+            mock_invoice_all
+    ):
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_invoice_list = ['mock', 'invoices']
+        mock_invoice_all.return_value = mock_invoice_list
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.get('/account/payment_history')
+
+        mock_render_template.assert_called_once_with(
+            'settings/payment_history.jinja2',
+            invoices=mock_invoice_list
+        )
+        mock_invoice_all.assert_called_once_with(
+            customer=MOCK_CUSTOMER_ID
+        )
+        self.assert200(resp)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.stripe.Plan.all')
+    def testBillingNoCustomer(self, mock_plan_all, mock_render_template):
+        mock_plan_list = ['mock', 'plan', 'list']
+        mock_plan_all.return_value = mock_plan_list
+
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = None
+        g.user = mock_user
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.get('/account/billing')
+
+        self.assert200(resp)
+
+        mock_render_template.assert_called_once_with(
+            'settings/billing.jinja2',
+            plans=mock_plan_list
+        )
+
+        mock_plan_all.assert_called_once_with()
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.stripe.Invoice.all')
+    @mock.patch('amber_portal.views.account.stripe.Customer.retrieve')
+    def testBillingActiveSubscription(
+            self,
+            mock_customer_retrieve,
+            mock_invoice_all,
+            mock_render_template
+    ):
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_invoice_list = [
+            {
+                'amount_due': 0
+            },
+            {
+                'amount_due': 0
+            }
+        ]
+        mock_invoice_all.return_value.data = mock_invoice_list
+
+        mock_customer = mock.Mock()
+        mock_customer.subscriptions = mock.Mock()
+        mock_customer.subscriptions.total_count = 1
+        mock_customer_retrieve.return_value = mock_customer
+
+        mock_subscription_data = mock.Mock()
+        mock_subscription_data.cancel_at_period_end = False
+        mock_customer.subscriptions.data = [mock_subscription_data]
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.get('/account/billing')
+
+        self.assert200(resp)
+
+        mock_render_template.assert_called_once_with(
+            'settings/billing.jinja2',
+            plans=None,
+            subscription=mock_subscription_data,
+            customer=mock_customer,
+            invoices=None
+        )
+
+        mock_customer_retrieve.assert_called_once_with(MOCK_CUSTOMER_ID)
+
+        mock_invoice_all.assert_called_once_with(
+            limit=6,
+            customer=MOCK_CUSTOMER_ID
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.stripe.Invoice.all')
+    @mock.patch('amber_portal.views.account.stripe.Plan.retrieve')
+    @mock.patch('amber_portal.views.account.stripe.Customer.retrieve')
+    def testBillingCanceledSubscription(
+            self,
+            mock_customer_retrieve,
+            mock_plan_retrieve,
+            mock_invoice_all,
+            mock_render_template
+    ):
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_invoice_list = [
+            {
+                'amount_due': 10
+            },
+            {
+                'amount_due': 0
+            }
+        ]
+        mock_invoice_all.return_value.data = mock_invoice_list
+
+        mock_customer = mock.Mock()
+        mock_customer.subscriptions = mock.Mock()
+        mock_customer.subscriptions.total_count = 1
+        mock_customer_retrieve.return_value = mock_customer
+
+        mock_subscription_data = mock.Mock()
+        mock_subscription_data.cancel_at_period_end = True
+        mock_customer.subscriptions.data = [mock_subscription_data]
+
+        mock_plan = mock.Mock()
+        mock_plan_retrieve.return_value = mock_plan
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.get('/account/billing')
+
+        self.assert200(resp)
+
+        mock_render_template.assert_called_once_with(
+            'settings/billing.jinja2',
+            plans=[mock_plan],
+            subscription=mock_subscription_data,
+            customer=mock_customer,
+            invoices=mock_invoice_all.return_value
+        )
+
+        mock_plan_retrieve.assert_called_once_with(
+            account_view.REACTIVATE_PLAN_ID
+        )
+
+        mock_invoice_all.assert_called_once_with(
+            limit=6,
+            customer=MOCK_CUSTOMER_ID
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.stripe.Invoice.all')
+    @mock.patch('amber_portal.views.account.stripe.Plan.retrieve')
+    @mock.patch('amber_portal.views.account.stripe.Customer.retrieve')
+    def testBillingExpiredSubscription(
+            self,
+            mock_customer_retrieve,
+            mock_plan_retrieve,
+            mock_invoice_all,
+            mock_render_template
+    ):
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_invoice_list = []
+        mock_invoice_all.return_value.data = mock_invoice_list
+
+        mock_customer = mock.Mock()
+        mock_customer.subscriptions = mock.Mock()
+        mock_customer.subscriptions.data = []
+        mock_customer.subscriptions.total_count = 0
+        mock_customer_retrieve.return_value = mock_customer
+
+        mock_plan = mock.Mock()
+        mock_plan_retrieve.return_value = mock_plan
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.get('/account/billing')
+
+        self.assert200(resp)
+
+        mock_render_template.assert_called_once_with(
+            'settings/billing.jinja2',
+            plans=[mock_plan],
+            subscription=None,
+            customer=mock_customer,
+            invoices=None
+        )
+
+        mock_plan_retrieve.assert_called_once_with(
+            account_view.REACTIVATE_PLAN_ID
+        )
+
+        mock_invoice_all.assert_called_once_with(
+            limit=6,
+            customer=MOCK_CUSTOMER_ID
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.BillingForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.stripe')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testSetupCustomerGetNoStripeID(
+            self,
+            mock_api,
+            mock_stripe,
+            mock_current_user,
+            mock_billing_form,
+            mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_stripe.Plan = mock.Mock()
+        mock_plan = mock.Mock()
+        mock_stripe.Plan.retrieve.return_value = mock_plan
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_current_user.stripe_customer = None
+        mock_current_user.name = 'Mockname'
+
+        mock_mfr = {
+            'street_address_1': 'mock addr 1',
+            'street_address_2': 'mock addr 2',
+            'city': 'mockville',
+            'state': 'Mockesota',
+            'zipcode': '00000',
+            'phone': MOCK_PHONE_NUMBER
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_form = mock.Mock()
+        mock_billing_form.return_value = mock_form
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.get('/account/billing/%s/setup' % MOCK_PLAN_ID)
+
+        self.assert200(resp)
+
+        mock_render_template.assert_called_once_with(
+            'settings/credit_info.jinja2',
+            plan=mock_plan,
+            form=mock_form,
+            subscription=None
+        )
+
+        mock_billing_form.assert_called_once_with(prefix='billing')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_stripe.Plan.retrieve.assert_called_once_with(MOCK_PLAN_ID)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.BillingForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.stripe')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testSetupCustomerGetWithStripeID(
+            self,
+            mock_api,
+            mock_stripe,
+            mock_current_user,
+            mock_billing_form,
+            mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_stripe.Plan = mock.Mock()
+        mock_plan = mock.Mock()
+        mock_stripe.Plan.retrieve.return_value = mock_plan
+
+        mock_stripe.Customer = mock.Mock()
+        mock_customer = mock.Mock()
+        mock_stripe.Customer.retrieve.return_value = mock_customer
+        mock_subscription_data = mock.Mock()
+        mock_subscriptions = mock.Mock()
+        mock_subscriptions.data = [mock_subscription_data]
+        mock_customer.subscriptions.all.return_value = mock_subscriptions
+        mock_customer.sources.data = []
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_current_user.stripe_customer = MOCK_CUSTOMER_ID
+        mock_current_user.name = 'Mockname'
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_mfr = {
+            'street_address_1': 'mock addr 1',
+            'street_address_2': 'mock addr 2',
+            'city': 'mockville',
+            'state': 'Mockesota',
+            'zipcode': '00000',
+            'phone': MOCK_PHONE_NUMBER
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_form = mock.Mock()
+        mock_billing_form.return_value = mock_form
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.get('/account/billing/%s/setup' % MOCK_PLAN_ID)
+
+        self.assert200(resp)
+
+        mock_render_template.assert_called_once_with(
+            'settings/credit_info.jinja2',
+            plan=mock_plan,
+            form=mock_form,
+            subscription=mock_subscription_data
+        )
+
+        mock_billing_form.assert_called_once_with(prefix='billing')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_stripe.Customer.retrieve.assert_called_once_with(MOCK_CUSTOMER_ID)
+
+        mock_customer.subscriptions.all.assert_called_once_with(limit=1)
+
+        mock_stripe.Plan.retrieve.assert_called_once_with(MOCK_PLAN_ID)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.BillingForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.stripe')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testSetupCustomerPostInvalidWithStripeID(
+            self,
+            mock_api,
+            mock_stripe,
+            mock_current_user,
+            mock_billing_form,
+            mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_stripe.Plan = mock.Mock()
+        mock_plan = mock.Mock()
+        mock_stripe.Plan.retrieve.return_value = mock_plan
+
+        mock_stripe.Customer = mock.Mock()
+        mock_customer = mock.Mock()
+        mock_stripe.Customer.retrieve.return_value = mock_customer
+        mock_subscription_data = mock.Mock()
+        mock_subscriptions = mock.Mock()
+        mock_subscriptions.data = [mock_subscription_data]
+        mock_customer.subscriptions.all.return_value = mock_subscriptions
+        mock_customer.sources.data = []
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_current_user.stripe_customer = MOCK_CUSTOMER_ID
+        mock_current_user.name = 'Mockname'
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_mfr = {
+            'street_address_1': 'mock addr 1',
+            'street_address_2': 'mock addr 2',
+            'city': 'mockville',
+            'state': 'Mockesota',
+            'zipcode': '00000',
+            'phone': MOCK_PHONE_NUMBER
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_form = mock.Mock()
+        mock_form.validate_on_submit.return_value = False
+        mock_billing_form.return_value = mock_form
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.post('/account/billing/%s/setup' % MOCK_PLAN_ID)
+
+        self.assert200(resp)
+
+        mock_render_template.assert_called_once_with(
+            'settings/credit_info.jinja2',
+            plan=mock_plan,
+            form=mock_form,
+            subscription=mock_subscription_data
+        )
+
+        mock_billing_form.assert_called_once_with(prefix='billing')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_stripe.Customer.retrieve.assert_called_once_with(MOCK_CUSTOMER_ID)
+
+        mock_customer.subscriptions.all.assert_called_once_with(limit=1)
+
+        mock_stripe.Plan.retrieve.assert_called_once_with(MOCK_PLAN_ID)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.BillingForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.stripe')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testSetupCustomerPostInvalidNoStripeID(
+            self,
+            mock_api,
+            mock_stripe,
+            mock_current_user,
+            mock_billing_form,
+            mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_stripe.Plan = mock.Mock()
+        mock_plan = mock.Mock()
+        mock_stripe.Plan.retrieve.return_value = mock_plan
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_current_user.stripe_customer = None
+        mock_current_user.name = 'Mockname'
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_mfr = {
+            'street_address_1': 'mock addr 1',
+            'street_address_2': 'mock addr 2',
+            'city': 'mockville',
+            'state': 'Mockesota',
+            'zipcode': '00000',
+            'phone': MOCK_PHONE_NUMBER
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_form = mock.Mock()
+        mock_form.validate_on_submit.return_value = False
+        mock_billing_form.return_value = mock_form
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.post('/account/billing/%s/setup' % MOCK_PLAN_ID)
+
+        self.assert200(resp)
+
+        mock_render_template.assert_called_once_with(
+            'settings/credit_info.jinja2',
+            plan=mock_plan,
+            form=mock_form,
+            subscription=None
+        )
+
+        mock_billing_form.assert_called_once_with(prefix='billing')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_stripe.Plan.retrieve.assert_called_once_with(MOCK_PLAN_ID)
+
+    @mock.patch('amber_portal.views.account.url_for')
+    @mock.patch('amber_portal.views.account.BillingForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.stripe')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testSetupCustomerPostValidWithStripeIDWithSubscription(
+            self,
+            mock_api,
+            mock_stripe,
+            mock_current_user,
+            mock_billing_form,
+            mock_url_for
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_stripe.Plan = mock.Mock()
+        mock_plan = mock.Mock()
+        mock_stripe.Plan.retrieve.return_value = mock_plan
+
+        mock_stripe.Customer = mock.Mock()
+        mock_customer = mock.Mock()
+        mock_stripe.Customer.retrieve.return_value = mock_customer
+
+        mock_subscription_data = mock.Mock()
+        mock_subscriptions = mock.Mock()
+        mock_subscriptions.data = [mock_subscription_data]
+        mock_customer.subscriptions.all.return_value = mock_subscriptions
+        mock_customer.sources.data = []
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_current_user.stripe_customer = MOCK_CUSTOMER_ID
+        mock_current_user.name = 'Mockname'
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_mfr = {
+            'street_address_1': 'mock addr 1',
+            'street_address_2': 'mock addr 2',
+            'city': 'mockville',
+            'state': 'Mockesota',
+            'zipcode': '00000',
+            'phone': MOCK_PHONE_NUMBER
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_form = mock.Mock()
+        mock_form.validate_on_submit.return_value = True
+        mock_form.data = mock_mfr
+        mock_form.data['address_country'] = 'US'
+        mock_billing_form.return_value = mock_form
+
+        expected_card_data = {
+            'address_line2': 'mock addr 2',
+            'city': 'mockville',
+            'address_city': 'mockville',
+            'address_line1': 'mock addr 1',
+            'object': 'card',
+            'street_address_1': 'mock addr 1',
+            'zipcode': '00000',
+            'street_address_2': 'mock addr 2',
+            'phone': MOCK_PHONE_NUMBER,
+            'state': 'Mockesota',
+            'address_state': 'Mockesota',
+            'address_zip': '00000',
+            'address_country': 'US'
+        }
+
+        mock_customer.subscriptions.total_count = 1
+        old_card = mock.Mock()
+        mock_customer.sources.data = [old_card]
+        mock_customer.sources.all.return_value.data = [old_card]
+        new_card = mock.Mock()
+        mock_customer.sources.create.return_value = new_card
+
+        mock_url_for.return_value = '/mock/billing/confirmation'
+
+        resp = self.client.post('/account/billing/%s/setup' % MOCK_PLAN_ID)
+        self.assertEqual(
+            resp.status_code,
+            302,
+            msg='This should return a redirect response.'
+        )
+
+        mock_url_for.assert_called_once_with('.billing_confirm')
+
+        old_card.delete.assert_called_once_with()
+
+        mock_customer.sources.create.assert_called_once_with(
+            source=expected_card_data
+        )
+        mock_customer.sources.all.assert_called_once_with(object='card')
+
+        self.assertItemsEqual(
+            [
+                mock.call.Plan.retrieve(MOCK_PLAN_ID),
+                mock.call.Customer.retrieve(MOCK_CUSTOMER_ID)
+            ],
+            mock_stripe.method_calls
+        )
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess['billing_plan_id'], MOCK_PLAN_ID)
+
+        mock_billing_form.assert_called_once_with(prefix='billing')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+    @mock.patch('amber_portal.views.account.url_for')
+    @mock.patch('amber_portal.views.account.BillingForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.stripe')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testSetupCustomerPostValidNoStripeID(
+            self,
+            mock_api,
+            mock_stripe,
+            mock_current_user,
+            mock_billing_form,
+            mock_url_for
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_stripe.Plan = mock.Mock()
+        mock_plan = mock.Mock()
+        mock_stripe.Plan.retrieve.return_value = mock_plan
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_current_user.stripe_customer = None
+        mock_current_user.name = 'Mockname'
+        mock_current_user.email = 'mock@mock.mock'
+
+        mock_mfr = {
+            'street_address_1': 'mock addr 1',
+            'street_address_2': 'mock addr 2',
+            'city': 'mockville',
+            'state': 'Mockesota',
+            'zipcode': '00000',
+            'phone': MOCK_PHONE_NUMBER
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_form = mock.Mock()
+        mock_form.validate_on_submit.return_value = True
+        mock_form.data = mock_mfr
+        mock_form.data['address_country'] = 'US'
+        mock_billing_form.return_value = mock_form
+
+        expected_card_data = {
+            'address_line2': 'mock addr 2',
+            'city': 'mockville',
+            'address_city': 'mockville',
+            'address_line1': 'mock addr 1',
+            'object': 'card',
+            'street_address_1': 'mock addr 1',
+            'zipcode': '00000',
+            'street_address_2': 'mock addr 2',
+            'phone': MOCK_PHONE_NUMBER,
+            'state': 'Mockesota',
+            'address_state': 'Mockesota',
+            'address_zip': '00000',
+            'address_country': 'US'
+        }
+
+        mock_customer = mock.Mock()
+        mock_customer.id = MOCK_CUSTOMER_ID
+        mock_stripe.Customer.create.return_value = mock_customer
+        mock_customer.sources.all.return_value.data = []
+        new_card = mock.Mock()
+        mock_customer.sources.create.return_value = new_card
+
+        mock_url_for.return_value = '/mock/billing/confirmation'
+
+        resp = self.client.post('/account/billing/%s/setup' % MOCK_PLAN_ID)
+
+        self.assertEqual(
+            resp.status_code,
+            302,
+            msg='This should return a redirect response.'
+        )
+
+        mock_url_for.assert_called_once_with('.billing_confirm')
+
+        mock_customer.sources.create.assert_called_once_with(
+            source=expected_card_data
+        )
+        mock_customer.sources.all.assert_called_once_with(object='card')
+
+        mock_current_user.save.assert_called_once_with()
+        self.assertEqual(mock_current_user.stripe_customer, MOCK_CUSTOMER_ID)
+
+        self.assertItemsEqual(
+            [
+                mock.call.Plan.retrieve(MOCK_PLAN_ID),
+                mock.call.Customer.create(
+                    email='mock@mock.mock',
+                    metadata={
+                        'phone': MOCK_PHONE_NUMBER
+                    }
+                )
+            ],
+            mock_stripe.method_calls
+        )
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess['billing_plan_id'], MOCK_PLAN_ID)
+
+        mock_billing_form.assert_called_once_with(prefix='billing')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+    @mock.patch('amber_portal.views.account.url_for')
+    @mock.patch('amber_portal.views.account.BillingForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.stripe')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testSetupCustomerPostValidWithStripeIDNoSubscription(
+            self,
+            mock_api,
+            mock_stripe,
+            mock_current_user,
+            mock_billing_form,
+            mock_url_for
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_stripe.Plan = mock.Mock()
+        mock_plan = mock.Mock()
+        mock_stripe.Plan.retrieve.return_value = mock_plan
+
+        mock_stripe.Customer = mock.Mock()
+        mock_customer = mock.Mock()
+        mock_stripe.Customer.retrieve.return_value = mock_customer
+
+        mock_subscription_data = mock.Mock()
+        mock_subscriptions = mock.Mock()
+        mock_subscriptions.data = [mock_subscription_data]
+        mock_customer.subscriptions.all.return_value = mock_subscriptions
+        mock_customer.sources.data = []
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_current_user.stripe_customer = MOCK_CUSTOMER_ID
+        mock_current_user.name = 'Mockname'
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_mfr = {
+            'street_address_1': 'mock addr 1',
+            'street_address_2': 'mock addr 2',
+            'city': 'mockville',
+            'state': 'Mockesota',
+            'zipcode': '00000',
+            'phone': MOCK_PHONE_NUMBER
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_form = mock.Mock()
+        mock_form.validate_on_submit.return_value = True
+        mock_form.data = mock_mfr
+        mock_form.data['address_country'] = 'US'
+        mock_billing_form.return_value = mock_form
+
+        expected_card_data = {
+            'address_line2': 'mock addr 2',
+            'city': 'mockville',
+            'address_city': 'mockville',
+            'address_line1': 'mock addr 1',
+            'object': 'card',
+            'street_address_1': 'mock addr 1',
+            'zipcode': '00000',
+            'street_address_2': 'mock addr 2',
+            'phone': MOCK_PHONE_NUMBER,
+            'state': 'Mockesota',
+            'address_state': 'Mockesota',
+            'address_zip': '00000',
+            'address_country': 'US'
+        }
+
+        mock_customer.subscriptions.total_count = 0
+        old_card = mock.Mock()
+        mock_customer.sources.all.return_value.data = [old_card]
+        new_card = mock.Mock()
+        mock_customer.sources.create.return_value = new_card
+
+        mock_url_for.return_value = '/mock/billing/confirmation'
+
+        resp = self.client.post('/account/billing/%s/setup' % MOCK_PLAN_ID)
+
+        self.assertEqual(
+            resp.status_code,
+            302,
+            msg='This should return a redirect response.'
+        )
+
+        mock_url_for.assert_called_once_with('.billing_confirm')
+
+        old_card.delete.assert_called_once_with()
+
+        mock_customer.sources.create.assert_called_once_with(
+            source=expected_card_data
+        )
+        mock_customer.sources.all.assert_called_once_with(object='card')
+
+        self.assertItemsEqual(
+            [
+                mock.call.Plan.retrieve(MOCK_PLAN_ID),
+                mock.call.Customer.retrieve(MOCK_CUSTOMER_ID)
+            ],
+            mock_stripe.method_calls
+        )
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(
+                sess['billing_plan_id'],
+                MOCK_PLAN_ID
+            )
+
+        mock_billing_form.assert_called_once_with(prefix='billing')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.BillingForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.stripe.Customer')
+    @mock.patch('amber_portal.views.account.stripe.Plan')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testSetupCustomerPostValidWithStripeIDThrowsCardError(
+            self,
+            mock_api,
+            mock_stripe_plan,
+            mock_stripe_customer,
+            mock_current_user,
+            mock_billing_form,
+            mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_plan = mock.Mock()
+        mock_stripe_plan.retrieve.return_value = mock_plan
+
+        mock_customer = mock.Mock()
+        mock_stripe_customer.retrieve.return_value = mock_customer
+
+        mock_subscription_data = mock.Mock()
+        mock_subscriptions = mock.Mock()
+        mock_subscriptions.data = [mock_subscription_data]
+        mock_customer.subscriptions.all.return_value = mock_subscriptions
+        mock_customer.sources.data = []
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_current_user.stripe_customer = MOCK_CUSTOMER_ID
+        mock_current_user.name = 'Mockname'
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_mfr = {
+            'street_address_1': 'mock addr 1',
+            'street_address_2': 'mock addr 2',
+            'city': 'mockville',
+            'state': 'Mockesota',
+            'zipcode': '00000',
+            'phone': MOCK_PHONE_NUMBER
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_form = mock.Mock()
+        mock_form.validate_on_submit.return_value = True
+        mock_form.data = mock_mfr
+        mock_form.data['address_country'] = 'US'
+        mock_billing_form.return_value = mock_form
+
+        expected_card_data = {
+            'address_line2': 'mock addr 2',
+            'city': 'mockville',
+            'address_city': 'mockville',
+            'address_line1': 'mock addr 1',
+            'object': 'card',
+            'street_address_1': 'mock addr 1',
+            'zipcode': '00000',
+            'street_address_2': 'mock addr 2',
+            'phone': MOCK_PHONE_NUMBER,
+            'state': 'Mockesota',
+            'address_state': 'Mockesota',
+            'address_zip': '00000',
+            'address_country': 'US'
+        }
+
+        mock_customer.subscriptions.total_count = 1
+        mock_customer.sources.all.return_value.data = []
+
+        mock_error = CardError('Generic Card Error!', 'param', 'invalid_cvc')
+
+        def create_side_effect(source=None):
+            raise mock_error
+        mock_customer.sources.create.side_effect = create_side_effect
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.post('/account/billing/%s/setup' % MOCK_PLAN_ID)
+
+        self.assert200(resp)
+
+        mock_render_template.assert_called_once_with(
+            'settings/credit_info.jinja2',
+            plan=mock_plan,
+            form=mock_form,
+            subscription=mock_subscription_data
+        )
+
+        self.assertItemsEqual(
+            [
+                mock.call.validate_on_submit(),
+                mock.call.cvc.errors.append(mock_error)
+            ],
+            mock_form.method_calls
+        )
+
+        mock_customer.sources.create.assert_called_once_with(
+            source=expected_card_data
+        )
+        mock_customer.sources.all.assert_called_once_with(object='card')
+
+        self.assertItemsEqual(
+            [
+                mock.call.retrieve(MOCK_CUSTOMER_ID)
+            ],
+            mock_stripe_customer.method_calls
+        )
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(
+                sess['billing_plan_id'],
+                MOCK_PLAN_ID
+            )
+
+        mock_billing_form.assert_called_once_with(prefix='billing')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_stripe_plan.retrieve.assert_called_with(MOCK_PLAN_ID)
+
+    @mock.patch('amber_portal.views.account.redirect')
+    @mock.patch('amber_portal.views.account.url_for')
+    @mock.patch('amber_portal.views.account.current_user')
+    def testBillingConfirmNoStripeID(
+            self,
+            mock_current_user,
+            mock_url_for,
+            mock_redirect
+    ):
+        mock_current_user.stripe_customer = None
+
+        mock_url_for.return_value = 'some/url'
+        mock_redirect.return_value = u''
+
+        resp = self.client.get('/account/billing/confirm')
+
+        mock_url_for.assert_called_once_with('.billing')
+
+        mock_redirect.assert_called_once_with('some/url')
+
+        self.assert200(resp)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.stripe')
+    def testBillingConfirmGetWithStripeID(
+            self,
+            mock_stripe,
+            mock_current_user,
+            mock_render_template
+    ):
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+        mock_current_user.stripe_customer = MOCK_CUSTOMER_ID
+
+        mock_customer = mock.Mock()
+        mock_stripe.Customer.retrieve.return_value = mock_customer
+
+        with self.client.session_transaction() as sess:
+            sess['billing_plan_id'] = MOCK_PLAN_ID
+
+        mock_plan = mock.Mock()
+        mock_stripe.Plan.retrieve.return_value = mock_plan
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.get('/account/billing/confirm')
+
+        mock_stripe.Customer.retrieve.assert_called_once_with(MOCK_CUSTOMER_ID)
+
+        mock_stripe.Plan.retrieve.assert_called_once_with(MOCK_PLAN_ID)
+
+        mock_render_template.asset_called_once_with(
+            'settings/billing_confirm.jinja2',
+            plan=mock_plan,
+            customer=mock_customer
+        )
+
+        self.assert200(resp)
+
+    @mock.patch('amber_portal.views.account.redirect')
+    @mock.patch('amber_portal.views.account.url_for')
+    @mock.patch('amber_portal.views.account.flash')
+    @mock.patch('amber_portal.views.account.stripe.Customer')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.stripe.Plan')
+    def testBillingConfirmPostWithStripeID(
+            self,
+            mock_stripe_plan,
+            mock_current_user,
+            mock_stripe_customer,
+            mock_flash,
+            mock_url_for,
+            mock_redirect
+    ):
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_customer = mock.Mock()
+
+        mock_status = mock.Mock()
+        mock_status.statuc = 404
+
+        mock_customer.subscriptions.data = [mock_status]
+        mock_stripe_customer.retrieve.return_value = mock_customer
+
+        with self.client.session_transaction() as sess:
+            sess['billing_plan_id'] = MOCK_PLAN_ID
+
+        mock_plan = mock.Mock()
+        mock_stripe_plan.retrieve.return_value = mock_plan
+
+        mock_current_user.stripe_customer = MOCK_CUSTOMER_ID
+
+        mock_url_for.return_value = 'some url'
+        mock_redirect.return_value = u'some site'
+
+        self.client.post('/account/billing/confirm')
+
+        with self.client.session_transaction() as sess:
+            self.assertIn('account_status', sess)
+
+        mock_stripe_customer.retrieve.assert_called_once_with(MOCK_CUSTOMER_ID)
+
+        mock_stripe_plan.retrieve.assert_called_once_with(MOCK_PLAN_ID)
+
+        mock_customer.subscriptions.create.assert_called_with(
+            plan=MOCK_PLAN_ID
+        )
+
+        mock_flash.assert_called_once_with(
+            'Thank you for your subscription!',
+            'success'
+        )
+        self.assertTrue(mock_flash.called)
+
+        mock_url_for.assert_called_once_with('.billing')
+        mock_redirect.assert_called_once_with('some url')
+
+    @mock.patch('amber_portal.views.account.redirect')
+    @mock.patch('amber_portal.views.account.url_for')
+    @mock.patch('amber_portal.views.account.flash')
+    @mock.patch('amber_portal.views.account.stripe.Customer')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.stripe.Plan')
+    def testBillingConfirmPostWithStripeIDThrowsCardError(
+            self,
+            mock_stripe_plan,
+            mock_current_user,
+            mock_stripe_customer,
+            mock_flash,
+            mock_url_for,
+            mock_redirect
+    ):
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_customer = mock.Mock()
+        mock_stripe_customer.retrieve.return_value = mock_customer
+
+        with self.client.session_transaction() as sess:
+            sess['billing_plan_id'] = MOCK_PLAN_ID
+
+        mock_plan = mock.Mock()
+        mock_stripe_plan.retrieve.return_value = mock_plan
+
+        mock_current_user.stripe_customer = MOCK_CUSTOMER_ID
+
+        mock_error = CardError('Generic Card Error!', 'param', 'code')
+        mock_error.json_body = {
+            'error': {
+                'message': 'Generic Card Error Message!'
+            }
+        }
+
+        def create_side_effect(plan=None):
+            raise mock_error
+        mock_customer.subscriptions.create.side_effect = create_side_effect
+
+        mock_url_for.return_value = 'some/url'
+        mock_redirect.return_value = u'some site'
+
+        self.client.post('/account/billing/confirm')
+
+        mock_stripe_customer.retrieve.assert_called_once_with(MOCK_CUSTOMER_ID)
+
+        mock_stripe_plan.retrieve.assert_called_once_with(MOCK_PLAN_ID)
+
+        mock_customer.subscriptions.create.assert_called_with(
+            plan=MOCK_PLAN_ID
+        )
+
+        mock_flash.assert_called_once_with(
+            'Generic Card Error Message!',
+            'danger'
+        )
+
+        mock_url_for.assert_called_once_with(
+            'setup_customer',
+            plan_id=MOCK_PLAN_ID
+        )
+        mock_redirect.assert_called_once_with('some/url')
+
+    @mock.patch('amber_portal.views.account.render_template')
+    def testAccountCancelConfirmNoStripeID(self, mock_render_template):
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = None
+        g.user = mock_user
+
+        mock_render_template.return_value = u'some site'
+
+        self.client.get('/account/cancel/confirm')
+
+        mock_render_template.assert_called_once_with(
+            'settings/cancel_account_modal.jinja2',
+            expiration_date=None
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.stripe.Customer')
+    def testAccountCancelConfirmWithStripeID(
+            self,
+            mock_stripe_customer,
+            mock_render_template
+    ):
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_customer = mock.Mock()
+        mock_stripe_customer.retrieve.return_value = mock_customer
+
+        mock_subscriptions = {
+            'data': [
+                {
+                    'current_period_end': 1337
+                }
+            ]
+        }
+        mock_customer.subscriptions.all.return_value = mock_subscriptions
+
+        mock_render_template.return_value = u'some site'
+
+        self.client.get('/account/cancel/confirm')
+
+        mock_stripe_customer.retrieve.assert_called_once_with(MOCK_CUSTOMER_ID)
+
+        mock_customer.subscriptions.all.assert_called_once_with(limit=1)
+
+        mock_render_template.assert_called_once_with(
+            'settings/cancel_account_modal.jinja2',
+            expiration_date=1337
+        )
+
+    @mock.patch('amber_portal.views.account.redirect')
+    @mock.patch('amber_portal.views.account.url_for')
+    @mock.patch('amber_portal.signals.user_signals.cancelled_account.send')
+    @mock.patch('amber_portal.views.account.stripe.Customer.retrieve')
+    def testAccountCancel(
+            self,
+            mock_customer_retrieve,
+            mock_send,
+            mock_url_for,
+            mock_redirect
+    ):
+        mock_user = mock.Mock()
+        mock_user.stripe_customer = MOCK_CUSTOMER_ID
+        g.user = mock_user
+
+        mock_customer = mock.Mock()
+        mock_customer_retrieve.return_value = mock_customer
+
+        mock_subscription = mock.Mock()
+        mock_subscriptions = {
+            'data': [
+                mock_subscription
+            ]
+        }
+        mock_customer.subscriptions.all.return_value = mock_subscriptions
+        mock_send.return_value = mock.Mock()
+        mock_url_for.return_value = 'some/url'
+        mock_redirect.return_value = u''
+
+        self.client.get('/account/cancel')
+
+        mock_customer_retrieve.assert_called_once_with(MOCK_CUSTOMER_ID)
+
+        mock_subscription.delete.assert_called_once_with(at_period_end=True)
+
+        mock_url_for.assert_called_once_with('.billing')
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.ManufacturerReturnForm')
+    @mock.patch('amber_portal.views.account.GeneralSettingsForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testAccountSettingsNoPanels(
+            self,
+            mock_api,
+            mock_current_user,
+            mock_general_settings_form,
+            mock_manufacturer_return_form,
+            mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_mfr_data = {
+            'id': 'something'
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr_data
+
+        mock_current_user.name = 'Mocky Rourke'
+        mock_current_user.email = 'mocky@rourke.mock'
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+
+        mock_general_form = mock.Mock()
+        mock_general_settings_form.return_value = mock_general_form
+
+        mock_return_form = mock.Mock()
+        mock_manufacturer_return_form.return_value = mock_return_form
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.get('/account/settings')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_general_settings_form.assert_called_once_with(
+            name='Mocky Rourke',
+            email='mocky@rourke.mock'
+        )
+
+        mock_manufacturer_return_form.assert_called_once_with(**mock_mfr_data)
+
+        with self.client.session_transaction() as sess:
+            self.assertDictEqual(sess['panels'], {})
+
+        mock_render_template.assert_called_once_with(
+            'settings/account_settings.jinja2',
+            manufacturer=mock_mfr_data,
+            general_form=mock_general_form,
+            return_form=mock_return_form
+        )
+
+        self.assert200(resp)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.ManufacturerReturnForm')
+    @mock.patch('amber_portal.views.account.GeneralSettingsForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testAccountSettingsWithPanels(
+            self,
+            mock_api,
+            mock_current_user,
+            mock_general_settings_form,
+            mock_manufacturer_return_form,
+            mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_mfr_data = {
+            'id': 'something'
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr_data
+
+        mock_current_user.name = 'Mocky Rourke'
+        mock_current_user.email = 'mocky@rourke.kcom'
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+
+        mock_general_form = mock.Mock()
+        mock_general_settings_form.return_value = mock_general_form
+
+        mock_return_form = mock.Mock()
+        mock_manufacturer_return_form.return_value = mock_return_form
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.get(
+            '/account/settings',
+            query_string='showpanel=mock'
+        )
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_general_settings_form.assert_called_once_with(
+            name='Mocky Rourke',
+            email='mocky@rourke.kcom'
+        )
+
+        mock_manufacturer_return_form.assert_called_once_with(**mock_mfr_data)
+
+        with self.client.session_transaction() as sess:
+            self.assertDictEqual(
+                sess['panels'],
+                {
+                    'account': {
+                        'mock': True
+                    }
+                }
+            )
+
+        mock_render_template.assert_called_once_with(
+            'settings/account_settings.jinja2',
+            manufacturer=mock_mfr_data,
+            general_form=mock_general_form,
+            return_form=mock_return_form
+        )
+
+        self.assert200(resp)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    @mock.patch('amber_portal.views.account.ManufacturerReturnForm')
+    @mock.patch('amber_portal.views.account.GeneralSettingsForm')
+    def testAccountSaveBothInvalid(
+            self,
+            mock_general_settings_form,
+            mock_manufacturer_return_form,
+            mock_api,
+            mock_current_user,
+            mock_render_template
+    ):
+        mock_general_form = mock.Mock()
+        mock_general_settings_form.return_value = mock_general_form
+
+        mock_return_form = mock.Mock()
+        mock_manufacturer_return_form.return_value = mock_return_form
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_mfr = {
+            'id': 'mock'
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+
+        mock_general_form.validate_on_submit.return_value = False
+        mock_return_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.post('/account/settings')
+
+        mock_general_settings_form.assert_called_once_with()
+        mock_manufacturer_return_form.assert_called_once_with()
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_render_template.assert_called_once_with(
+            'settings/account_settings.jinja2',
+            manufacturer=mock_mfr,
+            general_form=mock_general_form,
+            return_form=mock_return_form
+        )
+        self.assert200(resp)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    @mock.patch('amber_portal.views.account.ManufacturerReturnForm')
+    @mock.patch('amber_portal.views.account.GeneralSettingsForm')
+    def testAccountSaveManufacturerFormValid(
+            self,
+            mock_general_settings_form,
+            mock_manufacturer_return_form,
+            mock_api,
+            mock_current_user,
+            mock_render_template
+    ):
+        mock_general_form = mock.Mock()
+        mock_general_settings_form.return_value = mock_general_form
+
+        mock_return_form = mock.Mock()
+        mock_manufacturer_return_form.return_value = mock_return_form
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_mfr = {
+            'id': 'mock'
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+
+        mock_general_form.validate_on_submit.return_value = False
+        mock_return_form.validate_on_submit.return_value = True
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.post('/account/settings')
+
+        mock_general_settings_form.assert_called_once_with()
+        mock_manufacturer_return_form.assert_called_once_with()
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_render_template.assert_called_once_with(
+            'settings/account_settings.jinja2',
+            manufacturer=mock_mfr,
+            general_form=mock_general_form,
+            return_form=mock_return_form
+        )
+        self.assert200(resp)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    @mock.patch('amber_portal.views.account.ManufacturerReturnForm')
+    @mock.patch('amber_portal.views.account.GeneralSettingsForm')
+    def testAccountSaveGeneralFormValid(
+            self,
+            mock_general_settings_form,
+            mock_manufacturer_return_form,
+            mock_api,
+            mock_current_user,
+            mock_render_template
+    ):
+        mock_general_form = mock.Mock()
+        mock_general_settings_form.return_value = mock_general_form
+
+        mock_return_form = mock.Mock()
+        mock_manufacturer_return_form.return_value = mock_return_form
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_mfr = {
+            'id': 'mock'
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+
+        mock_general_form.validate_on_submit.return_value = True
+        mock_return_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.post('/account/settings')
+
+        mock_general_settings_form.assert_called_once_with()
+        mock_manufacturer_return_form.assert_called_once_with()
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_render_template.assert_called_once_with(
+            'settings/account_settings.jinja2',
+            manufacturer=mock_mfr,
+            general_form=mock_general_form,
+            return_form=mock_return_form
+        )
+        self.assert200(resp)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.db')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    @mock.patch('amber_portal.views.account.ManufacturerReturnForm')
+    @mock.patch('amber_portal.views.account.GeneralSettingsForm')
+    def testAccountSaveBothValidFormMatchesMfr(
+            self,
+            mock_general_settings_form,
+            mock_manufacturer_return_form,
+            mock_api,
+            mock_current_user,
+            mock_db,
+            mock_render_template
+    ):
+        mock_user = mock.Mock()
+        mock_user.public = 'mock_public_key'
+        g.user = mock_user
+
+        mock_general_form = mock.Mock()
+        mock_general_settings_form.return_value = mock_general_form
+
+        mock_return_form = mock.Mock()
+        mock_manufacturer_return_form.return_value = mock_return_form
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_mfr = {
+            'id': 'mock',
+            'return_period': 'mock days',
+            'returnable': True,
+            'restock_fee': 'mock dollars',
+            'legal': 'mock subpoena'
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+
+        mock_general_form.validate_on_submit.return_value = True
+        mock_return_form.validate_on_submit.return_value = True
+
+        mock_general_form.name.data = 'Mocky Rourke'
+        mock_general_form.email.data = 'mockey@rourke.kcom'
+
+        mock_user_key = {
+            'id': 'mock_id'
+        }
+        mock_client.get_user_key_by_public_key.return_value = mock_user_key
+
+        mock_return_form.data = {
+            'return_period': 'mock days',
+            'returnable': True,
+            'restock_fee': 'mock dollars',
+            'legal': 'mock subpoena',
+            'extra_key': 'wow'
+        }
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.post('/account/settings')
+
+        mock_general_settings_form.assert_called_once_with()
+        mock_manufacturer_return_form.assert_called_once_with()
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        self.assertEqual(g.user.name, 'Mocky Rourke')
+        self.assertEqual(g.user.email, 'mockey@rourke.kcom')
+
+        mock_db.session.add.assert_called_once_with(g.user)
+        mock_db.session.commit.assert_called_once_with()
+
+        mock_client.get_user_key_by_public_key.assert_called_once_with(
+            public_key='mock_public_key'
+        )
+        mock_client.update_user_key.assert_called_once_with(
+            user_key_id='mock_id',
+            data={'name': 'mockey@rourke.kcom'}
+        )
+
+        self.assertFalse(
+            mock_client.update_manufacturer.called,
+            msg='The manufacturer data all matched \
+            up so no call should be made.'
+        )
+
+        mock_render_template.assert_called_once_with(
+            'settings/account_settings.jinja2',
+            manufacturer=mock_mfr,
+            general_form=mock_general_form,
+            return_form=mock_return_form
+        )
+        self.assert200(resp)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.db')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    @mock.patch('amber_portal.views.account.ManufacturerReturnForm')
+    @mock.patch('amber_portal.views.account.GeneralSettingsForm')
+    def testAccountSaveBothValidMfrUpdated(
+            self,
+            mock_general_settings_form,
+            mock_manufacturer_return_form,
+            mock_api,
+            mock_current_user,
+            mock_db,
+            mock_render_template
+    ):
+        mock_user = mock.Mock()
+        mock_user.public = 'mock_public_key'
+        g.user = mock_user
+
+        mock_general_form = mock.Mock()
+        mock_general_settings_form.return_value = mock_general_form
+
+        mock_return_form = mock.Mock()
+        mock_manufacturer_return_form.return_value = mock_return_form
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_mfr = {
+            'id': 'mock',
+            'return_period': 'mock days',
+            'returnable': True,
+            'restock_fee': 'mock dollars',
+            'legal': 'mock subpoena'
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+
+        mock_general_form.validate_on_submit.return_value = True
+        mock_return_form.validate_on_submit.return_value = True
+
+        mock_general_form.name.data = 'Mocky Rourke'
+        mock_general_form.email.data = 'mockey@rourke.kcom'
+
+        mock_user_key = {
+            'id': 'mock_id'
+        }
+        mock_client.get_user_key_by_public_key.return_value = mock_user_key
+
+        mock_return_form.data = {
+            'return_period': 'new mock days',
+            'returnable': True,
+            'restock_fee': 'mock dollars',
+            'legal': 'mock subpoena',
+            'extra_key': 'wow'
+        }
+
+        expected_mfr = {
+            'return_period': 'new mock days',
+            'returnable': True,
+            'restock_fee': 'mock dollars',
+            'legal': 'mock subpoena',
+            'extra_key': 'wow',
+            'id': 'mock'
+        }
+        mock_client.update_manufacturer.return_value = expected_mfr
+
+        mock_render_template.return_value = u'some site'
+
+        resp = self.client.post('/account/settings')
+
+        mock_general_settings_form.assert_called_once_with()
+        mock_manufacturer_return_form.assert_called_once_with()
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        self.assertEqual(g.user.name, 'Mocky Rourke')
+        self.assertEqual(g.user.email, 'mockey@rourke.kcom')
+
+        mock_db.session.add.assert_called_once_with(g.user)
+        mock_db.session.commit.assert_called_once_with()
+
+        mock_client.get_user_key_by_public_key.assert_called_once_with(
+            public_key='mock_public_key'
+        )
+        mock_client.update_user_key.assert_called_once_with(
+            user_key_id='mock_id',
+            data={'name': 'mockey@rourke.kcom'}
+        )
+
+        mock_client.update_manufacturer.assert_called_once_with(
+            mfr_id=MOCK_MANUFACTURER_ID,
+            data=expected_mfr
+        )
+
+        mock_render_template.assert_called_once_with(
+            'settings/account_settings.jinja2',
+            manufacturer=mock_mfr,
+            general_form=mock_general_form,
+            return_form=mock_return_form
+        )
+        self.assert200(resp)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.ManufacturerContactForm')
+    @mock.patch('amber_portal.views.account.ManufacturerForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testProfileNoPanelsNoPhoneData(
+            self,
+            mock_api,
+            mock_current_user,
+            mock_manufacturer_form,
+            mock_manufacturer_contact_form,
+            mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+
+        mock_mfr = {
+            'id': MOCK_MANUFACTURER_ID
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_images = [
+            {
+                'id': 1
+            },
+            {
+                'id': 2,
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+
+        mock_profile_form = mock.Mock()
+        mock_manufacturer_form.return_value = mock_profile_form
+
+        mock_contact_form = mock.Mock()
+        mock_manufacturer_contact_form.return_value = mock_contact_form
+        mock_contact_form.phone.data = None
+
+        mock_render_template.return_value = u'some site'
+
+        response = self.client.get('/account/profile')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_manufacturer_form.assert_called_once_with(**mock_mfr)
+        mock_manufacturer_contact_form.assert_called_once_with(**mock_mfr)
+
+        with self.client.session_transaction() as sess:
+            self.assertDictEqual(sess['panels'], {})
+
+        mock_render_template.assert_called_once_with(
+            'settings/profile.jinja2',
+            manufacturer=mock_mfr,
+            profile_form=mock_profile_form,
+            contact_form=mock_contact_form,
+            images=mock_images
+        )
+        self.assert200(response)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.ManufacturerContactForm')
+    @mock.patch('amber_portal.views.account.ManufacturerForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testProfileWithPanelsNoPhoneData(
+            self,
+            mock_api,
+            mock_current_user,
+            mock_manufacturer_form,
+            mock_manufacturer_contact_form,
+            mock_render_template
+    ):
+        with self.client.session_transaction() as sess:
+            sess['panels'] = {
+                'account': {
+                    'some stuff'
+                }
+            }
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+
+        mock_mfr = {
+            'id': MOCK_MANUFACTURER_ID
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_images = [
+            {
+                'id': 1
+            },
+            {
+                'id': 2,
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+
+        mock_profile_form = mock.Mock()
+        mock_manufacturer_form.return_value = mock_profile_form
+
+        mock_contact_form = mock.Mock()
+        mock_manufacturer_contact_form.return_value = mock_contact_form
+        mock_contact_form.phone.data = None
+
+        mock_render_template.return_value = u'some site'
+
+        response = self.client.get('/account/profile')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_manufacturer_form.assert_called_once_with(**mock_mfr)
+        mock_manufacturer_contact_form.assert_called_once_with(**mock_mfr)
+
+        with self.client.session_transaction() as sess:
+            self.assertDictEqual(
+                sess['panels'],
+                {
+                    'account': {
+                        'some stuff'
+                    }
+                }
+            )
+
+        mock_render_template.assert_called_once_with(
+            'settings/profile.jinja2',
+            manufacturer=mock_mfr,
+            profile_form=mock_profile_form,
+            contact_form=mock_contact_form,
+            images=mock_images
+        )
+        self.assert200(response)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.format_phone')
+    @mock.patch('amber_portal.views.account.ManufacturerContactForm')
+    @mock.patch('amber_portal.views.account.ManufacturerForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testProfileNoPanelsWithPhoneData(
+            self,
+            mock_api,
+            mock_current_user,
+            mock_manufacturer_form,
+            mock_manufacturer_contact_form,
+            mock_format_phone,
+            mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+
+        mock_mfr = {
+            'id': MOCK_MANUFACTURER_ID
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_images = [
+            {
+                'id': 1
+            },
+            {
+                'id': 2,
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+
+        mock_profile_form = mock.Mock()
+        mock_manufacturer_form.return_value = mock_profile_form
+
+        mock_contact_form = mock.Mock()
+        mock_manufacturer_contact_form.return_value = mock_contact_form
+        mock_contact_form.phone.data = MOCK_PHONE_NUMBER
+
+        mock_render_template.return_value = u'some site'
+
+        response = self.client.get('/account/profile')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_manufacturer_form.assert_called_once_with(**mock_mfr)
+        mock_manufacturer_contact_form.assert_called_once_with(**mock_mfr)
+
+        with self.client.session_transaction() as sess:
+            self.assertDictEqual(sess['panels'], {})
+
+        mock_format_phone.assert_called_once_with(MOCK_PHONE_NUMBER)
+
+        mock_render_template.assert_called_once_with(
+            'settings/profile.jinja2',
+            manufacturer=mock_mfr,
+            profile_form=mock_profile_form,
+            contact_form=mock_contact_form,
+            images=mock_images
+        )
+        self.assert200(response)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.format_phone')
+    @mock.patch('amber_portal.views.account.ManufacturerContactForm')
+    @mock.patch('amber_portal.views.account.ManufacturerForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testProfileWithPanelsAndPhoneData(
+            self,
+            mock_api,
+            mock_current_user,
+            mock_manufacturer_form,
+            mock_manufacturer_contact_form,
+            mock_format_phone,
+            mock_render_template
+    ):
+        with self.client.session_transaction() as sess:
+            sess['panels'] = {
+                'account': {
+                    'some stuff'
+                }
+            }
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+
+        mock_mfr = {
+            'id': MOCK_MANUFACTURER_ID
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_images = [
+            {
+                'id': 1
+            },
+            {
+                'id': 2,
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+
+        mock_profile_form = mock.Mock()
+        mock_manufacturer_form.return_value = mock_profile_form
+
+        mock_contact_form = mock.Mock()
+        mock_manufacturer_contact_form.return_value = mock_contact_form
+        mock_contact_form.phone.data = MOCK_PHONE_NUMBER
+
+        mock_render_template.return_value = u'some site'
+
+        response = self.client.get('/account/profile')
+
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+
+        mock_manufacturer_form.assert_called_once_with(**mock_mfr)
+        mock_manufacturer_contact_form.assert_called_once_with(**mock_mfr)
+
+        with self.client.session_transaction() as sess:
+            self.assertDictEqual(
+                sess['panels'],
+                {
+                    'account': {
+                        'some stuff'
+                    }
+                }
+            )
+
+        mock_format_phone.assert_called_once_with(MOCK_PHONE_NUMBER)
+
+        mock_render_template.assert_called_once_with(
+            'settings/profile.jinja2',
+            manufacturer=mock_mfr,
+            profile_form=mock_profile_form,
+            contact_form=mock_contact_form,
+            images=mock_images
+        )
+        self.assert200(response)
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.format_phone')
+    @mock.patch('amber_portal.views.account.ManufacturerContactForm')
+    @mock.patch('amber_portal.views.account.ManufacturerForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testProfileSaveNoPhoneFormsInvalid(
+        self,
+        mock_api,
+        mock_current_user,
+        mock_manufacturer_form,
+        mock_manufacturer_contact_form,
+        mock_format_phone,
+        mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_profile_form = mock.Mock()
+        mock_manufacturer_form.return_value = mock_profile_form
+        mock_contact_form = mock.Mock()
+        mock_manufacturer_contact_form.return_value = mock_contact_form
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_mfr = {
+            'id': MOCK_MANUFACTURER_ID
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_images = [
+            {
+                'id': 1
+            },
+            {
+                'id': 2,
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+        mock_contact_form.phone.data = None
+
+        mock_profile_form.validate_on_submit.return_value = False
+        mock_contact_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u''
+
+        self.client.post('/account/profile')
+
+        self.assertFalse(mock_format_phone.called)
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_render_template.assert_called_once_with(
+            'settings/profile.jinja2',
+            manufacturer=mock_mfr,
+            profile_form=mock_profile_form,
+            contact_form=mock_contact_form,
+            images=mock_images
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.format_phone')
+    @mock.patch('amber_portal.views.account.ManufacturerContactForm')
+    @mock.patch('amber_portal.views.account.ManufacturerForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testProfileSaveWithPhoneFormsInvalid(
+        self,
+        mock_api,
+        mock_current_user,
+        mock_manufacturer_form,
+        mock_manufacturer_contact_form,
+        mock_format_phone,
+        mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_profile_form = mock.Mock()
+        mock_manufacturer_form.return_value = mock_profile_form
+        mock_contact_form = mock.Mock()
+        mock_manufacturer_contact_form.return_value = mock_contact_form
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_mfr = {
+            'id': MOCK_MANUFACTURER_ID
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_images = [
+            {
+                'id': 1
+            },
+            {
+                'id': 2,
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+        mock_contact_form.phone.data = MOCK_PHONE_NUMBER
+
+        mock_profile_form.validate_on_submit.return_value = False
+        mock_contact_form.validate_on_submit.return_value = False
+
+        mock_render_template.return_value = u''
+
+        self.client.post('/account/profile')
+
+        mock_format_phone.assert_called_once_with(MOCK_PHONE_NUMBER)
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_render_template.assert_called_once_with(
+            'settings/profile.jinja2',
+            manufacturer=mock_mfr,
+            profile_form=mock_profile_form,
+            contact_form=mock_contact_form,
+            images=mock_images
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.format_phone')
+    @mock.patch('amber_portal.views.account.ManufacturerContactForm')
+    @mock.patch('amber_portal.views.account.ManufacturerForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testProfileSaveNoPhoneFormsValid(
+        self,
+        mock_api,
+        mock_current_user,
+        mock_manufacturer_form,
+        mock_manufacturer_contact_form,
+        mock_format_phone,
+        mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_profile_form = mock.Mock()
+        mock_manufacturer_form.return_value = mock_profile_form
+        mock_profile_form.data = {
+            'profile_key': 'profile_value'
+        }
+        mock_contact_form = mock.Mock()
+        mock_manufacturer_contact_form.return_value = mock_contact_form
+        mock_contact_form.data = {
+            'contact_key': 'contact_value'
+        }
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_mfr = {
+            'id': MOCK_MANUFACTURER_ID
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_images = [
+            {
+                'id': 1
+            },
+            {
+                'id': 2,
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+        mock_contact_form.phone.data = None
+
+        mock_profile_form.validate_on_submit.return_value = True
+        mock_contact_form.validate_on_submit.return_value = True
+
+        expected_data_dict = {
+            'id': MOCK_MANUFACTURER_ID,
+            'profile_key': 'profile_value',
+            'contact_key': 'contact_value'
+        }
+        mock_client.update_manufacturer.return_value = expected_data_dict
+
+        mock_render_template.return_value = u''
+
+        self.client.post('/account/profile')
+
+        self.assertFalse(mock_format_phone.called)
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_client.update_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID,
+            data=expected_data_dict
+        )
+        mock_render_template.assert_called_once_with(
+            'settings/profile.jinja2',
+            manufacturer=expected_data_dict,
+            profile_form=mock_profile_form,
+            contact_form=mock_contact_form,
+            images=mock_images
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.format_phone')
+    @mock.patch('amber_portal.views.account.ManufacturerContactForm')
+    @mock.patch('amber_portal.views.account.ManufacturerForm')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testProfileSaveWithPhoneFormsValid(
+        self,
+        mock_api,
+        mock_current_user,
+        mock_manufacturer_form,
+        mock_manufacturer_contact_form,
+        mock_format_phone,
+        mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_profile_form = mock.Mock()
+        mock_manufacturer_form.return_value = mock_profile_form
+        mock_profile_form.data = {
+            'profile_key': 'profile_value'
+        }
+        mock_contact_form = mock.Mock()
+        mock_manufacturer_contact_form.return_value = mock_contact_form
+        mock_contact_form.data = {
+            'contact_key': 'contact_value'
+        }
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_mfr = {
+            'id': MOCK_MANUFACTURER_ID
+        }
+        mock_client.get_manufacturer.return_value = mock_mfr
+
+        mock_images = [
+            {
+                'id': 1
+            },
+            {
+                'id': 2,
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+        mock_contact_form.phone.data = MOCK_PHONE_NUMBER
+
+        mock_profile_form.validate_on_submit.return_value = True
+        mock_contact_form.validate_on_submit.return_value = True
+
+        expected_data_dict = {
+            'id': MOCK_MANUFACTURER_ID,
+            'profile_key': 'profile_value',
+            'contact_key': 'contact_value'
+        }
+        mock_client.update_manufacturer.return_value = expected_data_dict
+
+        mock_render_template.return_value = u''
+
+        self.client.post('/account/profile')
+
+        mock_format_phone.assert_called_once_with(MOCK_PHONE_NUMBER)
+        mock_client.get_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_client.update_manufacturer.assert_called_once_with(
+            MOCK_MANUFACTURER_ID,
+            data=expected_data_dict
+        )
+        mock_render_template.assert_called_once_with(
+            'settings/profile.jinja2',
+            manufacturer=expected_data_dict,
+            profile_form=mock_profile_form,
+            contact_form=mock_contact_form,
+            images=mock_images
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testProfilePreviewDefaultImage(
+        self,
+        mock_api,
+        mock_current_user,
+        mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_images = [
+            {
+                'id': 1,
+                'default': True
+            },
+            {
+                'id': 2,
+                'default': False
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+        mock_profile = '{"profile" : "value"}'
+        mock_render_template.return_value = u''
+
+        resp = self.client.post(
+            '/account_settings/preview/profile',
+            content_type='application/json',
+            data=mock_profile
+        )
+
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_render_template.assert_called_once_with(
+            'settings/profile_preview_modal.jinja2',
+            profile='value',
+            images=[{'id': 2, 'default': False}],
+            cover={'id': 1, 'default': True}
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testProfilePreviewNoDefaultImage(
+        self,
+        mock_api,
+        mock_current_user,
+        mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_images = [
+            {
+                'id': 1,
+                'default': False
+            },
+            {
+                'id': 2,
+                'default': False
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+        mock_profile = '{"profile" : "value"}'
+        mock_render_template.return_value = u''
+
+        resp = self.client.post(
+            '/account_settings/preview/profile',
+            content_type='application/json',
+            data=mock_profile
+        )
+
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_render_template.assert_called_once_with(
+            'settings/profile_preview_modal.jinja2',
+            profile='value',
+            images=mock_images,
+            cover=''
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.ManufacturerImageForm')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testImageNewGet(self, mock_api, mock_image_form, mock_render_template):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_form = mock.Mock()
+        mock_image_form.return_value = mock_form
+        mock_render_template.return_value = u''
+
+        self.client.get('/account/image/new')
+
+        mock_render_template.assert_called_once_with(
+            'settings/image_modal.jinja2',
+            form=mock_form
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.ManufacturerImageForm')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testImageNewPost(
+        self,
+        mock_api,
+        mock_image_form,
+        mock_current_user,
+        mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_form = mock.Mock()
+        mock_form.data = {
+            'logo_url': 'logo_value',
+            'default': 'default_value'
+        }
+        mock_image_form.return_value = mock_form
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        expected_image_data = {
+            'manufacturer_id': MOCK_MANUFACTURER_ID,
+            'url': 'logo_value',
+            'default': 'default_value',
+            'caption': ''
+        }
+        mock_images = [
+            {
+                'id': 1,
+                'default': False
+            },
+            {
+                'id': 2,
+                'default': False
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+        mock_render_template.return_value = u''
+
+        self.client.post('/account/image/new')
+        mock_client.add_manufacturer_image.assert_called_once_with(
+            MOCK_MANUFACTURER_ID,
+            expected_image_data
+        )
+        mock_render_template.assert_called_once_with(
+            'settings/forms/images.jinja2',
+            images=mock_images
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.ManufacturerImageForm')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testImageModal(
+        self,
+        mock_api,
+        mock_image_form,
+        mock_current_user,
+        mock_render_template
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_image = {
+            'id': 2,
+            'default': False
+        }
+        mock_client.get_manufacturer_image.return_value = mock_image
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_form = mock.Mock()
+        mock_image_form.return_value = mock_form
+        mock_render_template.return_value = u''
+
+        self.client.get('/account/image/2')
+        mock_client.get_manufacturer_image.assert_called_once_with(
+            MOCK_MANUFACTURER_ID,
+            2
+        )
+        mock_render_template.assert_called_once_with(
+            'settings/image_modal.jinja2',
+            image=mock_image,
+            form=mock_form
+        )
+
+    @mock.patch('amber_portal.views.account.jsonify')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.ManufacturerImageForm')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testImageSaveFormInvalid(
+        self,
+        mock_api,
+        mock_image_form,
+        mock_current_user,
+        mock_jsonify
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_form = mock.Mock()
+        mock_image_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = False
+
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_images = [
+            {
+                'id': 1,
+                'default': False
+            },
+            {
+                'id': 2,
+                'default': False
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+        mock_jsonify.return_value = u''
+
+        self.client.post('/account/image/2')
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_jsonify.assert_called_once_with({'success': False})
+
+    @mock.patch('amber_portal.views.account.jsonify')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.ManufacturerImageForm')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testImageSaveFormValid(
+        self,
+        mock_api,
+        mock_image_form,
+        mock_current_user,
+        mock_jsonify
+    ):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_form = mock.Mock()
+        mock_image_form.return_value = mock_form
+        mock_form.data = {
+            'logo_url': 'logo_value',
+            'default': 'default_value'
+        }
+        mock_form.validate_on_submit.return_value = True
+        expected_image_data = {
+            'manufacturer_id': MOCK_MANUFACTURER_ID,
+            'url': 'logo_value',
+            'default': 'default_value',
+            'caption': ''
+        }
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_images = [
+            {
+                'id': 1,
+                'default': False
+            },
+            {
+                'id': 2,
+                'default': False
+            }
+        ]
+        mock_client.get_manufacturer_images.return_value = mock_images
+        mock_jsonify.return_value = u''
+
+        self.client.post('/account/image/2')
+        mock_client.edit_manufacturer_image.assert_called_once_with(
+            MOCK_MANUFACTURER_ID,
+            2,
+            data=expected_image_data
+        )
+        mock_client.get_manufacturer_images.assert_called_once_with(
+            MOCK_MANUFACTURER_ID
+        )
+        mock_jsonify.assert_called_once_with({'success': True})
+
+    @mock.patch('amber_portal.views.account.jsonify')
+    @mock.patch('amber_portal.views.account.current_user')
+    @mock.patch('amber_portal.views.account.amber_api')
+    def testImageDelete(self, mock_api, mock_current_user, mock_jsonify):
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_current_user.manufacturer_id = MOCK_MANUFACTURER_ID
+        mock_jsonify.return_value = u''
+
+        self.client.delete('/account/image/2/delete')
+        mock_client.delete_manufacturer_image.assert_called_once_with(
+            MOCK_MANUFACTURER_ID,
+            2
+        )
+        mock_jsonify.assert_called_once_with({'success': True})
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.UpdatePassword')
+    def testUpdatePasswordGet(self, mock_password_form, mock_render_template):
+        mock_form = mock.Mock()
+        mock_password_form.return_value = mock_form
+        mock_render_template.return_value = u''
+
+        self.client.get('/account/update-password')
+        mock_render_template.assert_called_once_with(
+            'settings/forms/password.jinja2',
+            form=mock_form
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.CMUser.query')
+    @mock.patch('amber_portal.views.account.UpdatePassword')
+    def testUpdatePasswordPostFormInvalidPasswordUnverified(
+        self,
+        mock_password_form,
+        mock_cm_user_query,
+        mock_render_template
+    ):
+        mock_form = mock.Mock()
+        mock_password_form.return_value = mock_form
+
+        cm_user = mock.Mock()
+        mock_cm_user_query.get.return_value = cm_user
+
+        mock_form.validate_on_submit.return_value = False
+        cm_user.verify_password.return_value = False
+        mock_form.password.errors = []
+
+        mock_render_template.return_value = u''
+
+        self.client.post('/account/update-password')
+        self.assertIn(
+            'Password Incorrect. Please re-enter your password.',
+            mock_form.password.errors
+        )
+        mock_render_template.assert_called_once_with(
+            'settings/forms/password.jinja2',
+            form=mock_form
+        )
+
+    @mock.patch('amber_portal.views.account.render_template')
+    @mock.patch('amber_portal.views.account.CMUser.query')
+    @mock.patch('amber_portal.views.account.UpdatePassword')
+    def testUpdatePasswordPostFormValidPasswordUnverified(
+        self,
+        mock_password_form,
+        mock_cm_user_query,
+        mock_render_template
+    ):
+        mock_form = mock.Mock()
+        mock_password_form.return_value = mock_form
+
+        cm_user = mock.Mock()
+        mock_cm_user_query.get.return_value = cm_user
+
+        mock_form.validate_on_submit.return_value = True
+        cm_user.verify_password.return_value = False
+        mock_form.password.errors = []
+        mock_render_template.return_value = u''
+
+        self.client.post('/account/update-password')
+        self.assertIn(
+            'Password Incorrect. Please re-enter your password.',
+            mock_form.password.errors
+        )
+        mock_render_template.assert_called_once_with(
+            'settings/forms/password.jinja2',
+            form=mock_form
+        )
+
+    @mock.patch('amber_portal.views.account.url_for')
+    @mock.patch('amber_portal.views.account.redirect')
+    @mock.patch('amber_portal.views.account.flash')
+    @mock.patch('amber_portal.views.account.CMUser.query')
+    @mock.patch('amber_portal.views.account.UpdatePassword')
+    def testUpdatePasswordPostFormValidPasswordVerified(
+        self,
+        mock_password_form,
+        mock_cm_user_query,
+        mock_flash,
+        mock_redirect,
+        mock_url_for
+    ):
+        mock_form = mock.Mock()
+        mock_form.new_password.data = 'something'
+        mock_password_form.return_value = mock_form
+
+        cm_user = mock.Mock()
+        mock_cm_user_query.get.return_value = cm_user
+
+        mock_form.validate_on_submit.return_value = True
+        cm_user.verify_password.return_value = True
+        mock_redirect.return_value = u''
+
+        self.client.post('/account/update-password')
+        cm_user.set_password.assert_called_once_with('something')
+        cm_user.save.assert_called_once_with()
+        mock_flash.assert_called_once_with(
+            u'Your password has been changed.', 'success'
+        )
+        mock_url_for.assert_called_once_with(
+            'account_view.account_settings'
+        )
+
+    @mock.patch('amber_portal.views.account.jsonify')
+    @mock.patch('amber_portal.views.account.request')
+    @mock.patch('amber_portal.views.account.upload_image')
+    def testFileUpload(self, mock_upload_image, mock_request, mock_jsonify):
+        mock_image = 'somename.jpg'
+        mock_request.files = {'img': mock_image}
+        mock_url = 'http://some.url/img.jpg'
+        mock_upload_image.return_value = mock_url
+        mock_jsonify.return_value = u''
+
+        response = self.client.post(
+            '/account/upload',
+            data={'img': (BytesIO('something'), 'somename.jpg')}
+        )
+        mock_upload_image.assert_called_once_with(
+            mock_image,
+            self.app.config['S3_ACCESS'],
+            self.app.config['S3_SECRET'],
+            s3_bucket=self.app.config['S3_BUCKET']
+        )
+        mock_jsonify.assert_called_once_with(
+            {'success': True, 'image_url': mock_url}
+        )
+        self.assert200(response)
+
+    @mock.patch('amber_portal.views.account.jsonify')
+    def testPanelsAddNoPanels(self, mock_jsonify):
+        mock_jsonify.return_value = u''
+
+        response = self.client.put(
+            '/account/panels/add',
+            content_type='application/json',
+            data='{"panel":"panel_value"}'
+        )
+        with self.client.session_transaction() as sess:
+            self.assertItemsEqual(
+                sess['panels']['account'],
+                ['panel_value']
+            )
+        mock_jsonify.assert_called_once_with({'success': True})
+
+    @mock.patch('amber_portal.views.account.jsonify')
+    def testPanelsAddWithPanels(self, mock_jsonify):
+        mock_jsonify.return_value = u''
+        with self.client.session_transaction() as sess:
+            sess['panels'] = {'account': ['panel_account_value']}
+
+        response = self.client.put(
+            '/account/panels/add',
+            content_type='application/json',
+            data='{"panel":"panel_value"}'
+        )
+        with self.client.session_transaction() as sess:
+            self.assertItemsEqual(
+                sess['panels']['account'],
+                ['panel_value', 'panel_account_value']
+            )
+        mock_jsonify.assert_called_once_with({'success': True})
+
+    @mock.patch('amber_portal.views.account.jsonify')
+    def testPanelsRemoveNoSuchPanel(self, mock_jsonify):
+        mock_jsonify.return_value = u''
+        with self.client.session_transaction() as sess:
+            sess['panels'] = {'account': ['panel_account_value']}
+
+        response = self.client.put(
+            '/account/panels/remove',
+            content_type='application/json',
+            data='{"panel":"panel_value"}'
+        )
+        with self.client.session_transaction() as sess:
+            self.assertItemsEqual(
+                sess['panels']['account'],
+                ['panel_account_value']
+            )
+        mock_jsonify.assert_called_once_with({'success': True})
+
+    @mock.patch('amber_portal.views.account.jsonify')
+    def testPanelsRemoveWithSuchPanel(self, mock_jsonify):
+        mock_jsonify.return_value = u''
+        with self.client.session_transaction() as sess:
+            sess['panels'] = {
+                'account': ['panel_account_value', 'panel_value']
+            }
+
+        response = self.client.put(
+            '/account/panels/remove',
+            content_type='application/json',
+            data='{"panel":"panel_value"}'
+        )
+        with self.client.session_transaction() as sess:
+            self.assertItemsEqual(
+                sess['panels']['account'],
+                ['panel_account_value']
+            )
+        mock_jsonify.assert_called_once_with({'success': True})
+
+
+if __name__ == '__main__':
+    unittest.main()

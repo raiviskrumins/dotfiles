@@ -1,0 +1,175 @@
+# handles toggling between account panels and forms, and async file upload for
+# images.
+#
+# UI COMPONENTS:
+# --------------
+# .js-form-get : button in the panel. contains the url of the form to load
+#
+# .js-cancel : button in the form. loads the panel without saving data
+#
+# .js-file-trigger : button in the panel. activates a hidden file input.
+#
+# .js-file-input : file field in the panel. provides image file to be uploaded.
+#
+# .js-manu-file-input : file field for representational images. provides image
+#       file to be uploaded.
+
+changed = false
+
+$(document).ready ->
+  # handles the image upload for logo images
+  fileUpload = (e) ->
+    files = e.currentTarget.files
+    data = new FormData
+    data.append 'img', files[0]
+
+    upload data, updateLogo
+
+  imageUpload = (e) ->
+    files = e.currentTarget.files
+    data = new FormData
+    data.append 'img', files[0]
+
+    upload data, updateImage
+
+  # uploads a file (data), then fires the callback when successful
+  upload = (data, callback) ->
+    $.ajax
+      url: '/account/upload'
+      type: 'POST'
+      data: data
+      cache: false
+      contentType: false
+      processData: false
+      success: (result) ->
+        if result.success
+          callback(result)
+
+  # updates the logo image with the newly uploaded image
+  updateLogo = (result) ->
+    $('.logo').css 'background-image', "url('#{result.image_url}')"
+    $('#logo_url').val result.image_url
+    $('.js-image-holder').html "<img src=\"#{result.image_url}\">"
+    $('.upload-btn').text "Update Image"
+
+  updateImage = (result) ->
+    $('.modal #logo_url').val result.image_url
+    $('.modal .js-image-holder').html "<img src=\"#{result.image_url}\">"
+
+  # outright deletion of images
+  deleteImage = (e) ->
+    e.preventDefault()
+
+    url = $(e.currentTarget).attr 'href'
+    image = $(e.currentTarget).parents '.manu-image'
+
+    $.ajax url,
+      type: 'DELETE'
+      contentType: 'application/json'
+      success: (result) ->
+        $(image).remove()
+
+  imageCheck = (e) ->
+
+    firstImage = ->
+      if $('.manu-image').length <= 1
+        $('#default').attr 'checked', 'checked'
+
+    $(document).bind 'ajaxSuccess', firstImage
+    cm.getModal e
+
+  # handles form submission. grabs the type from the form method and the url
+  # from the form action. form data is parsed from input fields and serialized
+  #
+  # currently only used for image modal forms
+  formSubmit = (e) ->
+    $('input:submit', e.currentTarget).addClass 'disabled'
+    e.preventDefault()
+    raw_data = $(@).serializeArray()
+    form_data = {}
+
+    _.map raw_data, (key_value) ->
+      form_data[key_value.name] = key_value.value
+
+    url = $(@).attr 'action'
+    type = $(@).attr 'method'
+    $.ajax url,
+      type: type,
+      contentType: 'application/json',
+      data: JSON.stringify(form_data),
+      success: (result) ->
+        if result
+          if result.success == false
+            $('input[type=submit]').removeClass 'disabled'
+            $('.modal-body').append '<span class="text-danger">Please try saving your image again.</span>'
+          else
+            $("div[data-target=#js_images]").html result
+            $(".modal").modal("hide")
+            #window.location.reload()
+
+  # opens a modal to preview account from profile
+  preview = (e) ->
+    e.preventDefault()
+    type = $(@).data 'form'
+
+    form = _.object _.map $('input[type=text], textarea, select'), (row) ->
+        return [$(row).attr('id'), $(row).val()]
+    data = {}
+    data["#{type}"] = form
+
+    url = $(e.currentTarget).attr 'href'
+    $.ajax url,
+      type: 'POST'
+      contentType: 'application/json'
+      data: JSON.stringify data
+      success: (result) ->
+        cm.loadModal result
+
+  # triggers a hidden file input
+  inputTrigger = (e) ->
+    e.preventDefault()
+    input = $(e.currentTarget).data 'target'
+    $(input).click()
+
+  # loads the resulting HTML to the appropriate spot
+  # NOTE: the top-level element in the response needs to have a 'data-target'
+  #       attribute for this to work
+  generalSuccess = (result) ->
+    target = $(result).data 'target'
+    $(target).html result
+    if $('.modal').length
+      $('.modal').modal('hide')
+
+  # tracks which panels to keep open on page refresh
+  savePanel = (e) ->
+    url = if e.type is 'show' then '/account/panels/add' else '/account/panels/remove'
+
+    panel = $(e.currentTarget).attr 'id'
+    data = JSON.stringify
+      panel: panel
+
+    $.ajax url,
+      type: 'PUT'
+      data: data
+      contentType: 'application/json'
+
+  shallNotPass = ->
+    cm.setConfirmUnload 'You have unsaved changes.'
+
+  okayPass = ->
+    cm.setConfirmUnload false
+
+  $('body').on 'click', '.js-file-trigger', inputTrigger
+  $('body').on 'change', '#image_file', fileUpload
+  $('body').on 'change', '#feature_image', imageUpload
+  $('body').on 'click', '.js-view-image', cm.getModal
+  $('body').on 'click', '.js-image-delete', deleteImage
+  $('body').on 'click', '.js-preview', preview
+  $('body').on 'click', '.js-rep-image', imageCheck
+  $('body').on 'change', '#profileForm input, #accountForm input, #profileForm textarea, #accountForm textarea', shallNotPass
+  $('body').on 'submit', '#profileForm, #accountForm', okayPass
+  $('body').on 'submit', '.modal form', formSubmit
+
+  $('body').on 'click', '.js-cancel-account-confirm', cm.getModal
+
+  $('.panel-collapse').on 'show.bs.collapse hide.bs.collapse', savePanel

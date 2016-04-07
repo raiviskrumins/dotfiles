@@ -1,0 +1,22 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+
+{% for shelf in form.shelf.shelves %}
+<div class="subcomponent-section">
+    {% set sub_component_id = product.shelf.shelves[loop.index0].sub_component_data_id or 0 %}
+    <p><b>Shelf <span class="component-count">{{loop.index}}</span></b> <a href="{{ url_for('product_view.delete_product_sub_component', prod_id=product.id, component='shelf', sub_component_data_id=sub_component_id) }}" class="js-remove-subcomponent">Remove</a></p>
+    <div class="row">
+      <div class="col-md-2">{{ append_field(shelf.shelf_thickness, 'in') }}</div>
+        <div class="col-md-2">{{ append_field(shelf.shelf_width, 'in') }}</div>
+<<<<<<< HEAD
+=======
+        <div class="col-md-2">{{ append_field(shelf.shelf_thickness, 'in') }}</div>
+>>>>>>> 54b424abc24b6fc239849f6658e4e8341960126d
+        <div class="col-md-2">{{ append_field(shelf.shelf_depth, 'in') }}</div>
+
+        {{ shelf.sub_component_data_id }}
+        {{ shelf.shelf_component_id }}
+    </div>
+</div>
+{% endfor %}
+
+<a href="{{ url_for('product_view.new_sub_component_form', prod_id=product.id, component='shelf') }}" class="btn btn-primary js-add-subcomponent" data-target="shelf">Add Shelf</a>

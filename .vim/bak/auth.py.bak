@@ -1,0 +1,19 @@
+from flask import g, current_app
+from amber_portal.lib import get_current_user
+from amber_portal.lib.utils import amber_api_ctx
+import amber_lib
+
+from werkzeug.security import check_password_hash
+
+def apply_user_data_to_g():
+    g.user = get_current_user()
+
+
+def apply_collections_to_g():
+    if hasattr(get_current_user(), 'email'):
+        ctx = amber_api_ctx()
+        g.collections = amber_lib.Connection(ctx).Collection.query()
+
+
+def verify_password(password, hashed):
+    return check_password_hash(hashed, password)

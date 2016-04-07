@@ -1,0 +1,369 @@
+from amber_portal.lib import get_current_user
+
+from .auth import authenticated, good_standing
+
+from flask import (
+    Blueprint,
+    flash,
+    jsonify,
+    render_template,
+    request,
+    Response,
+    session,
+)
+
+import json
+
+from amber_lib import query, errors
+
+from amber_portal.lib.utils import (
+    refresh_collection_cache,
+    amber_api_connection
+)
+from amber_portal.forms.product import CollectionForm
+
+current_user = get_current_user()
+
+collection_view = Blueprint(
+    'collection_view',
+    __name__,
+    template_folder='templates'
+)
+
+
+@collection_view.route('/products/collections', methods=['GET'])
+@authenticated
+@good_standing
+def product_collection_list():
+    refresh_collection_cache()
+    api_conn = amber_api_connection()
+    try:
+        collections = api_conn.Collection.query()
+    except errors.NotFound:
+        collections = []
+
+    return Response(json.dumps(collections))
+
+
+@collection_view.route('/products/collection/form', methods=['GET', 'POST'])
+@authenticated
+@good_standing
+def collection_form():
+    api_conn = amber_api_connection()
+    form = CollectionForm()
+
+    if request.method == 'GET':
+        return render_template('product/collection_modal.jinja2', form=form)
+
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            collection = api_conn.Collection.from_dict(form.data)
+            collection.manufacturer_id = current_user.manufacturer_id
+            collection.save()
+
+            result = {
+                'collection': collection.to_dict(),
+                'success': True,
+                'new': True
+            }
+            refresh_collection_cache()
+
+            return jsonify(result)
+        else:
+            refresh_collection_cache()
+            return render_template(
+                'product/collection_modal.jinja2',
+                form=form
+            )
+
+
+@collection_view.route(
+    '/products/collection/form/<int:id>',
+    methods=['GET', 'PUT', 'DELETE']
+)
+@authenticated
+@good_standing
+def collection_form_id(id):
+    api_conn = amber_api_connection()
+    if request.method == 'GET':
+        collection = api_conn.Collection.retrieve(id)
+        form = CollectionForm(**collection.to_dict())
+        return render_template(
+            'product/collection_modal.jinja2',
+            form=form,
+            collection=collection
+        )
+
+    if request.method == 'PUT':
+        form = CollectionForm()
+
+        if form.validate_on_submit():
+            api_conn.Collection.retrieve(id).from_dict(form.data).save()
+            refresh_collection_cache()
+
+            return jsonify({'success': True})
+
+    if request.method == 'DELETE':
+        api_conn.Collection.delete(id)
+
+        refresh_collection_cache()
+
+        return jsonify({'success': True})
+
+
+@collection_view.route(
+    '/products/collection/<int:id>/confirm',
+    methods=['GET']
+)
+@authenticated
+@good_standing
+def collection_confirm(id):
+    api_conn = amber_api_connection()
+    collection = api_conn.Collection.retrieve(id)
+
+    return render_template(
+        'product/collection_delete_modal.jinja2',
+        collection=collection
+    )
+
+
+@collection_view.route(
+    '/products/collection/<int:collection_id>',
+    methods=['GET']
+)
+@authenticated
+@good_standing
+def collection_id(collection_id):
+    api_conn = amber_api_connection()
+    collection = api_conn.Collection.retrieve(collection_id)
+
+    categories = api_conn.Categories.retrieve().primary
+
+    # TODO: needs functional testing
+    where = query.Predicate(
+        "CollectionComponent.collection_id",
+        query.equal(collection_id)
+    )
+
+    products = api_conn.Product.query(filtering=where)
+
+    session['referrer'] = {'name': 'collection', 'id': collection_id}
+    return render_template(
+        'product/collection_product_list.jinja2',
+        products=products,
+        collection=collection,
+        categories=categories,
+        count=len(products)
+    )
+
+
+@collection_view.route(
+    '/products/collection/<int:collection_id>/list',
+    methods=['PUT']
+)
+@authenticated
+@good_standing
+def collection_list(collection_id):
+    refresh_collection_cache()
+    api_conn = amber_api_connection()
+    params = request.json
+    total = 0
+
+    cat = params.get('category')
+    filtering = None
+    if cat:
+        cat = None if cat == 'none' else cat
+        filtering = query.Predicate(
+            'CategoryComponent.primary_category', query.equal(cat))
+
+    params['manufacturer_preview'] = True
+    params['manufacturer_id'] = current_user.manufacturer_id
+
+    sort_dir = params.get('sort_direction', 'asc')
+    sort_map = {
+        'name': 'IdentityComponent.product_name',
+        'manufacturer_sku': 'IdentityComponent.sku',
+        'date_updated': 'AuditComponent.date_updated',
+        'active': 'VisibilityComponent.active'
+    }
+
+    collection_where = query.Predicate(
+        "CollectionComponent.collection_id", query.equal(collection_id)
+    )
+    if filtering:
+        filtering = query.And(filtering, collection_where)
+    else:
+        filtering = collection_where
+
+    selected = params.get('selected', [])
+    with_ids = None
+    without_ids = None
+
+    ids = api_conn.Product.search(
+        fields="id",
+        filtering=filtering,
+        terms=params.get('terms'),
+        manufacturer_id=current_user.manufacturer_id
+    )
+
+    # Check if sorting by selected
+    sort_by = params.get("sort_key")
+    if sort_by == "select" and len(selected):
+        without_ids = query.Predicate('id', query.not_in(*selected))
+        if filtering:
+            filtering = query.And(filtering, without_ids)
+        else:
+            filtering = without_ids
+        with_ids = query.Predicate('id', query.within(*selected))
+
+    products = api_conn.Product.search(
+        batch_size=100,
+        offset=params['offset'],
+        fields="identity,visibility,collection,category,audit,images",
+        filtering=filtering,
+        terms=params.get('terms'),
+        sort_by=sort_map.get(
+            params.get('sort_key'),
+            'IdentityComponent.product_name'
+        ),
+        sort_dir=sort_dir,
+        manufacturer_id=current_user.manufacturer_id
+    )
+
+    offset = params.get('offset', 0)
+    if with_ids and sort_by == "select":
+        prepended = api_conn.Product.query(
+            batch_size=100,
+            fields="identity,visibility,collection,category,audit,images",
+            filtering=with_ids,
+            sort_by=sort_map.get(
+                params.get('sort_key'),
+                'IdentityComponent.product_name'
+            ),
+            sort_dir=sort_dir,
+            manufacturer_id=current_user.manufacturer_id
+        )[:]
+
+        total = len(products) + len(prepended)
+        if sort_dir == 'asc':
+            products = [products[pid].to_dict() for pid in sorted(products.values)]
+            if offset == 0:
+                products = [prod.to_dict() for prod in prepended] + products
+        else:
+            if total <= offset + 100 or total <= offset + len(prepended):
+                products = [products[pid].to_dict() for pid in sorted(products.values)] + [prod.to_dict() for prod in prepended]
+            else:
+                products = [products[pid].to_dict() for pid in sorted(products.values)]
+    else:
+        all_products = len(
+            api_conn.Product.query(
+                batch_size=1,
+                fields="identity,visibility,collection,category,audit,images",
+                manufacturer_id=current_user.manufacturer_id,
+                filtering=collection_where
+            )
+        )
+        total = all_products
+        products = [products[pid].to_dict() for pid in sorted(products.values)]
+
+    return jsonify(
+        {
+            "products": products,
+            "total": total,
+            "ids": [prod.pk() for prod in ids]
+        }
+    )
+
+
+@collection_view.route('/products/collection/add-to', methods=['GET'])
+@authenticated
+@good_standing
+def collection_add_get():
+    form = CollectionForm(**{"manufacturer_id": current_user.manufacturer_id})
+    return render_template('product/collection_select_modal.jinja2', form=form)
+
+
+@collection_view.route(
+    '/products/collection/<int:c_id>/add-product',
+    methods=['PUT']
+)
+@authenticated
+@good_standing
+def collection_add_product(c_id):
+    api_conn = amber_api_connection()
+    count = 0
+    # TODO: needs functional testing
+    for prod_id in request.json.get('product_ids'):
+        prod_id = int(prod_id)
+        api_conn.Product.retrieve(prod_id).collection.from_dict(
+            {'collection_id': c_id}
+        ).save()
+        count += 1
+
+    collection = api_conn.Collection.retrieve(c_id)
+
+    if count > 1:
+        message = (
+            '{0} products have been added to '
+            '<a href="/products/collection/{1}">{2}</a>.').format(
+                count,
+                c_id,
+                collection.name
+        )
+    else:
+        message = (
+            '1 product has been added to '
+            '<a href="/products/collection/{0}">{1}</a>.').format(
+                c_id,
+                collection.name
+        )
+
+    refresh_collection_cache()
+
+    flash(message, 'success')
+
+    return jsonify({})
+
+
+@collection_view.route(
+    '/products/collection/confirm-remove',
+    methods=['GET']
+)
+@authenticated
+@good_standing
+def collection_remove_confirm():
+    return render_template('product/collection_product_remove_modal.jinja2')
+
+
+@collection_view.route(
+    '/products/collection/<int:collection_id>/remove-products',
+    methods=['POST']
+)
+@authenticated
+@good_standing
+def collection_remove_product(collection_id):
+    api_conn = amber_api_connection()
+    count = 0
+
+    # TODO: needs functional testing
+    for prod_id in request.json.get('product_ids'):
+        prod = api_conn.Product.retrieve(int(prod_id))
+        prod.collection.collection.unrelate(prod)
+        count += 1
+
+    if count > 1:
+        message = ('{0} products have been removed.').format(count)
+    else:
+        message = 'A product has been removed.'
+
+    refresh_collection_cache()
+
+    flash(message, 'success')
+    return jsonify({})
+
+
+@collection_view.route('/products/collection/none', methods=['GET'])
+@authenticated
+@good_standing
+def collection_no_products():
+    return render_template('product/collection_no_products.jinja2')

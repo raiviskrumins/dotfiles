@@ -1,0 +1,22 @@
+Amber Engine API
+=========
+
+### 1. Naming Conventions
+**Creating Pointers vs Making Instances**
+When creating and returning a pointer object, the method/function's name
+should begin with `New`, versus instantiation methods which need to begin 
+with `Make`.
+
+For example:
+
+    func NewThing() *Thing {
+        return new(Thing)    
+    }
+
+    func MakeThing() Thing {
+        return Thing{}    
+    }
+
+
+
+

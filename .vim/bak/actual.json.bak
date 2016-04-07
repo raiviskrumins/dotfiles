@@ -1,0 +1,23 @@
+{
+    "required": 1.0,
+    "int": 0,
+    "float": 0.2,
+    "string": "This is a string",
+    "bool": false,
+    "list": [1, 2, 3],
+    "object": {
+        "foo": "bar",
+        "hey": "listen!"
+    },
+    "object2": {
+        "fizz": "buzz",
+        "java": "sucks"
+    },
+    "nested": {
+        "parent": {
+            "child": {
+                "go": "further"
+            }
+        }
+    }
+}

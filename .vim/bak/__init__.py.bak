@@ -1,0 +1,30 @@
+from flask.ext.sqlalchemy import SQLAlchemy
+from flask_sqlalchemy import _QueryProperty, Model, _BoundDeclarativeMeta
+
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.schema import MetaData
+
+
+class CustomAlchemy(SQLAlchemy):
+    def make_declarative_base(self):
+        """ Because the things that should make everything easier usually
+            make it harder.
+        """
+        convention = {
+          "ix": 'ix_%(column_0_label)s',
+          "uq": "uq_%(table_name)s_%(column_0_name)s",
+          "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+          "pk": "pk_%(table_name)s"
+        }
+
+        meta = MetaData(naming_convention=convention)
+        base = declarative_base(
+          cls=Model,
+          name='Model',
+          metaclass=_BoundDeclarativeMeta,
+          metadata=meta
+        )
+        base.query = _QueryProperty(self)
+        return base
+
+db = CustomAlchemy()

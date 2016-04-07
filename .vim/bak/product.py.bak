@@ -1,0 +1,968 @@
+from amber_portal.lib import get_current_user
+
+from .auth import authenticated, good_standing
+from amber_lib import query, errors
+from amber_lib.query import And, Predicate, equal
+
+import pika
+import hashlib
+import json
+import base64
+import io
+from PIL import Image
+from time import sleep
+from urllib.request import urlopen
+
+import flask
+from flask import (
+    g,
+    abort,
+    Blueprint,
+    current_app,
+    flash,
+    jsonify,
+    render_template,
+    redirect,
+    Response,
+    request,
+    session,
+    url_for
+)
+
+from wtforms.validators import InputRequired
+
+from amber_portal.forms.product import (
+    NewProductForm
+)
+
+from amber_portal.lib.s3 import (
+    upload_image,
+    upload_stream
+)
+
+from amber_portal.lib.utils import (
+    amber_api_connection,
+    pluralize,
+    refresh_collection_cache
+)
+from amber_portal.lib.form_builder import (
+    build_product_form,
+    build_component_form
+)
+from amber_portal.lib.tearsheet import tearsheet
+
+product_view = Blueprint('product_view', __name__, template_folder='templates')
+
+priority_components = ['product_details', 'images', 'description']
+
+general_components = ['instruction']
+
+common_components = [
+    'option',
+    'pricing',
+    'ordering_information',
+    'shipping_information',
+    'keyword'
+]
+
+skip_components = [
+    'identity',
+    'audit',
+    'manufacturer',
+    'pricing',
+    'collection',
+    'visibility',
+    'option_sets',
+    'promotional_tag',
+    'category',
+    'overall_dimension',
+    'construction_information',
+    'weight'
+]
+
+skip_components.extend(priority_components)
+skip_components.extend(general_components)
+skip_components.extend(common_components)
+
+app = flask.current_app
+
+current_user = get_current_user()
+
+
+@product_view.route('/products', methods=['GET', 'POST'])
+@authenticated
+@good_standing
+def product_list():
+    refresh_collection_cache()
+    api_conn = amber_api_connection()
+
+    categories = api_conn.Categories.retrieve().primary
+    products = api_conn.Product.query(
+        batch_size=100,
+        fields="identity,visibility,collection,category,audit,images",
+        manufacturer_id=current_user.manufacturer_id # TODO: what if im an admin?
+    )
+
+    # session vars
+    if 'multiedit' in session:
+        session.pop('multiedit')
+    if 'referrer' in session:
+        session.pop('referrer')
+    if 'panels' in session and 'product' in session['panels']:
+        session['panels']['product'] = []
+    session.regenerate()
+
+    return render_template(
+        'product/product_list.jinja2',
+        categories=categories,
+        count=products.total
+    )
+
+
+@product_view.route('/products/list', methods=['PUT'])
+@authenticated
+@good_standing
+def product_search():
+    api_conn = amber_api_connection()
+    params = request.json
+
+    cat = params.get('category')
+    filtering = None
+    if cat:
+        cat = None if cat == 'none' else cat
+        filtering = Predicate('CategoryComponent.primary_category', equal(cat))
+
+    params['manufacturer_preview'] = True
+    params['manufacturer_id'] = current_user.manufacturer_id
+
+    sort_dir = params.get('sort_direction', 'asc')
+    sort_map = {
+        'name': 'IdentityComponent.product_name',
+        'manufacturer_sku': 'IdentityComponent.sku',
+        'date_updated': 'AuditComponent.date_updated',
+        'active': 'VisibilityComponent.active'
+    }
+
+    selected = params.get('selected', [])
+    with_ids = None
+    without_ids = None
+
+    ids = api_conn.Product.search(
+        fields="id",
+        filtering=filtering,
+        terms=params.get('terms'),
+        manufacturer_id=current_user.manufacturer_id
+    )
+
+    # Check if sorting by selected
+    sort_by = params.get("sort_key")
+    if sort_by == "select" and len(selected):
+        without_ids = Predicate('id', query.not_in(*selected))
+        with_ids = Predicate('id', query.within(*selected))
+        if filtering:
+            with_ids = And(filtering, with_ids)
+            filtering = And(filtering, without_ids)
+        else:
+            filtering = without_ids
+
+    products = api_conn.Product.search(
+        batch_size=100,
+        offset=params['offset'],
+        fields="identity,visibility,collection,category,audit,images",
+        filtering=filtering,
+        terms=params.get('terms'),
+        sort_by=sort_map.get(
+            params.get('sort_key'),
+            'IdentityComponent.product_name'
+        ),
+        sort_dir=sort_dir,
+        manufacturer_id=current_user.manufacturer_id
+    )
+
+    offset = params.get('offset', 0)
+    if with_ids and sort_by == "select":
+        prepended = api_conn.Product.query(
+            batch_size=100,
+            fields="identity,visibility,collection,category,audit,images",
+            filtering=with_ids,
+            sort_by=sort_map.get(
+                params.get('sort_key'),
+                'IdentityComponent.product_name'
+            ),
+            sort_dir=sort_dir,
+            manufacturer_id=current_user.manufacturer_id
+        ).all()
+        import pudb; pu.db
+        total = len(products) + len(prepended)
+        if sort_dir == 'asc':
+            products = [products[pid].to_dict() for pid in sorted(products.values)]
+            if offset == 0:
+                products = [prod.to_dict() for prod in prepended] + products
+        else:
+            if total <= offset + 100 or total <= offset + len(prepended):
+                products = [products[pid].to_dict() for pid in sorted(products.values)] + [prod.to_dict() for prod in prepended]
+            else:
+                products = [products[pid].to_dict() for pid in sorted(products.values)]
+    else:
+        all_products = len(
+            api_conn.Product.query(
+                batch_size=1,
+                fields="identity,visibility,collection,category,audit,images",
+                manufacturer_id=current_user.manufacturer_id
+            )
+        )
+        total = all_products
+        products = [products[pid].to_dict() for pid in sorted(products.values)]
+
+    return jsonify(
+        {
+            "products": products,
+            "total": total,
+            "ids": [prod.pk() for prod in ids]
+        }
+    )
+
+
+@product_view.route('/products/rows', methods=['PUT'])
+@authenticated
+def template_rows():
+    products = request.json['products']
+    return render_template('product/product_rows.jinja2', products=products)
+
+
+@product_view.route('/products/none', methods=['GET'])
+@authenticated
+def template_none():
+    return render_template('product/no_products.jinja2')
+
+
+@product_view.route('/products/no-results', methods=['GET'])
+@authenticated
+def template_no_results():
+    return render_template('product/no_results.jinja2')
+
+
+@product_view.route('/products/new', methods=['GET', 'POST'])
+@authenticated
+@good_standing
+def add_product():
+    refresh_collection_cache()
+    api_conn = amber_api_connection()
+    if 'collection' in request.args:
+        collection = request.args['collection']
+
+    else:
+        collection = None
+
+    form = NewProductForm()
+
+    if form.validate_on_submit():
+        data = dict(form.data)
+        product_data = {
+            'identity': {
+                'manufacturer_sku': data['manufacturer_sku'],
+                'name': data['name'],
+            }
+        }
+
+        if data['full_size']:
+            product_data['images'] = {
+                'image_list': [{
+                    'full_size': data['full_size'],
+                    'thumbnail_size': data['thumbnail'],
+                    'medium_size': data['medium'],
+                    'large_size': data['large'],
+                    'default': True,
+                    'category': data['image_type'],
+                    'caption': data['caption']
+                }]
+            }
+        product = api_conn.Product.from_dict(product_data).save()
+
+        channels = api_conn.SalesChannel.query()
+        channels_status = []
+        for channel in channels:
+            sc_products = channel.related_product_ids()
+            if sc_products:
+                channels_status.append(channel)
+        for channel in channels_status:
+            product.relate(channel)
+
+        referrer = None
+
+        if data.get('collection'):
+            # TODO: needs functional testing
+            col = api_conn.Collection.retrieve(int(data['collection']))
+            product.relate(col)
+
+            referrer = data['collection']
+
+        refresh_collection_cache()
+
+        return jsonify({
+            'success': True,
+            'url': url_for(
+                'product_view.prod_get',
+                prod_id=product.id,
+                referrer=referrer
+            )
+        })
+
+    return render_template(
+        'new_product.jinja2',
+        form=form,
+        collection=collection
+    )
+
+
+@product_view.route('/products/multiedit', methods=['GET'])
+@authenticated
+@good_standing
+def product_multiedit():
+    selected = request.args.get('selected')
+    if selected:
+        selected = json.loads(selected)
+    session['multiedit'] = selected
+    session.regenerate()
+
+    return redirect(url_for('.prod_get', prod_id=selected[0]))
+
+
+@product_view.route('/products/<int:prod_id>', methods=['GET'])
+@authenticated
+@good_standing
+def prod_get(prod_id):
+    api_conn = amber_api_connection()
+
+    try:
+        product = api_conn.Product.retrieve(prod_id)
+    except errors.NotFound:
+        abort(404)
+
+    form_data = product.form_schema()
+
+    if 'panels' not in session:
+        session['panels'] = {}
+        session.regenerate()
+
+    form = build_product_form(form_data, product.to_dict(), False)
+
+    if 'referrer' in session and session['referrer']['name'] != 'manufacturer':
+        session.pop('product_ids', None)
+        session.regenerate()
+
+    product_components = product.get_components()
+    return render_template(
+        'product.jinja2',
+        form=form,
+        product=product,
+        product_components=product_components,
+        skip_components=skip_components,
+        priority_components=priority_components,
+        general_components=general_components,
+        common_components=common_components
+    )
+
+
+@product_view.route('/products/<int:prod_id>/tearsheet', methods=['GET'])
+@authenticated
+@good_standing
+def product_get_tearsheet(prod_id):
+    api_conn = amber_api_connection()
+
+    product = api_conn.Product.retrieve(prod_id)
+
+    sheet = tearsheet.Tearsheet('')
+    sheet.add_product(product)
+
+    stream = sheet.to_stream()
+
+    file_name = product.identity.manufacturer_sku
+    if not file_name:
+        id_hash = hashlib.md5()
+        id_hash.update(str(product.id).encode('utf-8'))
+        file_name = id_hash.hexdigest()[-8:]
+
+    disposition = ('attachment;filename=%s.pdf' % file_name).encode('utf8')
+    return Response(
+        stream.getvalue(),
+        mimetype='application/pdf',
+        headers={
+            'Content-Disposition': disposition
+        }
+    )
+
+
+@product_view.route('/products/<int:prod_id>', methods=['POST'])
+@authenticated
+@good_standing
+def prod_save(prod_id):
+    refresh_collection_cache()
+    api_conn = amber_api_connection()
+    product = api_conn.Product.retrieve(prod_id)
+
+    product.collection.collection_id = (
+        request.args.get('collection-collection_id')
+    )
+
+    form_data = product.form_schema()
+    form = build_product_form(form_data, product.to_dict(), True)
+
+    # delete anything we don't want overwritten as empty
+    del form.images
+    if form.validate_on_submit():
+        product.update(form.data)
+        product.save()
+        flash(u'Product has been saved.', 'success')
+    else:
+        if product.option_sets:
+            option_sets = []
+            if product.option_sets.option_set_list:
+                for option_set in product.option_sets.option_set_list:
+                    option_set_id = option_set.id
+                    option_set = api_conn.OptionSet.retrieve(
+                        option_set_id
+                    )
+                    option_sets.append(option_set)
+            product.option_sets.option_set_list = option_sets
+
+        referrer = None
+
+        # Bonus TODO: make this suck less
+
+        if request.args.get('referrer'):
+            referrer = {
+                'name': request.args.get('referrer'),
+                'id': request.args.get('referrer_id')
+            }
+            if referrer['name'] != 'manufacturer':
+                session.pop('product_ids', None)
+        else:
+            session.pop('product_ids', None)
+
+        product_components = product.get_components()
+        return render_template(
+            'product.jinja2',
+            form=form,
+            product=product,
+            skip_components=skip_components,
+            priority_components=priority_components,
+            general_components=general_components,
+            common_components=common_components,
+            product_components=product_components,
+        )
+    return redirect(url_for('.prod_get', prod_id=prod_id))
+
+
+@product_view.route(
+    '/products/<int:prod_id>/sub_component/<string:component>/new',
+    methods=['GET']
+)
+@authenticated
+@good_standing
+def new_sub_component_form(prod_id, component):
+    api_conn = amber_api_connection()
+    # shipping_information and boxes don't follow the standard pattern
+    prod = api_conn.Product.retrieve(prod_id)
+    if component == 'feature':
+        feat = api_conn.components.Feature
+        feat.description = request.args.get('description_of_feature')
+        feat.product_id = prod.pk()
+        feat.parent_id = prod.description.pk()
+
+        feat.save()
+        template = 'product/sub_components/%s.jinja2' % component
+        return render_template(template, prod_id=prod_id, feature=feat)
+    elif component == 'box':
+        box = api_conn.components.Box
+        box.from_dict(request.args)
+        box.product_id = prod.pk()
+        box.parent_id = prod.shipping_information.pk()
+        box.save()
+        # prod.refresh()
+        form = build_component_form(box.form_schema(), box.to_dict())
+
+        template = 'product/sub_components/%s.jinja2' % component
+        return render_template(
+            template,
+            prod_id=prod_id,
+            form=form,
+            pk=box.pk()
+        )
+
+    template = 'product/sub_components/%s.jinja2' % component
+    if component == 'table_leaf':
+        comp = api_conn.components.TableLeaf
+        parent = prod.table_leaves
+    else:
+        comp = getattr(api_conn.components, component.title())
+        parent = getattr(prod, pluralize(component))
+
+    comp.from_dict(request.args)
+    comp.product_id = prod.pk()
+    comp.parent_id = parent.pk()
+    comp.save()
+    # prod.refresh()
+    form = build_component_form(comp.form_schema(), comp.to_dict())
+
+    template = 'product/sub_components/%s.jinja2' % component
+    return render_template(template, prod_id=prod_id, form=form)
+
+
+@product_view.route(
+    '/products/<int:prod_id>/sub_component/<string:component>/'
+    '<int:sub_component_data_id>/delete',
+    methods=['POST']
+)
+@authenticated
+@good_standing
+def delete_product_sub_component(prod_id, component, sub_component_data_id):
+    api_conn = amber_api_connection()
+
+    if component == 'table_leaf':
+        sub_component = getattr(api_conn.components, 'TableLeaf')
+    else:
+        sub_component = getattr(api_conn.components, component.title())
+    sub_component.retrieve(sub_component_data_id)
+    sub_component.delete()
+
+    return jsonify({'success': True})
+
+
+@product_view.route(
+    '/products/<int:prod_id>/delete',
+    methods=['GET', 'POST']
+)
+@authenticated
+@good_standing
+def product_delete_modal(prod_id):
+    if request.method == 'GET':
+        return render_template(
+            'product/product_delete_modal.jinja2',
+            prod_id=prod_id
+        )
+    else:
+        api_conn = amber_api_connection()
+        api_conn.Product.retrieve(prod_id).delete()
+        return redirect(url_for('.product_list'))
+
+
+@product_view.route(
+    '/products/<int:prod_id>/image/<int:data_id>',
+    methods=['GET', 'POST']
+)
+@authenticated
+@good_standing
+def product_image_modal(prod_id, data_id):
+    api_conn = amber_api_connection()
+
+    product = api_conn.Product.retrieve(prod_id)
+    img = api_conn.components.Image.retrieve(data_id)
+
+    form_data = img.form_schema()
+
+    form = build_component_form(form_data, img.to_dict())
+
+    if form.validate_on_submit():
+        data = form.data
+        data.update({
+            'component_data_id': img.pk(),
+            'description': img.description
+        })
+
+        img.from_dict(data)
+        img.save()
+        product.refresh()
+        return render_template(
+            'product/components/images.jinja2',
+            product=product
+        )
+
+    return render_template(
+        'product/image_modal.jinja2',
+        form=form,
+        prod_id=prod_id,
+        sub_component_data_id=data_id
+    )
+
+
+@product_view.route(
+    '/products/<int:prod_id>/image/new',
+    methods=['GET', 'POST']
+)
+@authenticated
+@good_standing
+def product_image_modal_new(prod_id):
+    api_conn = amber_api_connection()
+
+    product = api_conn.Product
+    img = api_conn.components.Image
+    try:
+        product = api_conn.Product.retrieve(prod_id)
+        img = api_conn.components.Image
+    except Exception:
+        abort(500)
+
+    schema = img.form_schema()
+    form = build_component_form(schema)
+    form.category.validators = [InputRequired('Please select an image type.')]
+
+    if form.validate_on_submit():
+        img.product_id = prod_id
+        img.parent_name = "images"
+        img.parent_id = product.images.pk()
+        img.from_dict(form.data).save()
+
+        product.refresh()
+
+        return render_template(
+            'product/components/images.jinja2',
+            product=product
+        )
+
+    return render_template(
+        'product/image_modal.jinja2',
+        form=form,
+        prod_id=prod_id
+    )
+
+
+@product_view.route(
+    '/products/<int:data_id>/image/delete',
+    methods=['GET']
+)
+@authenticated
+@good_standing
+def product_image_delete_modal(data_id):
+    return render_template(
+        'product/image_delete_modal.jinja2',
+        data_id=data_id
+    )
+
+
+@product_view.route('/products/delete/confirm', methods=['GET'])
+@authenticated
+@good_standing
+def product_delete_multiple_modal():
+    return render_template('product/delete_select_modal.jinja2')
+
+
+@product_view.route('/products/delete', methods=['POST'])
+@authenticated
+@good_standing
+def product_delete():
+    refresh_collection_cache()
+    api_conn = amber_api_connection()
+
+    ids = [int(prod_id) for prod_id in request.json.get('product_ids')]
+
+    where = query.Predicate("id", query.within(*ids))
+    result = api_conn.Product.query(filtering=where).delete()
+
+    return jsonify({"success": True})
+
+
+@product_view.route('/products/image/upload', methods=['POST'])
+@authenticated
+def file_upload():
+    s3_bucket = app.config['S3_BUCKET']
+    image = request.files['img']
+    image_url = upload_image(image, s3_bucket=s3_bucket)
+
+    image.seek(0)
+    image_buffer = io.BytesIO(image.read())
+    image_string = base64.encodestring(image_buffer.getvalue())
+
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(host='localhost')
+    )
+    channel = connection.channel()
+    channel.queue_declare(queue='image_queue', durable=True)
+
+    message = json.dumps({
+        'url': image_url
+    })
+
+    channel.basic_publish(
+        exchange='',
+        routing_key='image_queue',
+        body=message,
+        properties=pika.BasicProperties(delivery_mode=2)
+    )
+
+    connection.close()
+
+    return jsonify({'success': True, 'image_url': image_url})
+
+
+@product_view.route('/products/image/process', methods=['POST'])
+@authenticated
+def image_processing():
+    data = request.json
+    rot_angle = int(data.get('rotation_angle', 0))
+    if rot_angle == 0:
+        return jsonify({'success': True, 'image_url': data['full_size']})
+    s3_bucket = app.config['S3_BUCKET']
+
+    image_url = data['full_size']
+    image_buffer = io.BytesIO(urlopen(image_url).read())
+    ext = image_url.rsplit('.', 1)[1]
+
+    if ext.lower() not in app.config['VALID_IMAGE_TYPES']:
+        return jsonify({'success': False, 'image_url': image_url})
+
+    mime_format = ext.lower()
+    if mime_format == 'jpg':
+        mime_format = 'jpeg'
+    mimetype = 'image/%s' % mime_format
+
+    image_container = io.BytesIO()
+    image = Image.open(image_buffer)
+    copied_image = image.copy()
+
+    # Get biggest dimension
+    bigger_dim = copied_image.width
+    if copied_image.height > copied_image.width:
+        bigger_dim = copied_image.height
+    size = (bigger_dim, bigger_dim)
+
+    # Create square canvas based on largest dimension
+    canvas = Image.new(mode='RGBA', size=size, color=(255, 255, 255, 255))
+
+    # Create box of image size in the center of the canvas and paste image and
+    # rotate
+    canvas_box = (
+        0 + int((bigger_dim - copied_image.width) / 2),
+        0 + int((bigger_dim - copied_image.height) / 2),
+        int((bigger_dim - copied_image.width) / 2) + copied_image.width,
+        int((bigger_dim - copied_image.height) / 2) + copied_image.height
+    )
+    canvas.paste(copied_image, canvas_box)
+    rotated_canvas = canvas.rotate(-rot_angle)
+
+    # Determine crop dimensions based on rotation angle and crop
+    crop_box = (
+        0 + int(bigger_dim / 2) - int(copied_image.height / 2),
+        0 + int(bigger_dim / 2) - int(copied_image.width / 2),
+        bigger_dim - (int(bigger_dim / 2) - int(copied_image.height / 2)),
+        bigger_dim - (int(bigger_dim / 2) - int(copied_image.width / 2))
+    )
+    if rot_angle % 180 == 0:
+        crop_box = (
+            0 + int(bigger_dim / 2) - int(copied_image.width / 2),
+            0 + int(bigger_dim / 2) - int(copied_image.height / 2),
+            bigger_dim - (int(bigger_dim / 2) - int(copied_image.width / 2)),
+            bigger_dim - (int(bigger_dim / 2) - int(copied_image.height / 2))
+        )
+    rotated_image = rotated_canvas.crop(crop_box)
+
+    image.close()
+
+    try:
+        rotated_image.seek(0)
+        rotated_image.convert('RGBA')
+        rotated_image.save(image_container, mime_format)
+        image_string = base64.encodestring(image_container.getvalue())
+    except KeyError as error:
+        if hasattr(error, 'message') and 'message' in error.message:
+            current_app.logger.error(error.message['message'])
+        else:
+            current_app.logger.error(error)
+        return jsonify({'success': False, 'image_url': image_url})
+
+    image_container.seek(0)
+    new_url = upload_image(
+        image_container,
+        mimetype=mimetype,
+        s3_bucket=s3_bucket,
+        stream=True
+    )
+
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(host='localhost')
+    )
+    channel = connection.channel()
+    channel.queue_declare(queue='image_queue', durable=True)
+
+    message = json.dumps({
+        'url': new_url
+    })
+
+    channel.basic_publish(
+        exchange='',
+        routing_key='image_queue',
+        body=message,
+        properties=pika.BasicProperties(delivery_mode=2)
+    )
+
+    image_buffer.close()
+    image_container.close()
+    connection.close()
+
+    while urlopen(new_url).getcode() != 200:
+        sleep(1)
+    return jsonify({'success': True, 'image_url': new_url})
+
+
+@product_view.route(
+    '/products/<int:prod_id>/options/add',
+    methods=['GET', 'POST']
+)
+@authenticated
+@good_standing
+def product_add_option(prod_id):
+    api_conn = amber_api_connection()
+
+    # TODO: needs functional testing
+    option_sets = api_conn.OptionSet.query()
+    product = api_conn.Product.retrieve(prod_id)
+    if request.method == 'POST':
+        set_ids = request.json.get('sets')
+        if product and set_ids:
+            opset_ids = []
+            if product.option_sets and product.option_sets.option_set_list:
+                sets = product.option_sets.option_set_list
+                opset_ids = [str(opset.pk()) for opset in sets]
+
+            for set_id in set_ids:
+                if set_id not in opset_ids:
+                    product.relate(api_conn.OptionSet.retrieve(set_id))
+        else:
+            return jsonify({'success': False, 'message': 'Missing data.'})
+
+        return render_template(
+            'product/components/option.jinja2',
+            product=product
+        )
+
+    return render_template(
+        'product/option_add_modal.jinja2',
+        prod_id=product.id,
+        option_sets=option_sets
+    )
+
+
+@product_view.route('/products/options/add', methods=['GET', 'POST'])
+@authenticated
+@good_standing
+def products_add_options():
+    api_conn = amber_api_connection()
+    current_user = get_current_user()
+    # TODO: needs functional testing
+    option_sets = api_conn.OptionSet.query(
+        filtering=query.Predicate(
+            'manufacturer_id',
+            query.equal(current_user.manufacturer_id)
+        )
+    )
+
+    if request.method == 'POST':
+        product_ids = request.json.get('product_list')
+        set_ids = request.json.get('option_sets')
+        if product_ids and set_ids:
+            for prod_id in product_ids:
+                product = api_conn.Product.retrieve(prod_id)
+                opset_ids = []
+                if product.option_sets and product.option_sets.option_set_list:
+                    sets = product.option_sets.option_set_list
+                    opset_ids = [str(opset.pk()) for opset in sets]
+
+                for set_id in set_ids:
+                    if set_id not in opset_ids:
+                        product.relate(api_conn.OptionSet.retrieve(set_id))
+        else:
+            return jsonify({'success': False, 'message': 'Missing data.'})
+
+        flash(u'Option sets have been added to product(s).', 'success')
+        return jsonify({'success': True})
+
+    return render_template(
+        'product/option_add_modal.jinja2',
+        option_sets=option_sets,
+    )
+
+
+@product_view.route(
+    '/products/<int:prod_id>/options/<int:option_set_id>/remove',
+    methods=['POST']
+)
+@authenticated
+@good_standing
+def product_remove_option(prod_id, option_set_id):
+    api_conn = amber_api_connection()
+    product = api_conn.Product.retrieve(prod_id)
+    option_set = api_conn.OptionSet.retrieve(option_set_id)
+    product.unrelate(option_set)
+
+    return jsonify({'success': True})
+
+
+@product_view.route('/products/panels/add', methods=['PUT'])
+@authenticated
+def panels_add():
+    panel = request.json['panel']
+    if 'panels' not in session:
+        session['panels'] = {}
+
+    if 'product' not in session['panels']:
+        session['panels']['product'] = []
+
+    if panel not in session['panels']['product']:
+        session['panels']['product'].append(panel)
+    session.regenerate()
+    return jsonify({'success': True})
+
+
+@product_view.route('/products/panels/remove', methods=['PUT'])
+@authenticated
+def panels_remove():
+    panel = request.json['panel']
+    if 'product' in session['panels']:
+        if panel in session['panels']['product']:
+            session['panels']['product'].remove(panel)
+    session.regenerate()
+    return jsonify({'success': True})
+
+
+@product_view.route(
+    '/products/<int:prod_id>/preview/discover',
+    methods=['POST']
+)
+@authenticated
+@good_standing
+def preview_discover(prod_id):
+    api_conn = amber_api_connection()
+    product = api_conn.Product.retrieve(prod_id)
+
+    data = product.to_dict()
+    data.update(request.json)
+    product_data = data
+
+    filtering = And(
+        Predicate('SalesChannel.sales_channel_name', equal(u'Discover'))
+    )
+    discover = api_conn.SalesChannel.query(filtering=filtering)[0]
+
+    product_data['preference'] = {}
+
+    try:
+        where = query.Predicate('sales_channel_id', query.equal(discover.id))
+        sales_channel_preference = api_conn.SalesChannelPreference.query(
+            filtering=where
+        )[0].to_dict()
+        if sales_channel_preference:
+            product_data['preference'] = sales_channel_preference
+    except Exception:
+        product_data['preference']['active'] = False
+        product_data['preference']['description_description'] = 'description'
+        product_data['preference']['pricing_dealer_price'] = True
+        product_data['preference']['identity_name'] = 'name'
+        product_data['preference']['pricing_wholesale'] = True
+        product_data['preference']['pricing_minimum_internet_price'] = True
+        product_data['preference']['pricing_trade_price'] = True
+        product_data['preference']['pricing_msrp'] = True
+
+    return render_template(
+        'product/product_preview_modal.jinja2',
+        product=product_data
+    )

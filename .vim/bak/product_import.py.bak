@@ -1,0 +1,751 @@
+import argparse
+import ast
+from copy import deepcopy
+import json
+import os
+import sys
+
+import openpyxl
+
+sys.path.insert(
+    0, os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+import amber_lib
+from amber_portal import app
+from amber_portal.lib import import_handlers
+from amber_portal.models import db
+from amber_portal.models.user import CMUser
+
+
+db.app = app
+
+
+SUPPORTED_HANDLERS = [
+    None,
+    'default_format',
+    'default_repeat_format',
+    'concatenate_values',
+    'price_format',
+    'list_length_repeat',
+    'multi_default_handler',
+    'lead_time',
+    'category_format',
+    'keywords',
+    'ch_images',
+    'ch_keywords'
+    #'multi_value_list'
+]
+
+
+ADD_PROD_FIELDS = [
+    'weight',
+    'assemblage_id',
+    'version_start_date',
+    'tag',
+    'category',
+    'pricing',
+    'description',
+    'construction_information',
+    'overall_dimensions',
+    'manufacturer',
+    'promotional_tags',
+    'image',
+    'option',
+    'collection',
+    'visibility',
+    'ordering_information',
+    'identity',
+    'instructions',
+    'audit',
+    'shipping_information',
+    'assemblage'
+]
+
+SUB_COMP_ID_FIELDS = {
+    'cushion': ['cushions'],
+    'description': ['features'],
+    'door': ['doors'],
+    'drawer': ['drawers'],
+    'image': ['images'],
+    'option': ['option_sets'],
+    'pillow': ['pillows'],
+    'shelf': ['shelves'],
+    'shipping_information': ['boxes'],
+    'table_leaf': ['table_leaves'],
+    'tag': ['tags']
+}
+
+EMPTY_CATEGORY = {
+    u'category': None,
+    u'primary_sub_category': None,
+    u'secondary_sub_category': None
+}
+
+EMPTY_PRODUCT = {
+    u'collection': {u'collection': {},
+                    u'collection_id': None,},
+    u'construction_information': {u'finish': None,
+                                  u'joinery_type': None,
+                                  u'material': None},
+    u'description': {u'alternate_description': None,
+                     u'description': None,
+                     u'designer_description': None,
+                     u'features': [],
+                     u'retail_description': None},
+    u'identity': {u'alternate_name': None,
+                  u'manufacturer_sku': None,
+                  u'name': u'',
+                  u'source_url': None},
+    u'image': {u'images': []},
+    u'instructions': {u'cleaning_directions': None,
+                      u'installation_directions': None},
+    u'option': {u'option_sets': []},
+    u'ordering_information': {u'discontinued': None,
+                              u'lead_time': None,
+                              u'minimum_quantity': None,
+                              u'quick_ship': None,
+                              u'stock': None,
+                              u'unit': None,
+                              u'warranty': None},
+    u'overall_dimensions': {u'depth': None,
+                            u'diameter': None,
+                            u'height': None,
+                            u'width': None},
+    u'pricing': {u'dealer_price': None,
+                 u'minimum_internet_price': None,
+                 u'msrp': None,
+                 u'trade_price': None,
+                 u'wholesale': None},
+    u'promotional_tags': {u'best_seller': None,
+                          u'discontinued': None,
+                          u'limited_stock': None,
+                          u'new': None},
+    u'shipping_information': {u'boxes': [],
+                              u'country_of_origin': None,
+                              u'drop_ship': None,
+                              u'freight': None,
+                              u'shipping_notes': None,
+                              u'ships_from': None,
+                              u'standard': None,
+                              u'volume': None,
+                              u'white_glove': None},
+    u'tag': {u'tags': []},
+    u'visibility': {u'active': False,
+                    u'meets_posting_requirements': False},
+    u'weight': {u'weight': None}
+}
+
+
+def _amber_api():
+    amber_api_obj = amber_lib.AmberClient(
+        app.config['AMBER_URL'],
+        app.config['EXPORT_WORKER_PUBLIC'],
+        app.config['EXPORT_WORKER_PRIVATE']
+    )
+    return amber_api_obj
+
+
+def update(original, new_dict):
+    """
+    This function recursively updates a dictionary and its nested dictionaries
+        when provided an original and new dictionary. It differs from the
+        default dict().update() behavior in that, if it detects a list, instead
+        of overwriting the old list with the new one it extends the original.
+    :param original: The original dictionary of which an updated version is
+        being created.
+    :param new_dict: The new dictionary that's values will be used to update the
+        original.
+    :return: A new dictionary containing the original data from 'original' as
+        well as the updates from 'new_dict'.
+    """
+    for key, value in new_dict.iteritems():
+        if isinstance(value, dict):
+            recursed = update(original.get(key, {}), value)
+            original[key] = recursed
+        elif isinstance(value, list):
+            if original.get(key) and isinstance(original.get(key), list):
+                original[key].extend(value)
+            else:
+                original[key] = new_dict[key]
+        else:
+            original[key] = new_dict[key]
+    return original
+
+
+def verify_not_empty(ver_dict):
+    if ver_dict:
+        for k, val in ver_dict.iteritems():
+            if isinstance(val, dict):
+                if verify_not_empty(val):
+                    return True
+            elif isinstance(val, list):
+                for item in val:
+                    if (isinstance(item, dict) and verify_not_empty(item)) \
+                            or item:
+                        return True
+            elif val:
+                return True
+    return False
+
+
+class ProductImporter(object):
+    def __init__(self, import_type, filename, manufacturer_id):
+
+        self.import_type = import_type
+        self.manufacturer_id = manufacturer_id
+        self.import_type = import_type
+        self.workbook = openpyxl.load_workbook(filename)
+
+        working_dir = os.path.dirname(os.path.abspath(__file__))
+
+        template_file = open(
+            '%s/export_templates/%s/template.json' % (working_dir, import_type)
+        )
+
+        self.template_data = json.load(template_file)
+
+        self.start_row = self.template_data['options']['start_row']
+        self.start_col = self.template_data['options']['start_col']
+
+        self.amber_client = _amber_api()
+
+        listing = self.amber_client.get_product_listing(
+            {'manufacturer_id': self.manufacturer_id}
+        )
+        self.product_id_map = {}
+        for prod in listing['products']:
+            self.product_id_map[prod['id']] = True
+
+        collections = self.amber_client.get_collections()
+        self.collection_id_map = {}
+        self.collections = {}
+        for collection in collections:
+            if collection['manufacturer_id'] == self.manufacturer_id:
+                self.collection_id_map[collection['id']] = True
+
+        option_sets = self.amber_client.get_option_sets(
+            self.manufacturer_id)
+        # This will map old option set IDs to new option set IDs for any
+        # option set that needed to be recreated. At initialization all the IDs
+        # should map to themselves.
+        self.option_sets_id_map = {}
+        self.option_id_map = {}
+        for option_set in option_sets:
+            self.option_sets_id_map[option_set['id']] = option_set['id']
+
+        self.product_row_map = []
+        self.products = {}
+        self.assemblages = self.amber_client.get_assemblages()
+        self.new_prod_id_index = -1
+
+    def import_collection_data(self):
+        sheet = self.workbook.get_sheet_by_name('Collection')
+        collection_tab = {}
+        for tab in self.template_data['tabs']:
+            if tab['name'] == 'Collection':
+                collection_tab = tab
+        for row in xrange(2, sheet.get_highest_row()+1):
+            collection = {
+                'manufacturer_id': self.manufacturer_id
+            }
+            for col_index in xrange(len(collection_tab['columns'])):
+                cell = sheet.cell(row=row, column=1+col_index)
+                value = cell.value
+                import_handlers.default_format(
+                    collection,
+                    collection_tab['columns'][col_index]['data'],
+                    value
+                )
+            if self.collection_id_map.get(collection.get('id')):
+                collection = self.amber_client.update_collection(
+                    collection.get('id'),
+                    collection
+                )
+                self.collections[collection.get('name')] = collection
+            elif collection.get('name'):
+                collection.pop('id', None)
+                collection = self.amber_client.add_collection(collection)
+                self.collections[collection.get('name')] = collection
+
+    def create_option_set_dict(self, sheet, options_tab, data_field, row):
+        option_set = {
+            'manufacturer_id': self.manufacturer_id
+        }
+        for col_index in xrange(len(options_tab['columns'])):
+            cell = sheet.cell(row=row, column=1+col_index)
+            value = cell.value
+
+            column_data_field = deepcopy(data_field)
+            column_data_field.update(
+                options_tab['columns'][col_index].get('data', {}))
+            if column_data_field.get('type'):
+                value = self.cast_value_type(
+                    value, column_data_field.get('type')
+                )
+            if value is not None:
+                import_handlers.default_format(
+                    option_set,
+                    column_data_field,
+                    value
+                )
+        return option_set
+
+    def import_option_set_data(self):
+        sheet = self.workbook.get_sheet_by_name('Options')
+        options_tab = {}
+        data_field = {}
+        for tab in self.template_data['tabs']:
+            if tab['name'] == 'Options':
+                options_tab = tab
+        data_field.update(options_tab.get('data', {}))
+        for row in xrange(2, sheet.get_highest_row()+1):
+            option_set = self.create_option_set_dict(
+                sheet,
+                options_tab,
+                data_field,
+                row
+            )
+            option_set_id = option_set.get('id')
+            new_option_set = {}
+            if option_set_id in self.option_sets_id_map:
+                option_set['id'] = self.option_sets_id_map[option_set['id']]
+                # The option set still exists, we'll just update it with the
+                # imported values.
+                new_option_set = self.amber_client.edit_option_set(
+                    option_set_id=option_set['id'],
+                    data=option_set
+                )
+                if 'options' not in new_option_set:
+                    new_option_set['options'] = self.amber_client.get_options(
+                        new_option_set['id']
+                    )
+                # We need to traverse through the options in the current
+                # version of the option set and update them with the imported
+                # values
+                for option in option_set['options']:
+                    for new_option in new_option_set['options']:
+                        if option['id'] == new_option['id']:
+                            self.amber_client.edit_option(
+                                option['id'],
+                                option_set['set_type'],
+                                option
+                            )
+                            # We mark the ones we update for later.
+                            option['updated'] = True
+                for option in option_set['options']:
+                    # If the option wasn't updated it means that it was deleted
+                    # and needs to be recreated.
+                    if not option.get('updated'):
+                        option.pop('id', None)
+                        self.amber_client.add_option(
+                            new_option_set['id'],
+                            option
+                        )
+            elif option_set_id and option_set.get('set_type'):
+                # The option set no longer exists, so we'll need to recreate
+                # it.
+                option_set.pop('id', None)
+                new_option_set = self.amber_client.add_option_set(
+                    manufacturer_id=self.manufacturer_id,
+                    data=option_set
+                )
+                if 'options' not in new_option_set:
+                    new_option_set['options'] = []
+                for option in option_set.get('options', []):
+                    option.pop('id', None)
+                    self.amber_client.add_option(
+                        new_option_set['id'],
+                        option
+                    )
+            # If option_set was overwritten because it needed to be recreated
+            # then it will have a new id that needs to be mapped to the old
+            # one.
+            if new_option_set:
+                self.option_sets_id_map[option_set_id] = new_option_set['id']
+
+    @staticmethod
+    def listify_string(attr_map, value):
+        if attr_map.get('single_cell'):
+            try:
+                val_list = ast.literal_eval('[%s]' % value)
+            except SyntaxError as e:
+                val_list = value.split(',')
+                remove_list = []
+                for index in xrange(len(val_list)):
+                    val_list[index] = val_list[index].replace('\'', '')
+                    val_list[index] = val_list[index].replace('"', '')
+                    val_list[index] = val_list[index].strip()
+                    if not val_list[index]:
+                        remove_list.append(index)
+                remove_list.reverse()
+                for index in remove_list:
+                    del(val_list[index])
+            return val_list
+        return [value]
+
+    def create_product_dicts(self):
+        col = self.start_col
+        for tab in self.template_data['tabs']:
+            sheet = self.workbook.get_sheet_by_name(tab['name'])
+            # In a given tab any given row should only have the data for a
+            # single product, so we create a list wherein the index will
+            # be the row number and each item is a dictionary for a
+            # product.
+            self.product_row_map = [{}] * (sheet.get_highest_row())
+            self.iterate_columns(tab, tab.get('data', {}), sheet, 1, 0)
+
+            # iterate_columns has completed, so self.product_row_maps
+            # should be fully populated. Now we can update self.products
+            # with the new information.
+            for product in self.product_row_map:
+                if product.get('id'):
+                    # The product was already in self.products so it will
+                    # be updated.
+                    if self.products.get(product['id']):
+                        new_prod = deepcopy(self.products[product['id']])
+                        self.products[product['id']] = update(
+                            new_prod, product
+                        )
+                    # The product was not in self.products so it's being
+                    # created.
+                    else:
+                        self.products[product['id']] = deepcopy(product)
+                elif product and tab.get('primary'):
+                    while self.new_prod_id_index in self.products.keys():
+                        self.new_prod_id_index -= 1
+                    self.products[self.new_prod_id_index] = deepcopy(product)
+                    self.new_prod_id_index -= 1
+
+        return self.products
+
+    def iterate_columns(
+            self, column_grouping, data_field, sheet, col_index, depth):
+        columns = column_grouping.get('columns')
+        new_data = column_grouping.get('data')
+        current_data_field = deepcopy(data_field) or dict()
+        if new_data:
+            # A data field was detected so we need to update our existing data
+            # dictionary.
+            current_data_field.update(new_data)
+        if columns:
+            # If 'columns' exists that means this isn't a bottom level header,
+            # i.e. there are sub columns, so we need to recursively call
+            # iterate_columns on each column object.
+            for column in columns:
+                col_index = self.iterate_columns(
+                    column, current_data_field, sheet, col_index, depth+1
+                )
+            return col_index
+        # If we reach here then we're on a leaf of the column tree, so we are
+        # ensured that we're dealing with a single column (not a grouping of
+        # columns) and have all the data from the data fields along this branch
+        # of the tree, so we can iterate through the rows in this column to
+        # update the in-progress product dictionaries.
+
+        for active_row in xrange(depth, sheet.get_highest_row()):
+            product = deepcopy(self.product_row_map[active_row])
+            self._update_component(
+                product, current_data_field, sheet, active_row, col_index
+            )
+            index = deepcopy(self.product_row_map[active_row])
+            # For some reason, when you call .update() from a dictionary
+            # retrieved directly from the list it updates all the dictionaries
+            # in the list, so we need to retrieve and copy it first.
+            index.update(product)
+            self.product_row_map[active_row] = index
+        return col_index + 1
+
+    def _update_component(self, product_dict, attr_map, sheet, row, col):
+        handler = attr_map.get('handler')
+        # These are the handlers currently supported by this method.
+        if handler in SUPPORTED_HANDLERS:
+            if handler == 'multi_value_list':
+                attr_map['assemblages'] = self.assemblages
+            cell = sheet.cell(row=1+row, column=col)
+            value = cell.value
+
+            handler = getattr(
+                import_handlers,
+                handler or '',
+                import_handlers.default_format
+            )
+            if attr_map.get('single_cell'):
+                value = self.listify_string(attr_map, value)
+            if attr_map.get('type'):
+                value = self.cast_value_type(value, attr_map.get('type'))
+            if value is not None:
+                handler(product_dict, attr_map, value)
+
+    def cast_value_type(self, value, new_type):
+        if new_type == type(value).__name__:
+            return value
+        if isinstance(value, list):
+            for index in xrange(len(value)):
+                value[index] = self.cast_value_type(value[index], new_type)
+            return value
+        if new_type == 'bool':
+            if isinstance(value, str) and len(value) > 0:
+                if value.upper()[0] == 'F' or 'FALSE' in value.upper()\
+                        or value.upper()[0] == 'N':
+                    value = False
+            return bool(value)
+        if value is None:
+            return None
+        if new_type == 'int':
+            return int(value)
+        if new_type == 'float':
+            return float(value)
+        if new_type == 'str':
+            if isinstance(value, unicode):
+                return value
+            else:
+                return str(value)
+        return value
+
+    def fix_collection(self, prod):
+        # Because of how the full product export spreadsheet is formatted if
+        # the product has a collection it won't quite be complete yet, we'll
+        # need to add in the collection_id and other details for the collection
+        # from the information we retrieved from the collection tab before we
+        # created the product dictionaries.
+        if prod.get('collection', {}).get('collection', {}).get('name'):
+            collection_name = prod.get('collection', {}).get(
+                'collection', {}).get('name')
+            collection = self.collections.get(collection_name)
+            if collection is None:
+                collection = self.amber_client.add_collection(
+                    {
+                        'name': collection_name,
+                        'designed_by': None,
+                        'description': None,
+                        'manufacturer_id': self.manufacturer_id
+                    }
+                )
+                self.collections[collection_name] = collection
+            prod['collection']['collection_id'] = collection.get('id')
+            prod['collection']['collection'] = collection
+
+    def fix_option_sets(self, prod):
+        # Because of how the full product export spreadsheet is formatted if
+        # the product has option sets it may have IDs for option sets that no
+        # longer exist and had to be replaced.
+        if prod.get('option', {}).get('option_sets'):
+            for index in xrange(len(prod.get(
+                    'option', {}).get('option_sets', []))):
+                option_set_id = (
+                    prod['option']['option_sets'][index].get('option_set_id'))
+                # Here we swap out the option_set_id for its mapping. This
+                # means that if the option_set_id refers to an option set that
+                # was deleted we'll substitute its ID for the ID of the
+                # option set that was created to replace it.
+                prod['option']['option_sets'][index].pop('name', None)
+                if option_set_id and \
+                        self.option_sets_id_map.get(option_set_id):
+                    prod['option']['option_sets'][index]['option_set_id'] = (
+                        self.option_sets_id_map[option_set_id]
+                    )
+                    prod['option']['option_sets'][index]['product_id'] = (
+                        prod['id']
+                    )
+                else:
+                    for key in prod['option']['option_sets'][index].keys():
+                        prod['option']['option_sets'][index].pop(key, None)
+
+    @staticmethod
+    def fix_sub_components(prod):
+        for key in SUB_COMP_ID_FIELDS.keys():
+            comp = prod.get(key)
+            if comp:
+                for arg in SUB_COMP_ID_FIELDS[key]:
+                    delete_indices = []
+                    sub_comp_list = comp.get(arg, [])
+                    for index in xrange(len(sub_comp_list)):
+                        if not sub_comp_list[index]:
+                            delete_indices.append(index)
+                    delete_indices.reverse()
+                    for index in delete_indices:
+                        del(sub_comp_list[index])
+                    comp[arg] = sub_comp_list
+                prod[key] = comp
+
+    @staticmethod
+    def _split_product(prod_dict):
+        # Some components exist for all products and others depend on category,
+        # trying to create a product with all the components it needs may fail
+        # if it tries to do those components before setting the category, so we
+        # split them beforehand.
+        components_dict = {}
+        simple_product = {}
+        for key in prod_dict.keys():
+            if key in ADD_PROD_FIELDS and key not in SUB_COMP_ID_FIELDS.keys():
+                simple_product[key] = prod_dict[key]
+            else:
+                components_dict[key] = prod_dict[key]
+        return simple_product, components_dict
+
+    def create_products(self, product_list):
+        for prod in product_list:
+            empty_prod = deepcopy(EMPTY_PRODUCT)
+            empty_prod.update(prod)
+            prod = empty_prod
+            if 'manufacturer' not in prod:
+                prod['manufacturer'] = {}
+            prod['manufacturer']['manufacturer_id'] = self.manufacturer_id
+            if 'category' in prod.keys():
+                if 'category' not in prod['category']:
+                    prod['category']['category'] = 'none'
+                if 'primary_sub_category' not in prod['category']:
+                    prod['category']['primary_sub_category'] = 'none'
+                if 'secondary_sub_category' not in prod['category']:
+                    prod['category']['secondary_sub_category'] = 'none'
+            self.fix_sub_components(prod)
+            self.fix_collection(prod)
+            prod, comps = self._split_product(prod)
+            comps.pop('id', None)
+            prod.pop('id', None)
+            new_prod = self.amber_client.add_product(prod)
+
+            # If the category isn't set at the right time then attempts to make
+            # changes to certain components will fail, so we set it now before
+            # anything else just in case.
+
+            if 'category' in comps:
+                self.amber_client.update_product_component(
+                    new_prod['id'], 'category', comps['category']
+                )
+            self.amber_client.update_product(new_prod['id'], comps)
+
+    def update_products(self, product_list):
+        for prod in product_list:
+            if 'manufacturer' not in prod:
+                prod['manufacturer'] = {}
+            prod['manufacturer']['manufacturer_id'] = self.manufacturer_id
+            self.delete_product_sub_components(prod['id'])
+            # If the category has changed we want to wipe the category first
+            # to ensure we don't try to update a component it can't have,
+            # otherwise we want to keep it so that we don't inadvertently
+            # wipe MVD. Usually we want to wipe everything and re-import it,
+            # but in this case since we can't successfully import MVDs we
+            # don't want to touch them if we don't have to.
+            # TODO: eliminate this check when MVDs are importable.
+            category_comp = self.amber_client.get_product_component(
+                prod['id'], 'category'
+            )
+            called = False
+            if 'category' in prod:
+                category_comp.pop('component_data_id', None)
+                category_comp.pop('product_id', None)
+                for key in category_comp.keys():
+                    if not category_comp[key]:
+                        category_comp[key] = 'none'
+                    if not prod['category'].get(key):
+                        prod['category'][key] = 'none'
+                    if category_comp[key] != prod['category'][key]:
+                        self.amber_client.update_product_component(
+                            prod['id'], 'category', EMPTY_CATEGORY
+                        )
+                        called = True
+                        break
+            self.amber_client.update_product(prod['id'], EMPTY_PRODUCT)
+            # If the category isn't set at the right time then attempts to make
+            # changes to certain components will fail, so we set it now before
+            # calling the overall update just in case.
+            if called:
+                if 'category' not in prod['category']:
+                    prod['category']['category'] = 'none'
+                if 'primary_sub_category' not in prod['category']:
+                    prod['category']['primary_sub_category'] = 'none'
+                if 'secondary_sub_category' not in prod['category']:
+                    prod['category']['secondary_sub_category'] = 'none'
+                self.amber_client.update_product_component(
+                    prod['id'], 'category', prod['category']
+                )
+            self.fix_collection(prod)
+            self.fix_sub_components(prod)
+            prod = self.amber_client.update_product(prod['id'], prod)
+
+    def delete_product_sub_components(self, product_id):
+        # Sub components can't be blanked out by updating the product/component
+        # with a blank dictionary, so we need to go through and delete any
+        # that exist manually to prevent duplication.
+        for key in SUB_COMP_ID_FIELDS.keys():
+            component = self.amber_client.get_product_component(
+                product_id, key)
+            comp_list = []
+            for arg in SUB_COMP_ID_FIELDS[key]:
+                comp_list.append(component.get(arg))
+            if comp_list:
+                for comp in comp_list:
+                    if comp:
+                        for item in comp:
+                            self.amber_client.delete_product_sub_component(
+                                product_id,
+                                key,
+                                item['sub_component_data_id']
+                            )
+
+    def import_products(self):
+        # We need to import the collection data first so that all necessary
+        # collections already exist before we try to add products to them.
+        if self.import_type == 'amberengine':
+            self.import_collection_data()
+            self.import_option_set_data()
+        self.create_product_dicts()
+        existing_products = []
+        new_products = []
+        for prod_id, product in self.products.iteritems():
+            if verify_not_empty(product):
+                self.fix_option_sets(product)
+                if product.get('id') and \
+                        self.product_id_map.get(product['id']):
+                    existing_products.append(product)
+                else:
+                    new_products.append(product)
+        self.create_products(new_products)
+        self.update_products(existing_products)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description='Import product data from the specified spreadsheet '
+        'into the specified manufacturer\'s account.'
+    )
+    parser.add_argument(
+        '-f',
+        '--file',
+        metavar='Filename',
+        default='test.xlsx',
+        help='The name of the export file with the product data to be '
+             'imported.'
+    )
+    parser.add_argument(
+        '-m',
+        '--mfr',
+        type=int,
+        default=639,
+        metavar='Manufacturer ID',
+        help='The manufacturer id for the account '
+             'the product data will be imported into.'
+    )
+    parser.add_argument(
+        '-u',
+        '--user',
+        metavar='User email address',
+        help='The email address for the user account that '
+             'the product data will be imported into.'
+    )
+    parser.add_argument(
+        '-t',
+        '--template',
+        metavar='Template',
+        default='amberengine',
+        help='The name of the template to be used to map the columns to '
+             'the corresponding product data fields.'
+    )
+    args = parser.parse_args()
+    if args.user:
+        user = CMUser.query.filter_by(email=args.user).first()
+        args.mfr = user.manufacturer_id
+    importer = ProductImporter(args.template, args.file, args.mfr)
+    importer.import_products()

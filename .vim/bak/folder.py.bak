@@ -1,0 +1,324 @@
+import json
+from flask import (
+    Blueprint,
+    redirect,
+    render_template,
+    url_for,
+    g,
+    jsonify,
+    request,
+    abort,
+    flash
+)
+
+
+from amber_discover.models import db
+from amber_discover.lib.utils import amber_api
+from amber_discover.models.folder import Folder, FolderContent
+from amber_discover.forms.folder import FolderForm, AddProductToFolderForm, FolderProductSearchForm
+from amber_discover.forms.helpers import GetListOfCategories
+
+from auth import authenticated
+
+from flask.ext.login import current_user
+
+
+folder_view = Blueprint(
+    'folder_view',
+    __name__,
+    template_folder='templates'
+)
+
+
+@folder_view.route('/folders', methods=['GET'])
+@authenticated
+def folders():
+    folders = Folder.query.filter_by(user_id=current_user.id).order_by(
+        Folder.date_created.desc()).all()
+    for folder in folders:
+        folder.categories = set([p.product_category for p in folder.products])
+
+    return render_template('folders/folders.jinja2', folders=folders, form={})
+
+
+@folder_view.route('/folders/add', methods=['GET', 'POST'])
+@authenticated
+def folder_add():
+    form = FolderForm()
+
+    if form.validate_on_submit():
+        data = {
+            'name': form.data['name'],
+            'user_id': current_user.id
+        }
+
+        folder = Folder(**data)
+        db.session.add(folder)
+        db.session.commit()
+
+        return redirect(url_for('folder_view.folders'))
+
+    return render_template(
+        'modals/folders/add_folder.jinja2',
+        form=form
+    )
+
+
+@folder_view.route('/folders/edit/<int:id>', methods=['GET', 'POST'])
+@authenticated
+def folder_edit(id):
+    folder = Folder.query.filter_by(id=id).first()
+    import pprint
+    print "=" * 1000
+    pprint.pprint(folder.name)
+    form = FolderForm(obj=folder)
+
+    if form.validate_on_submit():
+        name = form.data.get('name')
+        cover_image = form.data.get('cover_image')
+
+        if folder.name == name and folder.cover_image == cover_image:
+            flash('<span class="icon-info"></span>No changes were made.')
+        else: 
+            folder.name = form.data.get('name')
+            folder.cover_image = form.data.get('cover_image')
+            db.session.add(folder)
+            db.session.commit()
+            flash('<span class="icon-success"></span>\
+            Your changes have been saved.')
+
+    return render_template(
+        'modals/folders/edit_folder.jinja2',
+        form=form,
+        folder=folder
+    )
+
+
+@folder_view.route('/folders/<int:id>/delete/', methods=['DELETE'])
+@authenticated
+def folder_delete(id):
+    folder = Folder.query.filter_by(id=id, user_id=current_user.id).first()
+
+    if folder:
+        db.session.delete(folder)
+        db.session.commit()
+
+    return jsonify({'success': True})
+
+
+@folder_view.route('/folders/<int:folder_id>/products', methods=['GET'])
+@authenticated
+def folder_product_list(folder_id):
+    form = FolderProductSearchForm()
+    categories = GetListOfCategories()
+    c = [(value, name) for value, name in categories if value != 'none']
+    form.category.choices = c
+
+    data = {
+        'has_product': True,
+    }
+
+    manufacturers = amber_api().get_manufacturers(data=data)
+    choices = sorted(
+        [(m['name'], m['name']) for m in manufacturers],
+        key=lambda m: m[1].lower()
+    )
+    choices.insert(0, ('', 'All Manufacturers'))
+    form.manufacturer.choices = choices
+
+    folders = Folder.query.filter_by(user_id=current_user.id).all()
+    products = FolderContent.query.filter_by(folder_id=folder_id).all()
+    folder = Folder.query.filter_by(id=folder_id).first()
+
+    return render_template(
+        'folders/product_list.jinja2',
+        products=products,
+        form=form,
+        folder=folder,
+        folders=folders
+    )
+
+
+@folder_view.route(
+    '/folders/<int:folder_id>/product/<int:product_id>',
+    methods=['DELETE']
+)
+@authenticated
+def folder_product_delete(folder_id, product_id):
+    folder = Folder.query.get(folder_id)
+    if folder.user_id == current_user.id:
+        product = FolderContent.query.filter_by(
+            folder_id=folder.id,
+            product_id=product_id
+            ).first()
+        try:
+            db.session.delete(product)
+            db.session.commit()
+
+            new_cover_image = FolderContent.query.filter_by(
+                folder_id=folder.id
+            )
+
+            if new_cover_image.count() > 0:
+                new_cover_image = new_cover_image.first()
+            else:
+                new_cover_image.product_image = '/static/img/gui/noimage.svg'
+
+            folder.cover_image = new_cover_image.product_image
+            db.session.add(folder)
+            db.session.commit()
+        except:
+            abort(500)
+
+    return 'Success', 200
+
+
+@folder_view.route(
+    '/folders/product/confirm_delete',
+    methods=['GET']
+)
+@authenticated
+def folder_confirm_product_delete():
+    folder_id = request.args.get('folder', None)
+    product_id = request.args.get('product', None)
+
+    if folder_id:
+        folder = Folder.query.get(folder_id)
+    else:
+        folder = None
+
+    return render_template(
+        'modals/folders/confirm_delete_product.jinja2',
+        folder=folder,
+        product_id=product_id
+    )
+
+
+@folder_view.route(
+    '/folders/confirm_delete',
+    methods=['GET']
+)
+@authenticated
+def folder_confirm_delete():
+    folder_id = request.args.get('folder', None)
+    if folder_id:
+        folder = Folder.query.get(folder_id)
+    else:
+        folder = None
+
+    return render_template(
+        'modals/folders/confirm_delete_folder.jinja2',
+        folder=folder
+    )
+
+
+@folder_view.route('/folder/product', methods=['GET', 'POST'])
+@authenticated
+def folder_product_add():
+    folders = Folder.query.filter_by(user_id=current_user.id).order_by('name')
+    folder_content = FolderContent()
+    form = AddProductToFolderForm()
+
+    # Populate select initial value
+    form.folders.choices = []
+
+    if folders.count() > 0:
+        form.folders.choices = [(f.id, f.name) for f in folders]
+
+    form.folders.choices.insert(0, (0, 'Select a Folder'))
+
+    if form.validate_on_submit():
+        folder_content_data = json.loads(request.data)
+        product_id = folder_content_data.get('product_id')
+        folder_id = folder_content_data.get('folders', None)
+
+        existing_product = folder_content.query.filter_by(
+            product_id=product_id,
+            folder_id=folder_id
+            )
+
+        if existing_product.count() > 0:
+            folder = Folder.query.get(int(folder_id))
+            return render_template(
+                'modals/folders/add_product_to_folder_success.jinja2',
+                folder=folder
+                )
+
+        product_data = amber_api().get_product(
+            prod_id=product_id,
+            data={'sales_channel_id': g.retailer.get('id')}
+        )
+
+        default_image = get_default_image(product_data)
+
+        if not form.data.get('new_folder'):
+            folder = Folder.query.get(int(folder_content_data.get('folders')))
+        else:
+            new_folder_data = {
+                'name': form.data.get('new_folder'),
+                'user_id': current_user.id
+            }
+
+            new_folder = Folder(**new_folder_data)
+            db.session.add(new_folder)
+            db.session.commit()
+
+            folder = Folder.query.get(new_folder.id)
+
+        if folder.cover_image is None or 'noimage.svg' in folder.cover_image:
+            folder.cover_image = default_image.get('full_size')
+            db.session.add(folder)
+
+        folder_content = map_folder_content(
+            folder_content,
+            folder,
+            product_data,
+            default_image
+        )
+
+        db.session.add(folder_content)
+        db.session.commit()
+
+        return render_template(
+            'modals/folders/add_product_to_folder_success.jinja2',
+            folder=folder
+            )
+
+    else:
+        pass
+
+    return render_template(
+        'modals/folders/add_product_to_folder.jinja2',
+        form=form,
+        folders=folders
+    )
+
+
+def map_folder_content(folder_content, folder, product_data, default_image):
+    temp_content = {
+        'folder_id': folder.id,
+        'product_id': int(product_data['id']),
+        'product_name': product_data['identity']['name'],
+        'product_image': default_image.get('full_size'),
+        'product_modified': product_data['audit']['date_updated'],
+        'product_category': product_data['category']['category'].title(),
+        'manufacturer_id': product_data['manufacturer']['manufacturer']['id'],
+        'manufacturer_name': product_data['manufacturer']['manufacturer']['name'],
+        'manufacturer_url': product_data['manufacturer']['manufacturer']['url']
+    }
+
+    for k,v in temp_content.iteritems():
+        setattr(folder_content, k, v)
+
+    return folder_content
+
+
+def get_default_image(product_data):
+    images = product_data.get('image').get('images')
+
+    for image in images:
+        if image.get('default') is True:
+            return image
+
+    # Made it out side the loop with no images
+    return images[0]

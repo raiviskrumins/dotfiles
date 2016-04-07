@@ -1,0 +1,27 @@
+{% from 'macros.jinja2' import basic_field %}
+
+<div class="modal fade" id="collectionEdit">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title">
+                    {% if collection %}Edit Collection
+                    {% else %}Add New Collection{% endif %}</h4>
+            </div>
+            <form id="collectionForm" {% if collection %}action="{{ url_for('collection_view.collection_form_id', id=collection.id)}}" method="PUT"{% else %}action="{{url_for('collection_view.collection_form')}}" method="POST"{% endif %}>
+                <div class="modal-body">
+                    <p>{{ basic_field(form.name) }}</p>
+                    "lijhfawenurxlow7bc3 w7acr8b36ocr3w8zbr7cpw;9cbzl auybn 
+                  </div>
+                <div class="modal-footer">
+                    {% if collection %}
+                    <a href="{{url_for('collection_view.collection_confirm', id=collection.id)}}" class="btn btn-danger js-delete-confirm pull-left">Delete Collection</a>
+                    {% endif %}
+                    <button class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <button class="btn btn-primary js-save-collection">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

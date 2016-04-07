@@ -1,0 +1,219 @@
+from flask import (
+    Blueprint,
+    jsonify,
+    render_template,
+    redirect,
+    request,
+    session,
+    url_for
+)
+from amber_portal.lib.utils import amber_api_connection
+from amber_portal.forms.contact import ContactForm
+from amber_portal.lib import get_current_user
+
+from amber_lib import query, errors
+
+import os
+import json
+
+from auth import authenticated
+from amber_portal import app
+
+import amber_portal.signals
+import amber_portal.views.user
+import amber_portal.views.manufacturer
+import amber_portal.views.product
+
+current_user = get_current_user()
+
+dashboard_view = Blueprint(
+    'dashboard_view',
+    __name__,
+    template_folder='templates'
+)
+
+categories = [
+    {'label': 'Accessories', 'category': 'accessory'},
+    {'label': 'Casegoods', 'category': 'casegood'},
+    {'label': 'Lighting', 'category': 'lighting'},
+    {'label': 'Outdoor', 'category': 'outdoor'},
+    {'label': 'Textiles', 'category': 'textiles'},
+    {'label': 'Upholstery', 'category': 'upholstery'},
+    {'label': 'Youth', 'category': 'youth'},
+    {'label': 'Uncategorized', 'category': 'none'}
+]
+
+@dashboard_view.route('/dashboard/required', methods=['GET'])
+@authenticated
+def required_completion():
+    api_conn = amber_api_connection()
+    manufacturer = api_conn.Manufacturer.retrieve(current_user.manufacturer_id)
+    where = query.Predicate(
+        "sales_channel_name", query.equal('Discover')
+    )
+    channel = api_conn.SalesChannel.query(filtering=where)
+
+    try:
+        where = query.Predicate('sales_channel_id', query.equal(channel[0].id))
+        preference = api_conn.SalesChannelPreference.query(filtering=where)[0].to_dict()
+    except errors.NotFound:
+        preference = {}
+
+    required = [
+        ('Name', bool(manufacturer.name)),
+        ('Bio', bool(manufacturer.bio)),
+        ('Phone Number or Email Address', bool(
+            manufacturer.email or
+            manufacturer.phone
+        )),
+        ('Logo', bool(manufacturer.logo_url)),
+        ('Turn Discover visibility on in Sales Channels tab', bool(
+            preference.get('active'))
+        )
+    ]
+
+    # count all complete items
+    complete = len([r for r, v in required if not v])
+
+    required_data = {
+        'complete': 1 - (float(complete) / len(required)),
+        'missing': [r for r, v in required if not v] # list missing items
+    }
+
+    tooltip = render_template(
+        'dashboard/chart_tooltip.jinja2',
+        data=required_data
+    )
+    required_data['tooltip'] = tooltip
+
+    where = query.Predicate("manufacturer_id", query.equal(manufacturer.pk()))
+    images = api_conn.ManufacturerImage.query(filtering=where)
+
+    default = True if True in [img.default for img in images] else False
+
+    optimized = [
+        ('Name', bool(manufacturer.name)),
+        ('Bio', bool(manufacturer.bio)),
+        ('Logo', bool(manufacturer.logo_url)),
+        ('Turn Discover visibility on in Sales Channels tab', bool(
+            preference.get('active'))
+        ),
+        ('Website', bool(manufacturer.url)),
+        ('Email Address', bool(manufacturer.email)),
+        ('Phone Number', bool(manufacturer.phone)),
+        ('Street Address', bool(manufacturer.street_address_1)),
+        ('City, State and Zip', bool(
+            manufacturer.city and
+            manufacturer.state and
+            manufacturer.zipcode
+        )),
+        ('At least one social media account', bool(
+            manufacturer.google_plus_url or
+            manufacturer.twitter_url or
+            manufacturer.facebook_url or
+            manufacturer.pinterest_url or
+            manufacturer.linkedin_url
+        )),
+        ('Feature Image', bool(default))
+    ]
+
+    if len(images) < 2:
+        optimized.append(('2 Additional Images', False))
+    elif len(images) < 3:
+        optimized.append(('1 Additional Image', False))
+
+    # count all complete items
+    complete = len([r for r, v in optimized if not v])
+    total = len(optimized)
+
+    optimized_data = {
+        'complete': 1 - (float(complete) / total),
+        'missing': [r for r, v in optimized if not v] # list missing items
+    }
+
+    tooltip = render_template(
+        'dashboard/chart_tooltip.jinja2',
+        data=optimized_data
+    )
+    optimized_data['tooltip'] = tooltip
+
+    data = {
+        'required': required_data,
+        'optimized': optimized_data
+    }
+
+    return jsonify(data)
+
+
+@dashboard_view.route('/dashboard/walkthrough', methods=['GET'])
+@authenticated
+def walkthrough():
+    path = os.path.join(
+        app.config['ABS_PATH'],
+        'static/data/walkthrough.json'
+    )
+
+    data_file = open(path)
+    return data_file.read()
+
+
+@dashboard_view.route('/dashboard', methods=['GET', 'POST'])
+@authenticated
+def dashboard():
+    api_conn = amber_api_connection()
+    for role in current_user.roles:
+        if role.name == "portal_admin":
+            return redirect(url_for('admin_view.admin_dashboard'))
+
+    all_products = api_conn.Product.query(batch_size=1) #Only used for a count
+
+    where = query.Predicate("VisibilityComponent.active", query.equal(True))
+    active_products = api_conn.Product.query(filtering=where, batch_size=1)
+
+    active_count = len(active_products)
+
+    for category in categories:
+        where = query.Predicate("CategoryComponent.primary_category", query.equal(category['category'].lower()))
+        cat_prods = api_conn.Product.query(filtering=where, batch_size=1)
+        category['count'] = len(cat_prods)
+
+    return render_template(
+        'dashboard/index.jinja2',
+        products=all_products,
+        categories=categories,
+        active=active_count
+    )
+
+
+@dashboard_view.route('/dashboard/contact', methods=['GET', 'POST'])
+@authenticated
+def contact():
+    user = {
+        'name': current_user.name,
+        'email': current_user.email
+    }
+
+    form = ContactForm(**user)
+
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            amber_portal.signals.user_signals.contact.send(form.data)
+            session['contact_data'] = form.data
+
+            return redirect(url_for('.confirmation'))
+
+    return render_template('dashboard/contact.jinja2', form=form)
+
+
+@dashboard_view.route('/dashboard/contact/sent', methods=['GET'])
+@authenticated
+def confirmation():
+    if 'contact_data' in session:
+        contact = session.pop('contact_data')
+    else:
+        contact = None
+
+    return render_template(
+        'dashboard/confirmation.jinja2',
+        contact=contact
+    )

@@ -1,0 +1,100 @@
+from flask_wtf import Form
+from wtforms import (
+    TextField,
+    TextAreaField,
+    BooleanField,
+    SelectField,
+    IntegerField,
+)
+
+from wtforms.validators import (
+    Email,
+    InputRequired,
+    Length
+)
+
+from amber_discover.forms.validators import (
+    RequiredIfNot
+)
+
+import us
+
+
+class RetailerForm(Form):
+    name = TextField('Company Name')
+    bio = TextAreaField('Company Bio')
+    url = TextField('Website')
+    logo_url = TextField('Logo URL')
+    new_images = TextField()
+    delete_images = TextField()
+
+
+class RetailerContactForm(Form):
+    email = TextField(
+        'Email Address',
+        validators=[
+            RequiredIfNot(
+                'phone',
+                message=u'Please enter your email or your phone number.'
+            ),
+            Email(
+                message=u'Please enter a valid email address.'
+            )
+        ]
+    )
+
+    # custom validation to check for either phone or email
+
+    phone = TextField(
+        'Phone Number',
+        validators=[
+            RequiredIfNot(
+                'email',
+                message=u'Please enter your email or your phone number.'
+            )
+        ]
+    )
+    street_address_1 = TextField('Street Address 1')
+    street_address_2 = TextField('Street Address 2')
+    city = TextField('City')
+    state = SelectField(
+        'State',
+        choices=list((state.abbr, state.name) for state in us.states.STATES)
+    )
+    zipcode = TextField(
+        'Zip Code',
+        validators=[
+            InputRequired(
+                message='Please enter a zip code.'
+            ),
+            Length(
+                min=3,
+                max=10,
+                message=u'Please enter a zip code \
+                between 3 and 10 characters long.'
+            )
+        ]
+    )
+    facebook_url = TextField('Facebook')
+    twitter_url = TextField('Twitter')
+    linkedin_url = TextField('LinkedIn')
+    pinterest_url = TextField('Pinterest')
+    google_plus_url = TextField('Google Plus')
+
+
+class ContactRetailerForm(Form):
+    email = TextField('To:')
+    subject = TextField('Subject:')
+    message = TextAreaField('Message:')
+    my_info = BooleanField('Include my contact information')
+    my_email = TextField('Email Address')
+    my_phone = TextField('Phone Number')
+
+
+class RetailerBillingForm(Form):
+    card_number = IntegerField('Card Number:')
+
+
+class RetailerImageForm(Form):
+    logo_url = TextField('Logo URL')
+    default = BooleanField('Feature Image')

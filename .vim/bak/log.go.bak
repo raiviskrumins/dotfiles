@@ -1,0 +1,88 @@
+package log
+
+import (
+	"fmt"
+	"os"
+	"text/template"
+	"time"
+)
+
+const (
+	Info  = iota
+	Debug = iota
+	Error = iota
+)
+
+const InfoColor = ""
+const DebugColor = ""
+const ErrorColor = ""
+
+func LevelName(level int) string {
+	switch level {
+	case Info:
+		return "info"
+	case Debug:
+		return "debug"
+	case Error:
+		return "error"
+	default:
+		panic("Invalid logging level.")
+	}
+}
+
+type Log struct {
+	Hour    int
+	Minute  int
+	Second  int
+	Day     int
+	Month   int
+	Year    int
+	Unix    int64
+	Name    string
+	Level   string
+	Message string
+}
+
+type Logger struct {
+	FilePath string
+	Template string
+	Name     string
+	Colored  bool
+}
+
+func (l *Logger) Default() {
+	l.Template = "{{.hour}}:{{.minute}}:{{.second}} {{.name}} ▶ {{.level}} {{.msg}}"
+	l.Name = "Logger"
+	l.Colored = true
+	l.FilePath = "/dev/stdout"
+}
+
+func (l *Logger) Write(level int, msg string, args ...interface{}) {
+	now := time.Time()
+	log := Low{
+		Hour:    now.Hour(),
+		Minute:  now.Minute(),
+		Second:  now.Second(),
+		Day:     now.Day(),
+		Month:   now.Month(),
+		Year:    now.Year(),
+		Unix:    now.Unix(),
+		Name:    l.Name,
+		Level:   LevelName(level),
+		Message: fmt.Sprintf(msg, args...),
+	}
+
+	t := template.New("Logging Template")
+	t, err := t.Parse(l.Template)
+	if err != nil {
+		panic(err)
+	}
+
+	f, err := os.OpenFile(l.FilePath, os.O_RDWR|os.O_APPEND, 0660)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	t.Execute(f, log)
+}

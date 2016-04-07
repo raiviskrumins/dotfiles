@@ -1,0 +1,137 @@
+class Config(object):
+    PORT = 82
+    DEBUG = True
+    SQLALCHEMY_ECHO = False
+    CSRF_ENABLED = False
+    WTF_CSRF_ENABLED = False
+
+    MAILGUN_DOMAIN = 'amberengine.com'
+    MAILGUN_API_KEY = 'key-5f09wnwa5hhl3vc8bd0tvodrxezmfym2'
+    MAILGUN_DEFAULT_FROM_EMAIL = 'Amber Engine <info@amberengine.com>'
+
+    STRIPE_SECRET_KEY = 'sk_test_lPTCXAPhPlPj0hwvKZsCFfiq'
+    STRIPE_PUBLISHABLE_KEY = 'pk_test_gF7unyDoswxnqgwkAcTy7MZr'
+
+    HUBSPOT_API_KEY = 'e93f27b6-f16b-45b9-807c-047cab7ec236'
+
+    LOGIN_DISABLED = False
+
+    REDIS_DB = 0
+
+    VALID_IMAGE_TYPES = ['jpg', 'jpeg', 'png', 'gif']
+
+
+class TestingConfig(Config):
+    TESTING = True
+    PRESERVE_CONTEXT_ON_EXCEPTION = False
+
+    SQLALCHEMY_DATABASE_URI = 'sqlite://'
+
+    S3_ACCESS = 'AKIAJVSN5YXVJ6NA3WQQ'
+    S3_SECRET = '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'
+    S3_BUCKET = 'amber-cm-dev'
+
+    SECRET_KEY = '4f504280b94e8ad8cd993fd58dddc61eda317987ac68da6dcaccdb6a04066fe8'
+
+    EXPORT_WORKER_PUBLIC = 'beb10ad861a2b7844cb9172462a618e5ce0eb16b1f1dc8e9452db188479421e3'
+    EXPORT_WORKER_PRIVATE = 'b3c64f36d8f500d405e9c83cf1b22aaf4d058644f0387034c9cbb7fb993f38cd'
+
+    AMBER_API_PUBLIC = '8abebf3699d76c1707cc192a1627a100888b873e567c85765c0ce52d51129523'
+    AMBER_API_PRIVATE = 'b8c056bc53fa4dcd3665978da53beab6e24a5b64b33f2f625c3c51fb63858130'
+
+    AMBER_URL = 'http://api.staging.amberengine.com'
+
+
+class DevelopmentConfig(Config):
+    REDIS_DB = 2
+
+    SQLALCHEMY_DATABASE_URI = 'postgresql://doodle@localhost:5432/portal'
+
+    S3_ACCESS = 'AKIAJVSN5YXVJ6NA3WQQ'
+    S3_SECRET = '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'
+    S3_BUCKET = 'amber-cm-dev'
+
+    SECRET_KEY = '4f504280b94e8ad8cd993fd58dddc61eda317987ac68da6dcaccdb6a04066fe8'
+
+    EXPORT_WORKER_PUBLIC = 'beb10ad861a2b7844cb9172462a618e5ce0eb16b1f1dc8e9452db188479421e3'
+    EXPORT_WORKER_PRIVATE = 'b3c64f36d8f500d405e9c83cf1b22aaf4d058644f0387034c9cbb7fb993f38cd'
+
+    AMBER_API_PUBLIC = '8abebf3699d76c1707cc192a1627a100888b873e567c85765c0ce52d51129523'
+    AMBER_API_PRIVATE = 'b8c056bc53fa4dcd3665978da53beab6e24a5b64b33f2f625c3c51fb63858130'
+
+    #AMBER_URL = 'http://api.staging.amberengine.com'
+    AMBER_URL = 'http://localhost:81'
+
+
+class StagingReleaseConfig(Config):
+    SQLALCHEMY_ECHO = True
+    SQLALCHEMY_DATABASE_URI = 'postgresql://doodle@portal-stage-20151013.clynklc694ta.us-west-1.rds.amazonaws.com:5432/portal'
+
+    S3_ACCESS = 'AKIAJYDF2XIOLZ4TTR6A'
+    S3_SECRET = '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'
+    S3_BUCKET = 'amber-cm-stage'
+
+    SECRET_KEY = '4f504280b94e8ad8cd993fd58dddc61eda317987ac68da6dcaccdb6a04066fe8'
+
+    EXPORT_WORKER_PUBLIC = 'ibeb10ad861a2b7844cb9172462a618e5ce0eb16b1f1dc8e9452db188479421e3'
+    EXPORT_WORKER_PRIVATE = 'b3c64f36d8f500d405e9c83cf1b22aaf4d058644f0387034c9cbb7fb993f38cd'
+
+    AMBER_API_PUBLIC = '8abebf3699d76c1707cc192a1627a100888b873e567c85765c0ce52d51129523'
+    AMBER_API_PRIVATE = 'b8c056bc53fa4dcd3665978da53beab6e24a5b64b33f2f625c3c51fb63858130'
+
+    AMBER_URL = 'http://internal-AmberLibStagingReleaseLB-611318040.us-west-1.elb.amazonaws.com'
+
+
+class StagingConfig(Config):
+    SQLALCHEMY_DATABASE_URI = 'postgresql://doodle@portal-stage-20151013.clynklc694ta.us-west-1.rds.amazonaws.com:5432/portal'
+
+    S3_ACCESS = 'AKIAJYDF2XIOLZ4TTR6A'
+    S3_SECRET = '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'
+    S3_BUCKET = 'amber-cm-stage'
+
+    SECRET_KEY = '4f504280b94e8ad8cd993fd58dddc61eda317987ac68da6dcaccdb6a04066fe8'
+
+    EXPORT_WORKER_PUBLIC = 'beb10ad861a2b7844cb9172462a618e5ce0eb16b1f1dc8e9452db188479421e3'
+    EXPORT_WORKER_PRIVATE = 'b3c64f36d8f500d405e9c83cf1b22aaf4d058644f0387034c9cbb7fb993f38cd'
+
+    AMBER_API_PUBLIC = '8abebf3699d76c1707cc192a1627a100888b873e567c85765c0ce52d51129523'
+    AMBER_API_PRIVATE = 'b8c056bc53fa4dcd3665978da53beab6e24a5b64b33f2f625c3c51fb63858130'
+
+    AMBER_URL = 'http://internal-AmberLibStagingLB-545722304.us-west-1.elb.amazonaws.com'
+
+
+class ProductionReleaseConfig(Config):
+    SQLALCHEMY_ECHO = True
+    SQLALCHEMY_DATABASE_URI = 'postgresql://doodle:doodle123@localhost:5432/portal'
+
+    S3_ACCESS = 'AKIAIM27ABJCO3GU4LCA'
+    S3_SECRET = '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'
+    S3_BUCKET = 'amber-cm-prod'
+
+    SECRET_KEY = 'b3caa847d381c12fac6b0df84b838d40470f7ce5a1346f6b75384b613444bc7638d6a64ed71d627e0540f9d7e57156d35bec'
+
+    EXPORT_WORKER_PUBLIC = 'beb10ad861a2b7844cb9172462a618e5ce0eb16b1f1dc8e9452db188479421e3'
+    EXPORT_WORKER_PRIVATE = 'b3c64f36d8f500d405e9c83cf1b22aaf4d058644f0387034c9cbb7fb993f38cd'
+
+    AMBER_API_PUBLIC = '8abebf3699d76c1707cc192a1627a100888b873e567c85765c0ce52d51129523'
+    AMBER_API_PRIVATE = 'b8c056bc53fa4dcd3665978da53beab6e24a5b64b33f2f625c3c51fb63858130'
+
+    AMBER_URL = 'http://internal-Release-AmberLibLB-506520583.us-west-2.elb.amazonaws.com'
+
+
+class ProductionConfig(Config):
+    SQLALCHEMY_DATABASE_URI = 'postgresql://doodle@portal-prod.ckxjyyw7u7mb.us-west-2.rds.amazonaws.com:5432/portal'
+
+    S3_ACCESS = 'AKIAIM27ABJCO3GU4LCA'
+    S3_SECRET = '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'
+    S3_BUCKET = 'amber-cm-prod'
+
+    SECRET_KEY = 'b3caa847d381c12fac6b0df84b838d40470f7ce5a1346f6b75384b613444bc7638d6a64ed71d627e0540f9d7e57156d35bec'
+
+    EXPORT_WORKER_PUBLIC = 'beb10ad861a2b7844cb9172462a618e5ce0eb16b1f1dc8e9452db188479421e3'
+    EXPORT_WORKER_PRIVATE = 'b3c64f36d8f500d405e9c83cf1b22aaf4d058644f0387034c9cbb7fb993f38cd'
+
+    AMBER_API_PUBLIC = '8abebf3699d76c1707cc192a1627a100888b873e567c85765c0ce52d51129523'
+    AMBER_API_PRIVATE = 'b8c056bc53fa4dcd3665978da53beab6e24a5b64b33f2f625c3c51fb63858130'
+
+    AMBER_URL = 'http://internal-AmberLibLB-903762868.us-west-2.elb.amazonaws.com'

@@ -1,0 +1,73 @@
+package test_utils
+
+import (
+	"encoding/json"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/gorilla/context"
+	"github.com/julienschmidt/httprouter"
+	"github.com/stretchr/testify/assert"
+)
+
+type TestFile map[string][]TestObject
+
+type TestObject map[string]json.RawMessage
+
+type MockJSON struct {
+	io.Reader
+}
+
+func (MockJSON) Close() error { return nil }
+
+// RouteTest is a generic harness for testing route code. It provides details about test failures in the /tmp/gotest
+// directory in individual files for each test.
+func RouteTest(t *testing.T, route httprouter.Handle, testName string, index int, payload string, expectedResponse json.RawMessage, method string, uri string, uriParams ...[]string) {
+
+	request, _ := http.NewRequest(method, uri, strings.NewReader(payload))
+	request.RequestURI = uri
+
+	var params httprouter.Params
+	for _, uriParam := range uriParams {
+		param := httprouter.Param{uriParam[0], uriParam[1]}
+		params = append(params, param)
+	}
+	context.Set(request, "params", params)
+
+	response := httptest.NewRecorder()
+
+	route(response, request, params)
+	responseJSON, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		assert.Fail(t, "Product JSON file invalid.")
+		return
+	}
+
+	var actual map[string]interface{}
+	err = json.Unmarshal(responseJSON, &actual)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var expected map[string]interface{}
+	err = json.Unmarshal(expectedResponse, &expected)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	errs := lib.JSONVerifyObject(actual, expected)
+	if errs != nil {
+		ioutil.WriteFile(lib.Join("", "/tmp/gotest/", testName, "_", strconv.Itoa(index), ".json"), responseJSON, 0777) // truncates before writes
+	}
+	for _, err := range errs {
+		assert.Fail(t, err.Error(), "Index: "+strconv.Itoa(index))
+	}
+}

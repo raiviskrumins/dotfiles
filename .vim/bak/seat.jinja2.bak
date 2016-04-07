@@ -1,0 +1,10 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+
+<div class="row">
+  <div class="col-md-5">{{ append_field(form.seat.seat_height, 'in') }}</div>
+  <div class="col-md-5">{{ append_field(form.seat.seat_depth, 'in') }}</div>
+</div>
+<div class="row">
+  <div class="col-md-5">{{ append_field(form.seat.seat_width, 'in') }}</div>
+  <div class="col-md-5">{{ basic_field(form.seat.seat_construction) }}</div>
+</div>

@@ -1,0 +1,134 @@
+// oops is an error-factory package for generating custom errors.
+package oops
+
+import (
+	"crypto/md5"
+	"fmt"
+	"os"
+	"runtime"
+	"runtime/debug"
+	"time"
+
+	"github.com/AmberEngine/api/config"
+)
+
+type Error interface {
+	Error() string
+	Stringify() string
+	Log()
+	Slog() string
+	HTTPStatus() int
+}
+
+// err is a struct for storing the HTTP response Status, the error Title,
+// a SHA1 hash of the title as the Code, and the Message describing the error.
+type err struct {
+	Status  int    `json:"status"`
+	Code    string `json:"code"`
+	Title   string `json:"title"`
+	Message string `json:"message"`
+	error   string
+}
+
+func (e err) HTTPStatus() int {
+	return e.Status
+}
+
+// Error is a wrapper for e.Stringify(), used to satisfy the error interface.
+func (e err) Error() string {
+	return e.Stringify()
+}
+
+// Stringify returns a stringified version of the err struct instance, so as to
+// conform to the std error type interface.
+func (e err) Stringify() string {
+	return fmt.Sprintf("HTTP %d - [%s] %s: %s", e.Status, e.Code, e.Title, e.Message)
+}
+
+// Log will print the current error string to Stderror within a goroutine.
+func (e err) Log() {
+	go func() {
+		fmt.Fprint(os.Stderr, e.error)
+	}()
+}
+
+// Slog will return the current error string.
+func (e err) Slog() string {
+	return fmt.Sprint(os.Stderr, e.error)
+}
+
+// newerr is a factory for creating and returning a new err instance. It
+// will create an err code using the first 7 characters of a sha1 hash of the
+// provided title string.
+func newError(file string, line int, fn string, status int, title, message string, params ...interface{}) Error {
+	// Generate a Sha1 hash of the title, use the first 7 characters.
+	code := fmt.Sprintf("%x", md5.Sum([]byte(title)))[:7]
+	e := err{status, code, title, message, ""}
+
+	// Get stacktrace of current Goroutine
+	stacktrace := string(debug.Stack())
+	datetime := time.Now().Format("2006/01/02 15:04:05")
+	e.error = fmt.Sprintf(
+		"%s  %s\n%s:%d %s\nParams: %v\n\n%s\n\n\n\n",
+		datetime,
+		e.Error(),
+		file,
+		line,
+		fn,
+		params,
+		stacktrace)
+
+	return e
+}
+
+// Handle will accept a standard error interface and will return an instance of the specified wrapper
+// function called with the provided message and params, or will return nil if nil is provided as the error
+// interface.
+func Handle(e error, wrapper func(message string, params ...interface{}) Error, message string, params ...interface{}) Error {
+	if e == nil {
+		return nil
+	}
+	params = append(params, e)
+	return wrapper(message, params...)
+}
+
+// makeErrorType will return a function aliased for newError, where the
+// status, code, and title will already have been defined and only the message
+// will be required.
+func makeErrorType(status int, title string) func(message string, params ...interface{}) Error {
+	// fn is a factory which will be used for creating a new err, which will utilize the
+	// status and title parameters passed to this function, as well as the message and
+	// option params which will be passed to the factory itself during runtime.
+	logErrors := config.Bool("log-errors")
+
+	fn := func(message string, params ...interface{}) Error {
+		if pc, file, line, ok := runtime.Caller(1); ok {
+			fn := runtime.FuncForPC(pc).Name()
+			r := newError(file, line, fn, status, title, message, params...)
+			if logErrors == true {
+				r.Log()
+			}
+			return r
+		}
+		return newError("", 0, "", status, title, message, params...)
+	}
+	return fn
+}
+
+// Various errors factories, which will provide a function to create an err
+// with the specified HTTP status and a Title.
+var (
+	BadRequest            = makeErrorType(400, "Bad Request")
+	BadJSON               = makeErrorType(400, "Invalid JSON Provided")
+	Unauthorized          = makeErrorType(401, "Unauthorized")
+	Forbidden             = makeErrorType(403, "Access Forbidden")
+	NotFound              = makeErrorType(404, "Not Found")
+	MethodNotAllowed      = makeErrorType(405, "Method Not Allowed")
+	NotAcceptable         = makeErrorType(406, "Not Acceptable")
+	Gone                  = makeErrorType(410, "Gone")
+	UnsupportedMediaType  = makeErrorType(415, "Unsupported Media Type")
+	ImATeapot             = makeErrorType(418, "I'm a Teapot")
+	AuthenticationTimeout = makeErrorType(419, "Authentication Timeout")
+	ServerError           = makeErrorType(500, "Internal Server Error")
+	NotImplemented        = makeErrorType(500, "Feature Not Implemented")
+)

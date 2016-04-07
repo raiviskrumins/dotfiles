@@ -1,0 +1,433 @@
+from flask import (
+    Blueprint,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for
+)
+
+from datetime import datetime
+from dateutil import parser
+import flask
+
+from amber_portal.lib.utils import amber_api_connection
+from amber_portal.lib.utils import partial_product
+from amber_portal.models.export import ExportMapping
+
+from amber_lib.query import And, Predicate, equal, not_in, within
+
+from amber_portal.lib import get_current_user
+
+from .auth import authenticated, good_standing
+
+export_view = Blueprint('export_view', __name__, template_folder='templates')
+
+app = flask.current_app
+
+current_user = get_current_user()
+
+
+@export_view.route('/export', methods=['GET'])
+@authenticated
+def export_index():
+    """ Route for the first step of the export process
+    """
+    api_conn = amber_api_connection()
+
+    if 'mapping_id' in session:
+        session.pop('mapping_id')
+        session.regenerate()
+
+    export_data = api_conn.Export.query()
+    exports = []
+    mapping_data = ExportMapping.query.all()
+    for e in export_data:
+        date_exported = None
+        if e.date_exported:
+            date_exported = parser.parse(e.date_exported)
+        date_created = None
+        if e.date_created:
+            date_created = parser.parse(e.date_created)
+        export = {
+            'date_exported': date_exported,
+            'date_created': date_created,
+            'id': e.id,
+            'count': len(e.product_ids),
+            'status': e.status,
+            'url': e.url
+        }
+        for mapping in mapping_data:
+            if mapping.id == e.mapping_id:
+                if mapping.retailer == 'AmberEngine':
+                    export['type'] = 'Full Product Export'
+                else:
+                    export['type'] = mapping.retailer.title() + ' Export'
+                break
+            else:
+                export['type'] = 'Full Product Export'
+        exports.append(export)
+
+    return render_template(
+        'export/index.jinja2',
+        exports=exports
+    )
+
+
+@export_view.route('/export/templates', methods=['GET'])
+@authenticated
+@good_standing
+def templates():
+    """Route for the step 1 of the retailer-specific exports
+        where a user can select a template for the export
+    """
+    templates = []
+    mapping_data = ExportMapping.query.all()
+    for mapping in mapping_data:
+        if mapping.retailer != 'AmberEngine':
+            template = {
+                'id': mapping.id,
+                'name': mapping.name
+                }
+            templates.append(template)
+    return render_template('export/templates.jinja2', templates=templates)
+
+
+@export_view.route('/export/select', methods=['GET'])
+@authenticated
+def select():
+    """ Route for the product selection step of export
+    """
+    api_conn = amber_api_connection()
+    categories = api_conn.Categories.retrieve().primary
+
+    # TODO: needs functional testing
+    results = api_conn.Product.query()
+
+    return render_template(
+        'export/select.jinja2',
+        products={},
+        categories=categories,
+        count=len(results)
+    )
+
+
+@export_view.route('/export/select/list', methods=['PUT'])
+@authenticated
+def select_list():
+    api_conn = amber_api_connection()
+    params = request.json
+
+    category = params.get('category')
+    category_filtering = None
+    collection = params.get('collection_id')
+    collection_filtering = None
+    filtering = None
+
+    if category:
+        category = None if category == 'none' else category
+        category_filtering = Predicate(
+            'CategoryComponent.primary_category',
+            equal(category)
+        )
+        filtering = category_filtering
+
+    if collection:
+        collection = None if collection == 'none' else collection
+        collection_filtering = Predicate(
+            "CollectionComponent.collection_id",
+            equal(collection)
+        )
+        filtering = collection_filtering
+
+    if category and collection:
+        filtering = And(category_filtering, collection_filtering)
+
+    params['manufacturer_preview'] = True
+    params['manufacturer_id'] = current_user.manufacturer_id
+
+    sort_dir = params.get('sort_direction', 'asc')
+    sort_map = {
+        'name': 'IdentityComponent.product_name',
+        'manufacturer_sku': 'IdentityComponent.sku',
+        'date_updated': 'AuditComponent.date_updated',
+        'active': 'VisibilityComponent.active'
+    }
+
+    selected = params.get('selected', [])
+    with_ids = None
+    without_ids = None
+
+    ids = api_conn.Product.search(
+        fields="id",
+        filtering=filtering,
+        terms=params.get('terms'),
+        manufacturer_id=current_user.manufacturer_id
+    )
+
+    # Check if sorting by selected
+    sort_by = params.get("sort_key")
+    if sort_by == "select" and len(selected):
+        without_ids = Predicate('id', not_in(*selected))
+        with_ids = Predicate('id', within(*selected))
+        if filtering:
+            with_ids = And(filtering, with_ids)
+            filtering = And(filtering, without_ids)
+        else:
+            filtering = without_ids
+
+    products = api_conn.Product.search(
+        batch_size=100,
+        offset=params['offset'],
+        fields="identity,visibility,collection,category,audit,images",
+        filtering=filtering,
+        terms=params.get('terms'),
+        sort_by=sort_map.get(
+            params.get('sort_key'),
+            'IdentityComponent.product_name'
+        ),
+        sort_dir=sort_dir,
+        manufacturer_id=current_user.manufacturer_id
+    )
+
+    offset = params.get('offset', 0)
+    if with_ids and sort_by == "select":
+        prepended = api_conn.Product.query(
+            batch_size=100,
+            fields="identity,visibility,collection,category,audit,images",
+            filtering=with_ids,
+            sort_by=sort_map.get(
+                params.get('sort_key'),
+                'IdentityComponent.product_name'
+            ),
+            sort_dir=sort_dir,
+            manufacturer_id=current_user.manufacturer_id
+        )[:]
+
+        total = len(products) + len(prepended)
+        if sort_dir == 'asc':
+            products = [products[pid].to_dict() for pid in sorted(products.values)]
+            if offset == 0:
+                products = [prod.to_dict() for prod in prepended] + products
+        else:
+            if total <= offset + 100 or total <= offset + len(prepended):
+                products = [products[pid].to_dict() for pid in sorted(products.values)] + [prod.to_dict() for prod in prepended]
+            else:
+                products = [products[pid].to_dict() for pid in sorted(products.values)]
+    else:
+        all_products = len(
+            api_conn.Product.query(
+                batch_size=100,
+                fields="identity,visibility,collection,category,audit,images",
+                manufacturer_id=current_user.manufacturer_id
+            )
+        )
+        total = all_products
+        products = [products[pid].to_dict() for pid in sorted(products.values)]
+
+    return jsonify(
+        {
+            "products": products,
+            "total": len(ids),
+            "ids": [prod.pk() for prod in ids]
+        }
+    )
+
+
+@export_view.route('/export/rows', methods=['PUT'])
+@authenticated
+def select_rows():
+    products = request.json['products']
+    return render_template('export/product_rows.jinja2', products=products)
+
+
+@export_view.route('/export/no-results', methods=['GET'])
+@authenticated
+def no_results():
+    return render_template('export/no_results.jinja2')
+
+
+@export_view.route('/export/no-products', methods=['GET'])
+@authenticated
+def no_products():
+    return render_template('export/no_products.jinja2')
+
+
+@export_view.route('/export/store-mapping-selection', methods=['POST'])
+@authenticated
+def store_mapping_selection():
+    session['mapping_id'] = request.json['mapping_id']
+    session.regenerate()
+    return jsonify({'success': True})
+
+
+@export_view.route('/export/prepare', methods=['POST'])
+@authenticated
+def prepare():
+    """ Route for the validation step of export. This is when the export record
+        is created in the database to allow a user to return to this point
+        later.
+    """
+    api_conn = amber_api_connection()
+    product_ids = request.form.get('product_ids').split(',')
+    product_ids = [int(pid) for pid in product_ids]
+
+    where = Predicate("id", within(*product_ids))
+    products = api_conn.Product.query(filtering=where)
+
+    product_data = []
+
+    for full_product in products:
+        product = partial_product(full_product)
+        product_data.append(product)
+
+    if 'mapping_id' in session:
+        mapping_id = session['mapping_id']
+    else:
+        default_mapping = ExportMapping.query.filter_by(
+            name='Lists as Sheets Products'
+        ).first()
+        mapping_id = default_mapping.id
+
+    export = api_conn.Export.from_dict(
+        {
+            'mapping_id': mapping_id,
+            'user_email': current_user.email,
+            'user_manufacturer_id': current_user.manufacturer_id,
+            'product_ids': product_ids,
+            'date_created': str(datetime.utcnow())#.isoformat())
+        }
+    )
+    export.save()
+
+    return render_template(
+        'export/prepare.jinja2',
+        products=product_data,
+        export=export
+    )
+
+
+@export_view.route('/export/prepare/<int:export_id>', methods=['GET'])
+@authenticated
+def prepare_id(export_id):
+    """ Route for the validation step of an already existing export.
+    """
+    api_conn = amber_api_connection()
+    export = api_conn.Export.retrieve(export_id)
+    if not export:
+        flask.abort(404)
+        return
+
+    where = Predicate("id", within(*export.product_ids))
+    products = api_conn.Product.query(filtering=where)
+
+    product_data = []
+    for full_product in products:
+        product = partial_product(full_product)
+        product_data.append(product)
+
+    return render_template(
+        'export/prepare.jinja2',
+        products=product_data,
+        export=export
+    )
+
+
+@export_view.route('/export/<int:export_id>/progress', methods=['GET'])
+@authenticated
+def progress(export_id):
+    """ Route for the export status and download page.
+        It will also track progress in the future iterations.
+    """
+    api_conn = amber_api_connection()
+    export = api_conn.Export.retrieve(export_id)
+    if not export:
+        flask.abort(404)
+        return
+    if export.status == 'not_started':
+        return redirect(url_for('export_view.prepare_id', export_id=export_id))
+
+    mapping = ExportMapping.query.get(export.mapping_id)
+    export_type = mapping.retailer
+
+    return render_template(
+        'export/progress.jinja2',
+        export=export,
+        export_type=export_type
+    )
+
+
+@export_view.route('/export/<int:export_id>/generate', methods=['POST'])
+@authenticated
+def generate(export_id):
+
+    api_conn = amber_api_connection()
+    export = api_conn.Export.retrieve(export_id)
+
+    export.user_email = current_user.email
+    export.save()
+
+    api_conn.ExportJob.from_dict(
+        {
+            'export_id': export_id
+        }
+    ).save()
+
+    return jsonify({'url': url_for('export_view.progress', export_id=export_id)})
+
+
+@export_view.route('/export/<int:export_id>/complete', methods=['GET'])
+@authenticated
+def download_finish(export_id):
+    api_conn = amber_api_connection()
+    export = api_conn.Export.retrieve(export_id)
+    if not export:
+        flask.abort(404)
+        return
+    return render_template('export/download.jinja2', export=export)
+
+
+@export_view.route('/export/<int:export_id>/status', methods=['GET'])
+@authenticated
+def export_status(export_id):
+    api_conn = amber_api_connection()
+    export = api_conn.Export.retrieve(export_id)
+    if export:
+        return jsonify({'status': export.status})
+    return jsonify({'status': 'not found'})
+
+
+@export_view.route('/export/previous', methods=['GET'])
+@authenticated
+def previous():
+    api_conn = amber_api_connection()
+    export_objs = api_conn.Export.query()
+    mapping_data = ExportMapping.query.all()
+    exports = []
+    for e in export_objs:
+        date_exported = None
+        if e.date_exported:
+            date_exported = parser.parse(e.date_exported)
+        date_created = None
+        if e.date_created:
+            date_created = parser.parse(e.date_created)
+        export = {
+            'date_exported': date_exported,
+            'date_created': date_created,
+            'id': e.id,
+            'count': len(e.product_ids),
+            'status': e.status,
+            'url': e.url
+        }
+        for mapping in mapping_data:
+            if mapping.id == e.mapping_id:
+                if mapping.retailer == 'AmberEngine':
+                    export['type'] = 'Full Product Export'
+                else:
+                    export['type'] = mapping.retailer.title() + ' Export'
+                break
+            else:
+                export['type'] = 'Full Product Export'
+        exports.append(export)
+    return render_template('export/previous.jinja2', exports=exports)

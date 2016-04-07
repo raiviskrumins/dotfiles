@@ -1,0 +1,66 @@
+import requests
+from flask import render_template
+
+# config
+MAILGUN_DOMAIN = 'amberengine.com'
+MAILGUN_API_KEY = 'key-5f09wnwa5hhl3vc8bd0tvodrxezmfym2'
+MAILGUN_DEFAULT_TO_EMAIL = 'info@amberengine.com'
+
+
+def send_simple_message(name=None, email=None, company=None, message=None):
+    if name is None:
+        return 'Name is required!'
+    if email is None:
+        return 'Email is required!'
+    if message is None:
+        return 'Message is required!'
+    if company is not None:
+        message = message + '\n\nContacted on behalf of ' + company
+
+    return requests.post(
+        'https://api.mailgun.net/v2/' + MAILGUN_DOMAIN + '/messages',
+        auth=('api', MAILGUN_API_KEY),
+        data={'from': name + ' <' + email + '>',
+              'to': [MAILGUN_DEFAULT_TO_EMAIL],
+              'subject': 'From AmberEngine contact page',
+              'text': message})
+
+
+def application_message(data, position, resume, cover):
+    name = '%s %s' % (data.get('first_name'), data.get('last_name'))
+    email = data.get('email')
+    message = render_template(
+        'email/application.jinja2',
+        position=position,
+        data=data
+    )
+    return requests.post(
+        'https://api.mailgun.net/v2/' + MAILGUN_DOMAIN + '/messages',
+        auth=('api', MAILGUN_API_KEY),
+        files=[
+            ('attachment', resume),
+            ('attachment', cover)
+        ],
+        data={'from': name + ' <' + email + '>',
+              'to': 'careers@amberengine.com',
+              'subject': 'Application',
+              'text': message})
+
+
+def add_list_member(list_name, email):
+    return requests.post(
+        'https://api.mailgun.net/v3/lists/%s@%s/members' %
+            (list_name, MAILGUN_DOMAIN),
+        auth=('api', MAILGUN_API_KEY),
+        data={
+            'subscribed': True,
+            'address': email
+        }
+    )
+
+def list_members(list_name):
+    return requests.get(
+        'https://api.mailgun.net/v2/lists/%s@%s/members' %
+            (list_name, MAILGUN_DOMAIN),
+        auth=('api', MAILGUN_API_KEY))
+

@@ -1,0 +1,127 @@
+"""Amber Engine Image Worker."""
+
+import pika
+import json
+import logging
+import io
+
+import os
+import sys
+import traceback
+from urllib.request import urlopen
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from PIL import Image
+
+from amber_portal.lib.s3 import upload_stream
+from amber_portal import app
+
+pid = str(os.getpid())
+
+# Prepare directory
+directory = 'logs/image_worker'
+if not os.path.exists(directory):
+    os.makedirs(directory)
+
+logging.basicConfig(
+    filename='logs/image_worker/image_worker.' + pid + '.log',
+    level=logging.WARNING
+)
+
+
+def resize(image, url, dimension, product_id, content_type):
+    """Use Pillow to perform the resize."""
+    """
+        image: string,
+        url: string,
+        dimension: list,
+        product_id: int
+    """
+    filename = url.rsplit('/')[-1]
+    file_string = filename.split('.')[0]
+    ext = filename.split('.')[1]
+
+    valid_image_types = ['jpg', 'jpeg', 'png', 'gif']
+    print("Ext lower %s" % ext.lower())
+    if ext.lower() not in valid_image_types:
+        ext = content_type.rsplit('/')[0]
+
+    mime_format = ext.lower()
+    if mime_format == 'jpg':
+        mime_format = 'jpeg'
+    mimetype = 'image/%s' % mime_format
+
+    s3_bucket = app.config['S3_BUCKET']
+
+    size = dimension, dimension
+
+    thumbnail = image.copy()
+    if dimension != 0:
+        thumbnail.thumbnail(size)
+
+    if dimension != 0:
+        thumbnail_filename = '%s_%s.%s' % (file_string, dimension, ext)
+    else:
+        thumbnail_filename = '%s.%s' % (file_string, ext)
+
+    thumbnail_out = io.BytesIO()
+
+    try:
+        thumbnail.convert('RGBA')
+        thumbnail.seek(0)
+        thumbnail.save(thumbnail_out, mime_format)
+    except KeyError:
+        logging.error(
+            "KeyError for: " + url +
+            " Product ID: " + str(product_id)
+        )
+        return
+
+    thumbnail_out.seek(0)
+
+    upload_stream(
+        thumbnail_out,
+        mimetype,
+        thumbnail_filename,
+        s3_bucket=s3_bucket
+    )
+
+    return True
+
+
+def create_images(ch, method, properties, body):
+    """Process each dimension of the images."""
+    data = json.loads(bytes.decode(body))
+    url = data['url']
+    product_id = data.get('product_id')
+    content_type = data.get('content-type')
+    print("Content type: %s" % content_type)
+
+    dimensions = [0, 150, 300, 640]
+    image = io.BytesIO(urlopen(url).read())
+    original = Image.open(image)
+    for dimension in dimensions:
+        resize(original, url, dimension, product_id, content_type)
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+
+connection = pika.BlockingConnection(
+    pika.ConnectionParameters(
+        host='127.0.0.1'
+    )
+)
+channel = connection.channel()
+
+# If queue doesn't already exist.
+channel.queue_declare(queue='image_queue', durable=True)
+
+# channel.queue_purge(queue='image_queue')
+
+# channel.basic_qos(prefetch_count=1)
+channel.basic_consume(create_images, queue='image_queue')
+
+channel.start_consuming()
+
+
+# channel.close()
+# connection.close()

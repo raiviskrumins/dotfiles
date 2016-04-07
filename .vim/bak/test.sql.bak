@@ -1,0 +1,15 @@
+        SELECT p.id,
+        i.product_name,
+        i.manufacturer_sku,
+        d.primary_description,
+        v.active,
+        v.meets_posting_requirements,
+        a.date_updated,
+        c.primary_category
+        FROM product_entity AS p
+        LEFT JOIN identity_component AS i ON p.id = i.product_id
+        LEFT JOIN description_component AS d ON p.id = d.product_id
+        LEFT JOIN visibility_component AS v ON p.id = v.product_id
+        LEFT JOIN audit_component AS a ON p.id = a.product_id
+        LEFT JOIN category_component AS c ON p.id = c.product_id
+        LEFT JOIN manufacturer_component AS mc ON p.id = mc.product_id;

@@ -1,0 +1,125 @@
+from flask import (
+    Blueprint,
+    flash,
+    g,
+    render_template
+)
+from amber_portal.models.user import CMUser
+from amber_portal.models import db
+from amber_portal.lib.utils import amber_api_connection
+from amber_portal.lib import get_current_user
+
+import amber_portal.views.user
+import amber_portal.views.manufacturer
+import amber_portal.views.product
+
+from amber_lib import errors
+
+from amber_portal.forms.user import GeneralSettingsForm
+
+from auth import authenticated, allowed_roles
+
+admin_view = Blueprint(
+    'admin_view', __name__,
+    template_folder='templates'
+)
+
+current_user = get_current_user()
+
+
+@admin_view.route('/admin-dashboard', methods=['GET', 'POST'])
+@authenticated
+@allowed_roles(['portal_admin'])
+def admin_dashboard():
+    users = CMUser.query.all()
+    api_conn = amber_api_connection()
+    try:
+        manufacturers = api_conn.Manufacturers.query()
+    except errors.NotFound:
+        manufacturers = []
+
+    return render_template(
+        'admin/index.jinja2',
+        users=users,
+        manufacturers=manufacturers
+    )
+
+
+@admin_view.route('/admin/users', methods=['GET', 'POST'])
+@allowed_roles(['portal_admin'])
+@authenticated
+def users():
+    return amber_portal.views.user.users_get()
+
+
+@admin_view.route('/admin/add-user', methods=['GET', 'POST'])
+@allowed_roles(['portal_admin'])
+@authenticated
+def add_user():
+    return amber_portal.views.user.add_user()
+
+
+@admin_view.route('/admin/manufacturers', methods=['GET', 'POST'])
+@allowed_roles(['portal_admin'])
+@authenticated
+def manufacturers():
+    return amber_portal.views.manufacturer.manufacturer_list()
+
+
+@admin_view.route('/admin/manufacturers/<int:mfr_id>', methods=['GET', 'POST'])
+@allowed_roles(['portal_admin'])
+@authenticated
+def manufacturer_get(mfr_id):
+    return amber_portal.views.manufacturer.manufacturer_get(mfr_id)
+
+
+@admin_view.route('/admin/add-manufacturer', methods=['GET', 'POST'])
+@allowed_roles(['portal_admin'])
+@authenticated
+def add_manufacturer():
+    return amber_portal.views.manufacturer.manufacturer_add()
+
+
+@admin_view.route(
+    '/admin/manufacturers/<int:mfr_id>/edit',
+    methods=['GET', 'POST']
+)
+@allowed_roles(['portal_admin'])
+@authenticated
+def edit_manufacturer(mfr_id):
+    return amber_portal.views.manufacturer.manufacturer_edit(mfr_id)
+
+
+@admin_view.route('/admin/account/settings', methods=['GET'])
+@allowed_roles(['portal_admin'])
+@authenticated
+def account_settings():
+    general_form = GeneralSettingsForm(
+        name=current_user.name,
+        email=current_user.email
+    )
+    return render_template(
+        'settings/admin_account_settings.jinja2',
+        general_form=general_form
+    )
+
+
+@admin_view.route('/admin/account/settings', methods=['POST'])
+@allowed_roles(['portal_admin'])
+@authenticated
+def account_save():
+    general_form = GeneralSettingsForm()
+
+    if general_form.validate_on_submit():
+        g.user.name = general_form.name.data
+        g.user.email = general_form.email.data
+
+        db.session.add(g.user)
+        db.session.commit()
+
+        flash(u'Account settings have been saved.', 'success')
+
+    return render_template(
+        'settings/admin_account_settings.jinja2',
+        general_form=general_form
+    )

@@ -1,0 +1,7 @@
+{% from 'macros.jinja2' import hidden_field %}
+
+<li class="subcomponent-section">
+  {{ feature.description }}
+    <a href="{{ url_for('product_view.delete_product_sub_component', prod_id=prod_id, component='feature', sub_component_data_id=feature.component_data_id) }}" class="js-remove-subcomponent">Remove</a>
+      {{ feature.component_data_id }}
+</li>

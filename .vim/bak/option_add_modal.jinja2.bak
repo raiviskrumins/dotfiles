@@ -1,0 +1,79 @@
+<div class="modal fade" id="addOption">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title">Assign Option Sets</h4>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    {% if option_sets %}
+                        <div class="col-md-6">
+                            <label>Option Sets</label>
+                            <ul class="optionset-list unstyled">
+                            {% for optionset in option_sets|sort(attribute='name')|sort(attribute='kind') %}
+                                <li class="clearfix" data-set="{{optionset.id}}">
+                                    <div class="checkbox">
+                                      <label>
+                                        {{ optionset.id }}
+                                        {{ prod_opset_ids }}
+                                          <input type="checkbox" name="optionsets" value="{{optionset.id}}" {% if optionset.id in prod_opset_ids %} checked {% endif %}> {{optionset.kind|title}}: {{optionset.name}}
+                                        </label>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                            </ul>
+                            <p class="text-danger optionset-help-text">Please select at least one option set.</p>
+                        </div>
+                        <div class="col-md-6">
+                            {% for optionset in option_sets %}
+                            <div class="options" id="optionset_{{optionset.id}}">
+                                <label>{{optionset.kind|title}}: {{optionset.name}}</label>
+                                <div class="row">
+                                    {# loop through first 8 options, but show nine if there are exactly nine options #}
+                                    {% for option in optionset.option_list %}
+                                        {% if loop.index0 < 8 or (loop.index0 == 8 and optionset.option_list|count == 9) %}
+                                            <div class="option-image text-center">
+                                                <span style="background-image:url('{{option.image}}');"
+                                                    {% if option.name and option.name|length > 22 %}
+                                                      data-toggle="tooltip" data-placement="bottom" title="{{ option.name or '' }}" data-original-title="{{ option.name or '' }}"
+                                                    {% endif %}
+                                                ></span>
+                                                <p>{{ (option.name or '')|truncate(22, True) }}</p>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {# show how many more options if more than nine #}
+                                    {% if optionset.option_list|count > 9 %}
+                                    <div class="option-image empty">
+                                        {{optionset.option_list|count - 8}} More
+                                    </div>
+                                    {% else %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                    <div class="col-md-12">
+                        <p><b>You haven't created any Option Sets.</b></p>
+                        <p>Create Option Sets by selecting "Option Sets" in the left navigation panel. Once you have created Option Sets you can assign them to products.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-default" data-dismiss="modal">Cancel</button>
+                {% if option_sets %}
+                    {% if product and product.id %}
+                    <a href="{{url_for('product_view.product_add_option', prod_id=product.id)}}" class="btn btn-primary js-add-optionsets">Save</a>
+                    {% else %}
+                    <a href="{{url_for('product_view.products_add_options')}}" class="btn btn-primary js-add-multi-optionsets">Save</a>
+                    {% endif %}
+                {% else %}
+                <button class="btn btn-primary" data-dismiss="modal">Okay</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

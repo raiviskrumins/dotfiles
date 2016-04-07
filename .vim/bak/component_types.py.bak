@@ -1,0 +1,2021 @@
+from amber_api.models import db, Base
+from amber_api.models.component import (
+    ComponentBase,
+    SubComponentBase,
+    Column,
+    Relationship,
+    MultiValueReference
+)
+from amber_api.models.manufacturer import Manufacturer
+from amber_api.models.collection import Collection
+from amber_api.models import multi_value
+
+
+class ManufacturerComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'manufacturer_component'
+    manufacturer_id = Column(
+        db.Integer,
+        db.ForeignKey('manufacturer.id'),
+        index=True,
+        field_metadata={
+            'label': 'Manufacturer ID',
+            'type': 'integer',
+            'required': True
+        }
+    )
+    manufacturer = Relationship(
+        'Manufacturer',
+        Manufacturer,
+        'id',
+        field_metadata={
+            'label': 'Manufacturer',
+            'type': 'object',
+            'required': False
+        }
+    )
+
+
+class CollectionComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'collection_component'
+    collection_id = Column(
+        db.Integer,
+        db.ForeignKey('collection.id', ondelete='SET NULL'),
+        field_metadata={
+            'label': 'Collection ID',
+            'type': 'integer',
+            'required': False
+        }
+    )
+    collection = Relationship(
+        'Collection',
+        Collection,
+        'id',
+        field_metadata={
+            'label': 'Collection',
+            'type': 'object',
+            'required': False
+        }
+    )
+
+
+class IdentityComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'identity_component'
+    name = Column(
+        db.String,
+        field_metadata={
+            'label': 'Name',
+            'type': 'text',
+            'required': False
+        }
+    )
+    alternate_name = Column(
+        db.String,
+        field_metadata={
+            'label': 'Alternate Name',
+            'type': 'text',
+            'required': False
+        }
+    )
+    manufacturer_sku = Column(
+        db.String,
+        field_metadata={
+            'label': 'Manufacturer SKU',
+            'type': 'text',
+            'required': False
+        }
+    )
+    source_url = Column(
+        db.String,
+        field_metadata={
+            'label': 'Source URL',
+            'type': 'text',
+            'required': False
+        }
+    )
+
+
+class PromotionalTagsComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'promotional_tags_component'
+    new = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'New',
+            'type': 'boolean',
+            'required': False,
+        }
+    )
+    best_seller = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'Best Seller',
+            'type': 'boolean',
+            'required': False,
+        }
+    )
+    limited_stock = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'Limited Stock',
+            'type': 'boolean',
+            'required': False,
+        }
+    )
+    discontinued = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'Discontinued',
+            'type': 'boolean',
+            'required': False,
+        }
+    )
+
+
+class CategoryComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'category_component'
+    category = Column(
+        db.Enum(
+            'none',
+            'accessory',
+            'casegood',
+            'lighting',
+            'outdoor',
+            'textiles',
+            'upholstery',
+            'youth',
+            name='product_category_types'
+        ),
+        field_metadata={
+            'label': 'Category',
+            'type': 'select',
+            'required': False,
+            'choices': [
+                ('none', 'None'),
+            ],
+        }
+    )
+    primary_sub_category = Column(
+        db.String,
+        field_metadata={
+            'label': 'Primary Sub-Category',
+            'type': 'select',
+            'required': False,
+            'choices': [
+                ('none', 'None'),
+            ],
+        }
+    )
+    secondary_sub_category = Column(
+        db.String,
+        field_metadata={
+            'label': 'Secondary Sub-Category',
+            'type': 'select',
+            'required': False,
+            'choices': [
+                ('none', 'None'),
+            ],
+        }
+    )
+
+
+class DescriptionSubComponent(db.Model, SubComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'description_sub_component'
+    description_component_id = Column(
+        db.Integer,
+        db.ForeignKey('description_component.component_data_id'),
+        field_metadata={
+            'label': 'Description Component ID',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    description_of_feature = Column(
+        db.String,
+        field_metadata={
+            'label': 'Feature',
+            'type': 'textarea',
+            'required': False
+        }
+    )
+
+
+class DescriptionComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'description_component'
+    description = Column(
+        db.String,
+        field_metadata={
+            'label': 'Description',
+            'type': 'textarea',
+            'required': False
+        }
+    )
+    retail_description = Column(
+        db.String,
+        field_metadata={
+            'label': 'Retail Description',
+            'type': 'textarea',
+            'required': False
+        }
+    )
+    designer_description = Column(
+        db.String,
+        field_metadata={
+            'label': 'Designer Description',
+            'type': 'textarea',
+            'required': False
+        }
+    )
+    alternate_description = Column(
+        db.String,
+        field_metadata={
+            'label': 'Alternate Description',
+            'type': 'textarea',
+            'required': False
+        }
+    )
+    features = Relationship(
+        "DescriptionSubComponent",
+        DescriptionSubComponent,
+        'description_component_id',
+        field_metadata={
+            'label': 'Features',
+            'type': 'list',
+            'required': False
+        }
+    )
+
+
+class AuditComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'audit_component'
+    date_added = Column(db.DateTime)
+    date_updated = Column(db.DateTime)
+    updated_by_api_key = Column(db.String)
+
+
+class OverallDimensionsComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'overall_dimensions_component'
+    width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    diameter = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Diameter',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class VisibilityComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'visibility_component'
+    active = Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+        field_metadata={
+            'label': 'Active',
+            'type': 'boolean',
+            'required': False
+        }
+    )
+    meets_posting_requirements = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'Meets Posting Requirements',
+            'type': 'boolean',
+            'required': False
+        }
+    )
+
+
+class WeightComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'weight_component'
+    weight = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Weight',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class InstructionsComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'instructions_component'
+    cleaning_directions = Column(
+        db.String,
+        field_metadata={
+            'label': 'Cleaning Directions',
+            'type': 'text',
+            'required': False
+        }
+    )
+    installation_directions = Column(
+        db.String,
+        field_metadata={
+            'label': 'Installation Directions',
+            'type': 'text',
+            'required': False
+        }
+    )
+
+
+class OrderingInformationComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'ordering_information_component'
+    unit = Column(
+        db.Enum(
+            'each',
+            'yard',
+            'sq_ft',
+            'sq_yard',
+            'pair',
+            'set',
+            'foot',
+            'single_roll',
+            'double_roll'
+        ),
+        field_metadata={
+            'label': 'Unit',
+            'type': 'select',
+            'required': False,
+            'choices': [
+                ('none', 'None'),
+                ('each', 'Each'),
+                ('yard', 'Yard'),
+                ('sq_ft', 'Sq. Ft.'),
+                ('sq_yard', 'Sq. Yard'),
+                ('pair', 'Pair'),
+                ('set', 'Set'),
+                ('foot', 'Foot'),
+                ('single_roll', 'Single Roll'),
+                ('double_roll', 'Double Roll')
+            ]
+        }
+    )
+    discontinued = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'Discontinued',
+            'type': 'boolean',
+            'required': False
+        }
+    )
+    lead_time = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'Lead Time',
+            'type': 'integer',
+            'required': False
+        },
+
+    )
+    lead_time_unit = Column(
+        db.Enum(
+            'day',
+            'week',
+            'month',
+            name='time_interval_type'
+        ),
+        field_metadata={
+            'label': 'Lead Time Unit',
+            'type': 'select',
+            'required': False,
+            'choices': [
+                ('day', 'Day(s)'),
+                ('week', 'Week(s)'),
+                ('month', 'Month(s)')
+            ]
+        }
+    )
+    quick_ship = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'Quick Ship',
+            'type': 'boolean',
+            'required': False
+        }
+    )
+    minimum_quantity = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'Minimum Quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+    stock = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Stock',
+            'type': 'float',
+            'required': False
+        }
+    )
+    warranty = Column(
+        db.String,
+        field_metadata={
+            'label': 'Warranty',
+            'type': 'text',
+            'required': False
+        }
+    )
+
+
+class ShippingInformationSubComponent(db.Model, SubComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'shipping_information_sub_component'
+    shipping_information_component_id = Column(
+        db.Integer,
+        db.ForeignKey('shipping_information_component.component_data_id'),
+        field_metadata={
+            'label': 'Shipping Information Component ID',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    packaged_weight = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Packaged Weight',
+            'type': 'float',
+            'required': False
+        }
+    )
+    packaged_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Box Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    packaged_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Box Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    packaged_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Box Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    packaged_volume = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Box Volume',
+            'type': 'float',
+            'required': False
+        }
+    )
+    package_quantity = Column(
+        db.Integer,
+        default=1,
+        field_metadata={
+            'label': 'Package Quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+
+
+class ShippingInformationComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'shipping_information_component'
+    standard = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'Standard',
+            'type': 'boolean',
+            'required': False
+        }
+    )
+    freight = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'Freight',
+            'type': 'boolean',
+            'required': False
+        }
+    )
+    white_glove = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'White Glove',
+            'type': 'boolean',
+            'required': False
+        }
+    )
+    drop_ship = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'Drop Ship',
+            'type': 'boolean',
+            'required': False
+        }
+    )
+    ships_from = Column(
+        db.String,
+        field_metadata={
+            'label': 'Ships From / FOB',
+            'type': 'text',
+            'required': False
+        }
+    )
+    shipping_notes = Column(
+        db.String,
+        field_metadata={
+            'label': 'Shipping Notes',
+            'type': 'textarea',
+            'required': False
+        }
+    )
+    volume = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Volume',
+            'type': 'float',
+            'required': False
+        }
+    )
+    country_of_origin = Column(
+        db.String,
+        field_metadata={
+            'label': 'Country of Origin',
+            'type': 'text',
+            'required': False
+        }
+    )
+    boxes = Relationship(
+        "ShippingInformationSubComponent",
+        ShippingInformationSubComponent,
+        'shipping_information_component_id',
+        field_metadata={
+            'label': 'Boxes',
+            'type': 'list',
+            'required': False
+        }
+    )
+
+
+class PricingComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'pricing_component'
+    wholesale = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'Wholesale Price',
+            'type': 'currency',
+            'required': False
+        }
+    )
+    trade_price = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'Trade Price',
+            'type': 'currency',
+            'required': False
+        }
+    )
+    minimum_internet_price = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'Minimum Internet Price',
+            'type': 'currency',
+            'required': False
+        }
+    )
+    msrp = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'MSRP',
+            'type': 'currency',
+            'required': False
+        }
+    )
+    dealer_price = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'Dealer Price',
+            'type': 'currency',
+            'required': False
+        }
+    )
+
+
+class ConstructionInformationComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'construction_information_component'
+    material = Column(
+        db.String,
+        field_metadata={
+            'label': 'Material',
+            'type': 'text',
+            'required': False
+        }
+    )
+    joinery_type = Column(
+        db.String,
+        field_metadata={
+            'label': 'Joinery Type',
+            'type': 'text',
+            'required': False
+        }
+    )
+    finish = Column(
+        db.String,
+        field_metadata={
+            'label': 'Finish',
+            'type': 'text',
+            'required': False
+        }
+    )
+
+
+# Possible Components
+class FootrestComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'footrest_component'
+    footrest_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Footrest Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class ArmComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'arm_component'
+    arm_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Arm Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    arm_style = Column(
+        db.String,
+        field_metadata={
+            'label': 'Arm Style',
+            'type': 'text',
+            'required': False
+        }
+    )
+
+
+class SeatComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'seat_component'
+    seat_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Seat Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    seat_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Seat Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    seat_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Seat Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    seat_construction = Column(
+        db.String,
+        field_metadata={
+            'label': 'Seat Construction',
+            'type': 'text',
+            'required': False
+        }
+    )
+
+
+class FootboardComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'footboard_component'
+    footboard_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Footboard Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    footboard_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Footboard Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    footboard_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Footboard Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    floor_clearance = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Floor Clearance',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class HeadboardComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'headboard_component'
+    headboard_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Headboard Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    headboard_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Headboard Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    headboard_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Headboard Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    floor_clearance = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Floor Clearance',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class SideRailComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'side_rail_component'
+    side_rail_length = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Side Rail Length',
+            'type': 'float',
+            'required': False
+        }
+    )
+    floor_clearance = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Floor Clearance',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class FrameComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'frame_component'
+    frame_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Frame Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    back_rail_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Back Rail Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class ShelfSubComponent(db.Model, SubComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'shelf_sub_component'
+    shelf_component_id = Column(
+        db.Integer,
+        db.ForeignKey('shelf_component.component_data_id'),
+        field_metadata={
+            'label': 'Shelf Component ID',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    shelf_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Shelf Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    shelf_thickness = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Shelf Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    shelf_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Shelf Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    shelf_quantity = Column(
+        db.Integer,
+        default=1,
+        field_metadata={
+            'label': 'Shelf Quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+
+
+class ShelfComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'shelf_component'
+    quantity = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+    shelves = Relationship(
+        "ShelfSubComponent",
+        ShelfSubComponent,
+        'shelf_component_id',
+        field_metadata={
+            'label': 'Shelves',
+            'type': 'list',
+            'required': False
+        }
+    )
+
+
+class DoorSubComponent(db.Model, SubComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'door_sub_component'
+    door_component_id = Column(
+        db.Integer,
+        db.ForeignKey('door_component.component_data_id'),
+        field_metadata={
+            'label': 'Door Component ID',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    door_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Door Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    door_thickness = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Door Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    door_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Door Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    door_opening = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Door Opening',
+            'type': 'float',
+            'required': False
+        }
+    )
+    door_quantity = Column(
+        db.Integer,
+        default=1,
+        field_metadata={
+            'label': 'Door Quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+
+
+class DoorComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'door_component'
+    quantity = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+    doors = Relationship(
+        "DoorSubComponent",
+        DoorSubComponent,
+        'door_component_id',
+        field_metadata={
+            'label': 'Doors',
+            'type': 'list',
+            'required': False
+        }
+    )
+
+
+class DrawerSubComponent(db.Model, SubComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'drawer_sub_component'
+    drawer_component_id = Column(
+        db.Integer,
+        db.ForeignKey('drawer_component.component_data_id'),
+        field_metadata={
+            'label': 'Drawer Component ID',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    drawer_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Drawer Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    drawer_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Drawer Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    drawer_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Drawer Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    drawer_quantity = Column(
+        db.Integer,
+        default=1,
+        field_metadata={
+            'label': 'Drawer Quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+
+
+class DrawerComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'drawer_component'
+    quantity = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+    drawers = Relationship(
+        "DrawerSubComponent",
+        DrawerSubComponent,
+        'drawer_component_id',
+        field_metadata={
+            'label': 'Drawers',
+            'type': 'list',
+            'required': False
+        }
+    )
+
+
+class TableLeafSubComponent(db.Model, SubComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'table_leaf_sub_component'
+    table_leaf_component_id = Column(
+        db.Integer,
+        db.ForeignKey('table_leaf_component.component_data_id'),
+        field_metadata={
+            'label': 'Table Leaf Component ID',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    leaf_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Leaf Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    leaf_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Leaf Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    leaf_quantity = Column(
+        db.Integer,
+        default=1,
+        field_metadata={
+            'label': 'Leaf Quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+
+
+class TableLeafComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'table_leaf_component'
+    quantity = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+    table_leaves = Relationship(
+        "TableLeafSubComponent",
+        TableLeafSubComponent,
+        'table_leaf_component_id',
+        field_metadata={
+            'label': 'Table Leaves',
+            'type': 'list',
+            'required': False
+        }
+    )
+
+
+class PillowSubComponent(db.Model, SubComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'pillow_sub_component'
+    pillow_component_id = Column(
+        db.Integer,
+        db.ForeignKey('pillow_component.component_data_id'),
+        field_metadata={
+            'label': 'Pillow Component ID',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    pillow_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Pillow Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    pillow_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Pillow Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    pillow_thickness = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Pillow Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    pillow_quantity = Column(
+        db.Integer,
+        default=1,
+        field_metadata={
+            'label': 'Pillow Quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+
+
+class PillowComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'pillow_component'
+    quantity = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+    pillows = Relationship(
+        "PillowSubComponent",
+        PillowSubComponent,
+        'pillow_component_id',
+        field_metadata={
+            'label': 'Pillows',
+            'type': 'list',
+            'required': False
+        }
+    )
+
+
+class CushionSubComponent(db.Model, SubComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'cushion_sub_component'
+    cushion_component_id = Column(
+        db.Integer,
+        db.ForeignKey('cushion_component.component_data_id'),
+        field_metadata={
+            'label': 'Cushion Component ID',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    cushion_fill = Column(
+        db.String,
+        field_metadata={
+            'label': 'Cushion Fill',
+            'type': 'text',
+            'required': False
+        }
+    )
+    cushion_style = Column(
+        db.String,
+        field_metadata={
+            'label': 'Cushion Style',
+            'type': 'text',
+            'required': False
+        }
+    )
+    cushion_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Cushion Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    cushion_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Cushion Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    cushion_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Cushion Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    cushion_quantity = Column(
+        db.Integer,
+        default=1,
+        field_metadata={
+            'label': 'Cushion Quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+
+
+class CushionComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'cushion_component'
+    quantity = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+    cushions = Relationship(
+        "CushionSubComponent",
+        CushionSubComponent,
+        'cushion_component_id',
+        field_metadata={
+            'label': 'Cushions',
+            'type': 'list',
+            'required': False
+        }
+    )
+
+
+class PedestalComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'pedestal_component'
+    pedestal_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Pedestal Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    pedestal_diameter = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Pedestal Diameter',
+            'type': 'float',
+            'required': False
+        }
+    )
+    pedestal_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Pedestal Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    pedestal_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Pedestal Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class BaseComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'base_component'
+    base_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Base Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    base_diameter = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Base Diameter',
+            'type': 'float',
+            'required': False
+        }
+    )
+    base_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Base Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    base_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Base Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class FlameComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'flame_component'
+    fuel_type = Column(
+        db.String,
+        field_metadata={
+            'label': 'Fuel Type',
+            'type': 'text',
+            'required': False
+        }
+    )
+    # liters
+    burner_capacity = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Burner Capacity',
+            'type': 'float',
+            'required': False
+        }
+    )
+    # hours
+    burning_time = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Burning Time',
+            'type': 'float',
+            'required': False
+        }
+    )
+    # btu/h
+    heat_output = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Heat Output',
+            'type': 'float',
+            'required': False
+        }
+    )
+    # sq ft
+    minimum_room_size = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Minimum Room Size',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class GlassComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'glass_component'
+    glass_type = Column(
+        db.String,
+        field_metadata={
+            'label': 'Glass Type',
+            'type': 'text',
+            'required': False
+        }
+    )
+
+
+class SuspensionPointComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'suspension_point_component'
+    support_type = Column(
+        db.String,
+        field_metadata={
+            'label': 'Support Type',
+            'type': 'text',
+            'required': False
+        }
+    )
+    canopy_diameter = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Canopy Diameter',
+            'type': 'float',
+            'required': False
+        }
+    )
+    canopy_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Canopy Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    canopy_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Canopy Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    canopy_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Canopy Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    minimum_hanging_length = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Minimum Hanging Length',
+            'type': 'float',
+            'required': False
+        }
+    )
+    maximum_hanging_length = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Maximum Hanging Length',
+            'type': 'float',
+            'required': False
+        }
+    )
+    wire_length = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Wire Length',
+            'type': 'float',
+            'required': False
+        }
+    )
+    chain_length = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Chain Length',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class ShadeComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'shade_component'
+    shade_type = Column(
+        db.String,
+        field_metadata={
+            'label': 'Shade Type',
+            'type': 'text',
+            'required': False
+        }
+    )
+    shade_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Shade Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    shade_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Shade Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    shade_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Shade Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    shade_diameter = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Shade Diameter',
+            'type': 'float',
+            'required': False
+        }
+    )
+    material = Column(
+        db.String,
+        field_metadata={
+            'label': 'Shade Material',
+            'type': 'text',
+            'required': False
+        }
+    )
+    shade_qty = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'Shade Quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+
+
+class BulbComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'bulb_component'
+    bulb_type = Column(
+        db.String,
+        field_metadata={
+            'label': 'Bulb Type',
+            'type': 'text',
+            'required': False
+        }
+    )
+    bulb_base = Column(
+        db.String,
+        field_metadata={
+            'label': 'Bulb Base',
+            'type': 'text',
+            'required': False
+        }
+    )
+    bulb_qty = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'Bulb Quantity',
+            'type': 'integer',
+            'required': False
+        }
+    )
+    bulb_wattage = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'Bulb Wattage',
+            'type': 'integer',
+            'required': False
+        }
+    )
+
+
+class ElectricalComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'electrical_component'
+    switch_type = Column(
+        db.String,
+        field_metadata={
+            'label': 'Switch Type',
+            'type': 'text',
+            'required': False
+        }
+    )
+    voltage = Column(
+        db.Integer,
+        field_metadata={
+            'label': 'Voltage',
+            'type': 'integer',
+            'required': False
+        }
+    )
+    exterior_use = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'Exterior Use',
+            'type': 'boolean',
+            'required': False
+        }
+    )
+
+
+class PatternComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'pattern_component'
+    pattern_number = Column(
+        db.String,
+        field_metadata={
+            'label': 'Pattern Number',
+            'type': 'text',
+            'required': False
+        }
+    )
+    vertical_repeat = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Vertical Repeat',
+            'type': 'float',
+            'required': False
+        }
+    )
+    horizontal_repeat = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Horizontal Repeat',
+            'type': 'float',
+            'required': False
+        }
+    )
+    direction = Column(
+        db.String,
+        field_metadata={
+            'label': 'Direction',
+            'type': 'text',
+            'required': False
+        }
+    )
+    scale = Column(
+        db.String,
+        field_metadata={
+            'label': 'Scale',
+            'type': 'text',
+            'required': False
+        }
+    )
+    color = MultiValueReference('color', 'pattern')
+    design_type = MultiValueReference('design_type', 'pattern')
+
+
+class TextileComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'textile_component'
+    content = Column(
+        db.String,
+        field_metadata={
+            'label': 'Content',
+            'type': 'text',
+            'required': False
+        }
+    )
+    width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+    treatment = Column(
+        db.String,
+        field_metadata={
+            'label': 'Treatment',
+            'type': 'text',
+            'required': False
+        }
+    )
+    grade = Column(
+        db.String,
+        field_metadata={
+            'label': 'Grade',
+            'type': 'text',
+            'required': False
+        }
+    )
+    weave_type = MultiValueReference('weave_type', 'textile')
+    usage = MultiValueReference('usage', 'textile')
+
+
+class LeatherComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'leather_component'
+    leather_type = Column(
+        db.String,
+        field_metadata={
+            'label': 'Leather Type',
+            'type': 'text',
+            'required': False
+        }
+    )
+    pattern_number = Column(
+        db.String,
+        field_metadata={
+            'label': 'Pattern Number',
+            'type': 'text',
+            'required': False
+        }
+    )
+    hide_size = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Hide Size',
+            'type': 'float',
+            'required': False
+        }
+    )
+    finish = Column(
+        db.String,
+        field_metadata={
+            'label': 'Finish',
+            'type': 'text',
+            'required': False
+        }
+    )
+
+
+class FiberComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'fiber_component'
+    pile = Column(
+        db.String,
+        field_metadata={
+            'label': 'Pile',
+            'type': 'text',
+            'required': False
+        }
+    )
+    construction = Column(
+        db.Enum(
+            'hand_crafted',
+            'hand_hooked',
+            'hand_tufted',
+            'hand_knotted',
+            'hand_loomed',
+            'hand_woven',
+            'machine_made',
+            name='fiber_construction_types'
+        ),
+        field_metadata={
+            'label': 'Construction',
+            'type': 'select',
+            'required': False,
+            'choices': [
+                ('none', 'None'),
+                ('hand_crafted', 'Hand Crafted'),
+                ('hand_hooked', 'Hand Hooked'),
+                ('hand_tufted', 'Hand Tufted'),
+                ('hand_knotted', 'Hand Knotted'),
+                ('hand_loomed', 'Hand Loomed'),
+                ('hand_woven', 'Hand Woven'),
+                ('machine_made', 'Machine Made'),
+            ],
+        }
+    )
+
+
+class DurabilityComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'durability_component'
+    martindale = Column(
+        db.String,
+        field_metadata={
+            'label': 'Martindale',
+            'type': 'text',
+            'required': False
+        }
+    )
+    wyzenbeek = Column(
+        db.String,
+        field_metadata={
+            'label': 'Wyzenbeek',
+            'type': 'text',
+            'required': False
+        }
+    )
+    flammability = Column(
+        db.String,
+        field_metadata={
+            'label': 'Flammability',
+            'type': 'text',
+            'required': False
+        }
+    )
+
+
+class InteriorDimensionComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'interior_dimension_component'
+    interior_depth = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Interior Depth',
+            'type': 'float',
+            'required': False
+        }
+    )
+    interior_height = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Interior Height',
+            'type': 'float',
+            'required': False
+        }
+    )
+    interior_width = Column(
+        db.Float,
+        field_metadata={
+            'label': 'Interior Width',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+class OptionSetSubComponent(db.Model, SubComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'option_set_sub_component'
+    __parent_component__ = 'option'
+    option_component_id = Column(
+        db.Integer,
+        db.ForeignKey('option_component.component_data_id'),
+        field_metadata={
+            'label': 'Option Component ID',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    option_set_id = Column(
+        db.Integer,
+        db.ForeignKey('option_set.id'),
+        field_metadata={
+            'label': 'Option Set ID',
+            'type': 'integer',
+            'required': False
+        }
+    )
+
+
+class OptionComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'option_component'
+    option_sets = Relationship(
+        "OptionSetSubComponent",
+        OptionSetSubComponent,
+        'option_component_id',
+        field_metadata={
+            'label': 'Option Sets',
+            'type': 'list',
+            'required': False
+        }
+    )
+
+
+class ImageSubComponent(db.Model, SubComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'image_sub_component'
+    image_component_id = Column(
+        db.Integer,
+        db.ForeignKey('image_component.component_data_id'),
+        field_metadata={
+            'label': 'Image Component ID',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    default = Column(
+        db.Boolean,
+        field_metadata={
+            'label': 'Default',
+            'type': 'boolean',
+            'required': False
+        }
+    )
+    category = Column(
+        db.Enum(
+            'setting',
+            'isolated',
+            'other',
+            name='image_category_types'
+        ),
+        nullable=True,
+        field_metadata={
+            'label': 'Category',
+            'type': 'radio',
+            'required': True,
+            'choices': [
+                ('setting', 'In Setting'),
+                ('isolated', 'White Background'),
+                ('other', 'Other'),
+            ],
+            'default': 'other'
+        }
+    )
+    caption = Column(
+        db.String,
+        field_metadata={
+            'label': 'Caption',
+            'type': 'text',
+            'required': False
+        }
+    )
+    full_size = Column(
+        db.String,
+        field_metadata={
+            'label': 'Full Size',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    thumbnail = Column(
+        db.String,
+        field_metadata={
+            'label': 'Thumbnail',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    medium = Column(
+        db.String,
+        field_metadata={
+            'label': 'Medium',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+    large = Column(
+        db.String,
+        field_metadata={
+            'label': 'Large',
+            'type': 'hidden',
+            'required': False
+        }
+    )
+
+
+class ImageComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'image_component'
+    images = Relationship(
+        "ImageSubComponent",
+        ImageSubComponent,
+        'image_component_id',
+        field_metadata={
+            'label': 'Images',
+            'type': 'list',
+            'required': False
+        }
+    )
+
+
+class ComColComponent(db.Model, ComponentBase):
+    __perspectives__ = {}
+    __tablename__ = 'com_col_component'
+    com = Column(
+        db.Float,
+        field_metadata={
+            'label': 'COM',
+            'type': 'float',
+            'required': False
+        }
+    )
+    col = Column(
+        db.Float,
+        field_metadata={
+            'label': 'COL',
+            'type': 'float',
+            'required': False
+        }
+    )
+
+
+"""class OptionGroup(db.Model, ComponentBase):
+    __tablename__ = 'option_group'
+    id = Column(db.Integer, primary_key=True)
+    name = Column(db.String)
+    description = Column(db.String)
+"""

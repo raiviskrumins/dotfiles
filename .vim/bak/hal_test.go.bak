@@ -1,0 +1,158 @@
+package lib
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+// TestEmbed tests the Embed method on a Resource to ensure it will embed data
+// correctly into its Embedded attribute.
+func TestEmbedIn(t *testing.T) {
+	res := new(Resource)
+	res.Embedded = make(map[string][]interface{})
+
+	childData := 42
+	key := "children"
+
+	res.EmbedIn(key, childData)
+
+	if !assert.NotNil(t, res.Embedded) {
+		return
+	}
+
+	assert.Len(t, res.Embedded, 1)
+	assert.Len(t, res.Embedded[key], 1)
+	assert.EqualValues(t, res.Embedded[key][0], childData)
+}
+
+// TestAddLink tests the AddLink method for Resources, asserting that
+// it is possible to add and reference a link.
+func TestAddLink(t *testing.T) {
+	res := new(Resource)
+	res.Links = make(map[string]HALHref)
+
+	ref := "self"
+	link := HALHref{Endpoint: "/example/path"}
+
+	res.AddLink(ref, link)
+
+	if !assert.NotNil(t, res.Links) {
+		return
+	}
+
+	assert.Len(t, res.Links, 1)
+	assert.EqualValues(t, res.Links["self"], link)
+}
+
+// TestNewResource tests the creation of a new resource off of a provided object,
+// ensuring that the embedded, links and state attributes are not nil.
+func TestNewResource(t *testing.T) {
+	obj := make(map[string]interface{})
+	obj["foo"] = "bar"
+	obj["pi"] = 3.14159
+
+	res, e := NewResource(obj)
+
+	assert.NoError(t, e)
+
+	assert.NotNil(t, res.Embedded)
+	assert.NotNil(t, res.Links)
+	assert.NotNil(t, res.State)
+
+	assert.EqualValues(t, res.State, obj)
+}
+
+// TestAddNavLinks tests the AddNavLinks method to ensure it will correctly add
+// the proper navigation links to the Links attribute based on the total, offset
+// and limit parameters.
+func TestAddNavLinks(t *testing.T) {
+	resetLinks := func(r *Resource) {
+		delete(r.Links, "first")
+		delete(r.Links, "next")
+		delete(r.Links, "previous")
+		delete(r.Links, "last")
+	}
+
+	res := new(Resource)
+	res.Links = make(map[string]HALHref)
+
+	total := 100
+	offset := 10
+	limit := 6
+
+	// Try to add nav links without a "self" link.
+	res.AddNavLinks(total, offset, limit)
+	assert.Len(t, res.Links, 0)
+
+	self := HALHref{Endpoint: "/uri"}
+	res.AddLink("self", self)
+
+	// Show all links
+	res.AddNavLinks(total, offset, limit)
+	assert.Len(t, res.Links, 5)
+	assert.EqualValues(t, self, res.Links["self"])
+
+	firstCase := HALHref{Endpoint: "/uri", Params: map[string]interface{}{"offset": 0, "limit": 6}}
+	assert.EqualValues(t, firstCase, res.Links["first"])
+	secondCase := HALHref{Endpoint: "/uri", Params: map[string]interface{}{"offset": offset + limit, "limit": 6}}
+	assert.EqualValues(t, secondCase, res.Links["next"])
+	thirdCase := HALHref{Endpoint: "/uri", Params: map[string]interface{}{"offset": offset - limit, "limit": 6}}
+	assert.EqualValues(t, thirdCase, res.Links["previous"])
+	fourthCase := HALHref{Endpoint: "/uri", Params: map[string]interface{}{"offset": total - limit, "limit": 6}}
+	assert.EqualValues(t, fourthCase, res.Links["last"])
+
+	resetLinks(res)
+	res.AddNavLinks(5, 0, 3)
+	assert.Len(t, res.Links, 4)
+
+	resetLinks(res)
+	res.AddNavLinks(1, 0, 1)
+	assert.Len(t, res.Links, 1)
+}
+
+// TestMarshalJSON_Resource tests the marshalling ability
+func TestMarshalJSON_Resource(t *testing.T) {
+	obj := make(map[string]interface{})
+	obj["foo"] = "bar"
+	obj["answer"] = 42
+	obj["pi"] = 3.14159
+
+	res, e := NewResource(obj)
+	if !assert.NoError(t, e) {
+		return
+	}
+
+	res.AddLink("self", HALHref{Endpoint: "/example/uri"})
+
+	childOne := 12
+	childTwo := 21
+
+	res.EmbedIn("children", childOne)
+	res.EmbedIn("children", childTwo)
+
+	jsonBytes, err := json.Marshal(res)
+	assert.NoError(t, err)
+
+	expected := `{"_embedded":{"children":[12,21]},"_links":{"self":{"href":"/example/uri"}},"answer":42,"foo":"bar","pi":3.14159}`
+	assert.Equal(t, []byte(expected), jsonBytes)
+}
+
+// TestMarshalJSON_HALLink tests the Marshalling ability of the HALLink struct
+// to ensure it will be marshalled as expected.
+func TestMarshalJSON_HALLink(t *testing.T) {
+	self := HALHref{Endpoint: "/self"}
+	first := HALHref{Endpoint: "/first"}
+	next := HALHref{Endpoint: "/next"}
+	previous := HALHref{Endpoint: "/previous"}
+	last := HALHref{Endpoint: "/last"}
+
+	link := HALLink{&self, &first, &next, &previous, &last}
+
+	jsonBytes, err := json.Marshal(link)
+	assert.NoError(t, err)
+
+	expected := `{"first":{"href":"/first"},"last":{"href":"/last"},"next":{"href":"/previous"},"previous":{"href":"/next"},"self":{"href":"/self"}}`
+	assert.Equal(t, []byte(expected), jsonBytes)
+}

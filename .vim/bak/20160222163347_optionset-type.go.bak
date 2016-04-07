@@ -1,0 +1,15 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20160222163347(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE option_set RENAME COLUMN option_set_type TO kind;")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160222163347(txn *sql.Tx) {
+
+}

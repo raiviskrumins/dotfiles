@@ -1,0 +1,48 @@
+from random import randint
+
+import jsonify.classes
+
+
+class Person(jsonify.classes.PublicOnly):
+    __ssn = 000000000
+
+    def __init__(self, first, last):
+        self.first_name = first
+        self.last_name = last
+        self.age = randint(21, 99)
+
+    def say_hello(self):
+        return "Hello! I am %s %s!" % (self.first_name, self.last_name)
+
+    def get_ssn(self):
+        return self.__ssn
+
+    def set_ssn(self, num):
+        self.__ssn = num
+
+    def print_info(self):
+        first = self.first_name
+        last = self.last_name
+        age = self.age
+        ssn = self.__ssn
+
+        print("%s %s, age: %i, SSN: %s" % (first, last, age, ssn))
+
+
+def main():
+    john = Person("John", "Doe")
+    john.set_ssn("123456789")
+
+    print("=" * 10 + " Before " + "=" * 10)
+    john.print_info()
+    print(john.json)
+
+
+    print("=" * 10 + " After " + "=" * 10)
+    updated_json = "{\"last_name\": \"Smith\", \"age\": 42}"
+    john.json = updated_json
+    john.print_info()
+    print(john.json)
+
+if __name__ == "__main__":
+    main()

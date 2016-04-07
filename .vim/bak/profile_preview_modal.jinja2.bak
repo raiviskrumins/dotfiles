@@ -1,0 +1,62 @@
+<div class="modal fade" id="accountPreview">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h3 class="modal-title">Preview Profile</h3>
+            </div>
+            <div class="modal-body">
+                <div class="col-md-12">
+                    <div class="row">
+                        <div class="col-md-5">
+                            <p>{% if profile.logo_url %}<img src="{{profile.logo_url}}">{% elif profile.logo_url %}<img src="{{profile.logo_url}}">{% else %}<img src="/static/img/default-logo.png">{% endif %}</p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-8">
+                            {% if cover %}<img src="{{cover.url}}">{% else %}<img src="/static/img/defaultfeatureimage.png">{% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <p>{{profile.name}} <br>
+                                {{profile.street_address_1 or ''}} <br>
+                                {{profile.city or ''}}{% if profile.city %},{% endif %} {{profile.state or ''}} {{profile.zipcode or ''}}
+                            </p>
+                            <p>Phone: {{profile.phone or ''}} {% if profile.extension %}x {{ profile.extension }}{% endif %}<br>
+                               Email: {% if profile.email %}<a href="mailto:{{profile.email}}">{{profile.email}}{% endif %}</a>
+                            </p>
+                            <p><a href="{{profile.url}}" target="_blank">{{profile.url}}</a></p>
+                            <p>
+                                {% if profile.facebook_url %}<a href="{{profile.facebook_url}}" target="_blank"><img src="/static/img/facebook.png"></a>{% endif %}
+                                {% if profile.twitter_url %}<a href="{{profile.twitter_url}}" target="_blank"><img src="/static/img/twitter.png"></a>{% endif %}
+                                {% if profile.google_plus_url %}<a href="{{profile.google_plus_url}}" target="_blank"><img src="/static/img/google.png"></a>{% endif %}
+                                {% if profile.linkedin_url %}<a href="{{profile.linkedin_url}}" target="_blank"><img src="/static/img/linkedin.png"></a>{% endif %}
+                                {% if profile.pinterest_url %}<a href="{{profile.pinterest_url}}" target="_blank"><img src="/static/img/pinterest.png"></a>{% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h3 class="pull-left">About</h3>
+                        </div>
+                        <div class="col-md-12">
+                            <p class="text-left">{{profile.bio|preserve_newlines}}</p>
+                        </div>
+                    </div>
+                    {% if images|length >= 1 %}
+                    <hr>
+                    <div class="row">
+                        {% for image in images %}
+                        <a href="#" class="manu-image" style="background-image:url('{{image.url}}')"></a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-default" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

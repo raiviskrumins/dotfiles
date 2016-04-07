@@ -1,0 +1,18 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+
+{% if product.option_sets.option_set_list %}
+  {% for optionset in product.option_sets.option_set_list|sort(attribute='name')|sort(attribute='type') %}
+  <div class="clearfix optionset-container" data-id="{{ optionset.id }}">
+      <label>{{ optionset.type|title }}: {{ optionset.name }}</label>
+      <a href="{{ url_for('product_view.product_remove_option', prod_id=product.id, option_id=optionset.id) }}" class="js-remove-optionset remove-optionset"><i>Remove</i></a>
+      <div class="option-images clearfix">
+          {% for option in optionset.options %}
+          <div class="option-image text-center">
+              <a href="{{ url_for('options_view.option_get', set_type=optionset.set_type, option_id=option.id) }}" class="js-view-option"><span style="background-image:url('{{ option.image }}');"></span></a>
+          </div>
+          {% endfor %}
+      </div>
+  </div>
+  {% endfor %}
+{% endif %}
+<p><a href="{{ url_for('product_view.product_add_option', prod_id=product.id) }}" class="btn btn-default js-optionset-modal">+ Add Option Set</a></p>

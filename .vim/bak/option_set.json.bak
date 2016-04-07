@@ -1,0 +1,170 @@
+{
+    "instance": {
+        "id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "manufacturer_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "name": {
+            "type": "string",
+            "regex": ".+"
+        },
+        "type": {
+            "type": "string",
+            "regex": ".+"
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        }
+    },
+    "collection": {
+        "total": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "count": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "_embedded": {
+            "type": "object",
+            "object": {
+                "option_sets": {
+                    "type": "list",
+                    "element": {
+                        "type": "object",
+                        "template": "option_set.json:instance"
+                    }
+                }
+            },
+            "required": false
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        }
+    },
+    "create-option-set": [
+        {
+            "payload": {
+                "data": {
+                    "manufacturer_id": 629,
+                    "name": "Second Test",
+                    "type": "finish"
+                },
+                "public_key": "fefcbba7962921e2b81fd3f6caca7b6d85d0641874ae641fe6ae35d72b2627b4"
+            },
+            "response": {
+                "type": "object",
+                "template": "option_set.json:instance"
+            }
+        }
+    ],
+    "update-option-set": [
+        {
+            "id": 2,
+            "payload": {
+                "data": {
+                    "id": 2,
+                    "manufacturer_id": 629,
+                    "name": "Updated Name",
+                    "type": "textile"
+                },
+                "public_key": "fefcbba7962921e2b81fd3f6caca7b6d85d0641874ae641fe6ae35d72b2627b4"
+            },
+            "response": {
+                "type": "object",
+                "template": "option_set.json:instance"
+            }
+        },
+        {
+            "id": -12,
+            "payload": {
+                "data": {
+                    "id": 2,
+                    "manufacturer_id": 629,
+                    "name": "Updated Name",
+                    "type": "textile"
+                },
+                "public_key": "fefcbba7962921e2b81fd3f6caca7b6d85d0641874ae641fe6ae35d72b2627b4"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "list-option-sets": [
+        {
+            "payload": {
+                "public_key": "fefcbba7962921e2b81fd3f6caca7b6d85d0641874ae641fe6ae35d72b2627b4"
+            },
+            "response": {
+                "type": "object",
+                "template": "option_set.json:collection"
+            }
+        },
+        {
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "retrieve-option-set": [
+        {
+            "id": 2,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "option_set.json:instance"
+            }
+        },
+        {
+            "id": -1,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "delete-option-set": [
+        {
+            "id": 7,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {}
+        },
+        {
+            "id": -14,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ]
+}

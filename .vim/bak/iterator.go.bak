@@ -1,0 +1,151 @@
+package lib
+
+import (
+	"reflect"
+
+	"github.com/AmberEngine/api/oops"
+)
+
+type Iterable interface {
+	NewIterator() *Iterator
+	ColumnNames() []string
+	Map() map[string]IteratorItem
+}
+
+type IteratorItem struct {
+	Data     reflect.Value
+	DataType reflect.StructField
+}
+
+func (itv IteratorItem) Addr() interface{} {
+	return itv.Data.Addr().Interface()
+}
+
+func (itv IteratorItem) Set(val interface{}) {
+	itv.Data.Addr().Interface().(Field).Set(val)
+}
+
+func (itv IteratorItem) Tag() reflect.StructTag {
+	return itv.DataType.Tag
+}
+
+func (itv IteratorItem) Name() string {
+	return itv.DataType.Name
+}
+
+func (itv IteratorItem) Value() interface{} {
+	return itv.Data.Interface()
+}
+
+func (itv IteratorItem) ColumnName() string {
+	tag := itv.Tag()
+	columnName := tag.Get("db")
+	if columnName == "" {
+		columnName = tag.Get("json")
+	}
+	return columnName
+}
+
+type Iterator struct {
+	Current       int
+	length        int
+	DataElem      reflect.Value
+	DataType      reflect.Type
+	innerIterator *Iterator
+}
+
+func (it *Iterator) Item() IteratorItem {
+	val := it.DataElem.Field(it.Current)
+	valType := it.DataType.Field(it.Current)
+	if valType.Anonymous {
+		elem := val.Addr().Interface().(Iterable)
+		if it.innerIterator == nil {
+			it.innerIterator = elem.NewIterator()
+		}
+		if it.innerIterator.Next() {
+			innerVal := it.innerIterator.Item()
+			if it.innerIterator.Next() {
+				it.innerIterator.Current--
+				it.Current--
+			}
+			return innerVal
+		}
+	} else {
+		it.innerIterator = nil
+	}
+	return IteratorItem{Data: val, DataType: valType}
+}
+
+func (it *Iterator) Next() bool {
+	it.Current++
+	if it.length == 0 {
+		it.length = it.DataElem.NumField()
+	}
+	if it.Current >= it.length {
+		return false
+	}
+	return true
+}
+
+func ColumnNames(it *Iterator) []string {
+	var columns []string
+	for it.Next() {
+		val := it.Item()
+		tag := val.Tag()
+		if tag.Get("private") == "true" {
+			continue
+		}
+		if tag.Get("list_sub_field") == "" && tag.Get("relation") == "" {
+			columns = append(columns, val.ColumnName())
+		}
+	}
+	return columns
+}
+
+func Map(it *Iterator) map[string]IteratorItem {
+	structMap := make(map[string]IteratorItem)
+	for it.Next() {
+		field := it.Item()
+		structMap[field.Name()] = field
+	}
+	return structMap
+}
+
+// ValueByName returns the field that was requested by name.
+func ValueByName(it *Iterator, name string) Field {
+	for it.Next() {
+		field := it.Item()
+		if field.Name() == name {
+			return field.Addr().(Field)
+		}
+	}
+	return nil
+}
+
+func ColumnsValues(it Iterable, includePrimary bool) ([]string, []interface{}, oops.Error) {
+	var columns []string
+	var values []interface{}
+
+	for iter := it.NewIterator(); iter.Next(); {
+		field := iter.Item()
+		tag := field.Tag()
+
+		if len(tag.Get("list_sub_field")+tag.Get("relation")) > 0 {
+			continue
+		}
+
+		if includePrimary == false && len(tag.Get("primary")) > 0 {
+			continue
+		}
+
+		fieldVal, err := field.Addr().(Field).Value()
+		if err != nil {
+			return nil, nil, oops.ServerError("", err.Error())
+		}
+
+		columns = append(columns, field.ColumnName())
+		values = append(values, fieldVal)
+	}
+
+	return columns, values, nil
+}

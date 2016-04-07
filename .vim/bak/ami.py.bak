@@ -1,0 +1,255 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import getopt
+import inspect
+import os
+import re
+import sys
+
+import boto.ec2 as ec2
+
+
+env_region_map = {
+    "dev": "us-east-1",
+    "prod": "us-west-2",
+    "stage": "us-west-1",
+    "prod-release": "us-west-2",
+    "stage-release": "us-west-1",
+}
+
+
+class ec2_connector():
+    """
+    A connector class for an AWS EC2 connection.
+    """
+    def __init__(self, region):
+        self.region = region
+
+    def __enter__(self):
+        self.connection = ec2.connect_to_region(self.region)
+
+        return self.connection
+
+    def __exit__(self, type, value, traceback):
+        self.connection.close()
+
+
+def callable_function(function):
+    """
+    Adds the attribute is_callable_function to the decorated function.
+    """
+    function.is_callable_function = True
+
+    return function
+
+
+def is_callable_function(function):
+    """
+    Checks if the function is decorated with the callable_function decorator.
+    Args:
+        function: The function.
+    Returns:
+        bool: True if the function is a callable function.
+    """
+    return hasattr(
+                function,
+                'is_callable_function'
+           ) and function.is_callable_function
+
+
+def get_callable_function_list():
+    """
+    Gets a list of functions decorated with the callable_function decorator.
+    Returns:
+        list: A list of functions with the callable_function decorator.
+    """
+    members = inspect.getmembers(sys.modules[__name__])
+    functions = []
+
+    for member in members:
+        function = member[1]
+
+        if inspect.isfunction(function) and is_callable_function(function):
+            functions.append(function.__name__)
+
+    return functions
+    
+
+def get_filters(config):
+    """
+    Gets a dictionary of AWS API filters from the configuration data.
+    Args:
+        config (dict): A dictionary containing the configuration.
+    Returns:
+        dict: A dictionary of AWS API filters.
+    """
+    filters = { 'tag:EnvType': config.get('EnvType') }
+
+    if config.get('AppTypes'):
+        filters['tag:AppType'] = config.get('AppTypes')
+
+    if config.get('image-id'):
+        filters['image-id'] = config.get('image-id')
+
+    return filters
+    
+
+def is_affirmed(response):
+    """
+    Checks if a user input response is an affirmation.
+    Args:
+        response (str): The user input response.
+    Returns:
+        bool: True if the user input response is an affirmation.
+    """
+    regex = '^(y(es)?)$'
+    pattern = re.compile(regex)
+    result = re.match(pattern, response.strip().lower())
+
+    if result:
+        return True
+
+    return False
+
+
+@callable_function
+def list(config):
+    """
+    List Amazon Machine Images.
+    Args:
+        config (dict): A dictionary containing the configuration.
+    """
+    filters = get_filters(config)
+
+    with ec2_connector(config.get('region')) as ec2_connection:
+        images = ec2_connection.get_all_images(filters=filters)
+
+        for image in images:
+            print image.id, image.name, image.creationDate
+
+
+@callable_function
+def deregister(config):
+    """
+    Deregister Amazon Machine Images.
+    Args:
+        config (dict): A dictionary containing the configuration.
+    """
+    filters = get_filters(config)
+    images = None
+
+    with ec2_connector(config.get('region')) as ec2_connection:
+        images = ec2_connection.get_all_images(filters=filters)
+
+    if images:
+        message = "You are about to delete the following AMI(s): "
+        image_ids = [ image.id for image in images ]
+        message += ', '.join(image_ids)
+        message += "\nEnter y[es] to Continue: "
+        response = raw_input(message)
+
+        if is_affirmed(response):
+            for image in images:
+                ec2_connection.deregister_image(image.id)
+                print "Deregistered: %s" % image.id
+
+
+def usage(pname, function=None, status=0):
+    """
+    Show usage and exit.
+    Args:
+        pname (str): Program name.
+        function (str, optional): Name of the function. Defaults to None.
+        status (int, optional): Exit status code. Defaults to 0.
+    """
+    message = None
+
+    if function:
+        message = """Usage: python %s %s [-h] [-e env] [-i image-id] 
+ -h                         Shows this help
+ -e env-type=<env>          EnvType tag value (e.g. stage, prod, dev).
+""" % (pname, function)
+
+        sys.stderr.write(message)
+    else:
+        sys.stderr.write("Usage: python %s command [arguments ...]\n" % pname)
+        sys.stderr.write("\nCommands:\n")
+
+        for function in get_callable_function_list():
+            sys.stderr.write("  %s\n" % function)
+
+        message = """
+Usage: python %s <command> [-h] [options]
+ -h                         Show this help.
+
+""" % pname
+
+        sys.stderr.write(message)
+        sys.stderr.write("Try: python %s command -h\n" % pname)
+
+    sys.exit(status)
+
+
+def main(pname, argv):
+    """
+    AWS EC2 AMI Utility.
+    Args:
+        pname (str): Program name.
+        argv (list): List of program arguments.
+    """
+    function = None
+    config = {}
+
+    if len(argv) < 1:
+        usage(pname)
+
+    try:
+        function = getattr(sys.modules[__name__], argv[0])
+
+        if not function.is_callable_function:
+            usage(pname, status=1)
+
+        options, argv = getopt.getopt(argv[1:], "he:i:", ["help", "env-type", "image-id"])
+
+        for option, argument in options:
+            if option in ("-h", "--help"):
+                usage(pname, function.func_name)
+            if option in ("-e", "--env-type"):
+                config['EnvType'] = argument.lower()
+                config['region'] = env_region_map.get(config.get('EnvType'))
+            if option in ("-i", "--image-id"):
+                config['image-id'] = argument.lower()
+
+        if argv:
+            config['AppTypes'] = argv
+
+        if not config.get('EnvType'):
+            raise getopt.GetoptError('missing env')
+
+        if not config.get('region'):
+            raise getopt.GetoptError('missing region')
+
+        function(config)
+
+    except AttributeError as error:
+        sys.stderr.write("Error: %s\n" % str(error))
+
+        if function:
+            usage(pname, function=function.func_name, status=1)
+        else:
+            usage(pname, status=1)
+
+    except getopt.GetoptError as error:
+        sys.stderr.write("Error: %s\n" % str(error))
+
+        if function:
+            usage(pname, function=function.func_name, status=1)
+        else:
+            usage(pname, status=1)
+
+
+if __name__ == '__main__':
+    pname = os.path.basename(sys.argv[0])
+
+    main(pname, sys.argv[1:])

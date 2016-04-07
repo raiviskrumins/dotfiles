@@ -1,0 +1,179 @@
+{
+    "instance": {
+        "id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "api_key_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "bio": {
+            "type": "string",
+            "nullable": true
+        },
+        "city": {
+            "type": "string",
+            "nullable": true
+        },
+        "email": {
+            "type": "string",
+            "regex": "@{1}",
+            "nullable": true
+        },
+        "facebook_url": {
+            "type": "string",
+            "regex": "^http",
+            "nullable": true
+        },
+        "google_plus_url": {
+            "type": "string",
+            "regex": "^http",
+            "nullable": true
+        },
+        "isolated_image": {
+            "type": "string",
+            "nullable": true
+        },
+        "linkedin_url": {
+            "type": "string",
+            "regex": "^http",
+            "nullable": true
+        },
+        "logo_url": {
+            "type": "string",
+            "regex": "^http",
+            "nullable": true
+        },
+        "other_image": {
+            "type": "string",
+            "nullable": true
+        },
+        "phone": {
+            "type": "string",
+            "nullable": true
+        },
+        "phone_extension": {
+            "type": "string",
+            "nullable": true
+        },
+        "pinterest_url": {
+            "type": "string",
+            "nullable": true
+        },
+        "sales_channel_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "setting_image": {
+            "type": "string",
+            "nullable": true
+        },
+        "state": {
+            "type": "string",
+            "nullable": true
+        },
+        "street_address_1": {
+            "type": "string",
+            "nullable": true
+        },
+        "street_address_2": {
+            "type": "string",
+            "nullable": true
+        },
+        "twitter_url": {
+            "type": "string",
+            "regex": "^http",
+            "nullable": true
+        },
+        "url": {
+            "type": "string",
+            "regex": "^http",
+            "nullable": true
+        },
+        "visible": {
+            "type": "bool"
+        },
+        "zipcode": {
+            "type": "string",
+            "regex": "[0-9]+",
+            "nullable": true
+        },
+        "_links": {
+            "type": "object",
+            "object": {
+                "self": {
+                    "type": "object",
+                    "object": {
+                        "href": {
+                            "type": "string",
+                            "regex": ".+"
+                        }
+                    }
+                }
+            }
+        }
+        
+    },
+    "collection": {
+        "total": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "count": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "_embedded": {
+            "type": "object",
+            "object": {
+                "sales_channels": {
+                    "type": "list",
+                    "element": {
+                        "type": "object",
+                        "template": "sales_channel.json:instance"
+                    }
+                }
+            }
+        },
+        "_links": {
+            "type": "object",
+            "object": {
+                "self": {
+                    "type": "string",
+                    "regex": "^http"
+                }
+            }
+        }
+    },
+    "retrieve-sales-channel": [
+        {
+            "id": 3,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "sales_channel.json:instance"
+            }
+        },
+        {
+            "id": -1,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ]
+}

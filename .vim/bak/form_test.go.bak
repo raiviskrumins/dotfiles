@@ -1,0 +1,130 @@
+package form
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+// TestSchemaMarshalJSON tests to ensure that a Schema object can be
+// marshalled to JSON correctly.
+func TestSchemaMarshalJSON(t *testing.T) {
+	s := make(Schema)
+	s["test"] = NewField("test", "string", Render("label", "text"))
+
+	bites, err := json.Marshal(s)
+	assert.NoError(t, err)
+	assert.True(t, len(bites) > 2)
+}
+
+// TestNewSchema tests to ensure a new Schema instance will be correctly
+// populated with the pointers of a variety of FieldSchema instances.
+func TestNewSchema(t *testing.T) {
+	field1 := new(FieldSchema)
+	field2 := new(FieldSchema)
+	field3 := new(FieldSchema)
+
+	field1.Name = "field1"
+	field2.Name = "field2"
+	field3.Name = "field3"
+
+	s := NewSchema(field1, field2, field3)
+	if assert.NotNil(t, s) {
+		assert.Equal(t, field1, (*s)[field1.Name])
+		assert.Equal(t, field2, (*s)[field2.Name])
+		assert.Equal(t, field3, (*s)[field3.Name])
+	}
+}
+
+// TestNewField asserts that a field created will be correctly populated with
+// all of the provided data.
+func TestNewField(t *testing.T) {
+	r := Render("label", "element")
+	f := NewField("name", "class", r, Required(), Units("ft"))
+
+	if assert.NotNil(t, f) {
+		assert.Equal(t, "name", f.Name)
+		assert.Equal(t, "class", f.Classification)
+		assert.Equal(t, true, f.Required)
+		assert.Equal(t, "ft", f.Units)
+
+		assert.Equal(t, r, f.Render)
+	}
+}
+
+// TestRequired tests that it is possible make a FieldSchema's required attribute
+// true.
+func TestRequired(t *testing.T) {
+	f := NewField("name", "class", RenderData{})
+	f.Required = false
+	assert.False(t, f.Required)
+
+	Required()(f)
+	assert.True(t, f.Required)
+}
+
+// TestUnits tests that it is possible make a FieldSchema's units attribute
+// to the desired string.
+func TestUnits(t *testing.T) {
+	f := NewField("name", "class", RenderData{})
+	f.Units = ""
+	assert.Empty(t, f.Units)
+
+	Units("ft")(f)
+	assert.Equal(t, "ft", f.Units)
+}
+
+// TestEmbed tests that it is possible to embed a Schema into a  FieldSchema
+// instance.
+func TestEmbed(t *testing.T) {
+	f := NewField("name", "class", RenderData{})
+	s := make(Schema)
+
+	assert.Nil(t, f.Embedded)
+	Embed(&s)(f)
+
+	if assert.NotNil(t, f.Embedded) {
+		assert.Equal(t, s, *f.Embedded)
+	}
+}
+
+// TestRender tests the Render functions ability to generate a populated RenderData
+// instance.
+func TestRender(t *testing.T) {
+	r := Render("label", "element", MultiSelect())
+	assert.Equal(t, "label", r.Label)
+	assert.Equal(t, "element", r.Element)
+	assert.True(t, r.MultiSelect)
+}
+
+// TestMultiSelect tests to ensure that Multiselect will return a function
+// for enabling Multiselection of a RenderData instance.
+func TestMultiSelect(t *testing.T) {
+	r := Render("label", "element")
+	MultiSelect()(&r)
+
+	assert.True(t, r.MultiSelect)
+}
+
+// TestSelectChoices tests to ensure that choices can be provided to a RenderData
+// instance.
+func TestSelectChoice(t *testing.T) {
+	k := []string{"key1", "key2"}
+	v := []string{"value1", "value2"}
+
+	r := Render("label", "element")
+
+	SelectChoices(k, v)(&r)
+	assert.Len(t, r.Choices, 2)
+}
+
+// TestChoiceMarshalJSON tests to ensure that a Choice instance can be marshalled
+// to JSON correctly.
+func TestChoiceMarshalJSON(t *testing.T) {
+	c := choice{"key", "value"}
+	bites, err := json.Marshal(c)
+
+	assert.NoError(t, err)
+	assert.True(t, len(bites) > 2)
+}

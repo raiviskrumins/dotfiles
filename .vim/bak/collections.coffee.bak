@@ -1,0 +1,68 @@
+# collection CRUD functionality via modals
+#
+# UI COMPONENTS:
+# --------------
+# .js-new-collection : button in the left nav to open the new collection modal
+#
+# .js-edit-collection : button in the collection page to open the edit
+#       collection modal
+#
+# .js-delete-collection : button in the edit collection modal to delete the
+#       collection.
+#
+# #collectionForm : the new/edit collection form
+
+$(document).ready ->
+  # sends the collection data to be saved, then reloads the page if successful
+  collectionSave = (e) ->
+    e.preventDefault()
+    e.stopPropagation()
+    console.log e
+    $('.js-save-collection').addClass('disabled')
+    raw_data = $(@).serializeArray()
+    form_data = {}
+
+    url = $(@).attr 'action'
+    type = $(@).attr 'method'
+
+    _.map raw_data, (key_value) ->
+      form_data[key_value.name] = key_value.value
+
+    $.ajax url,
+      type: type,
+      contentType: 'application/json',
+      data: JSON.stringify(form_data),
+      success: (result) ->
+        if result.success is true
+          window.location.reload()
+        else
+          cm.loadModal result
+
+  # sends a DELETE request, then redirects to the product listing if
+  # successful
+  collectionDelete = (e) ->
+    e.preventDefault()
+    e.stopPropagation()
+
+    url = $(@).attr 'href'
+
+    $.ajax url,
+      type: 'DELETE',
+      success: (result) ->
+        if result.success is true
+          window.location = '/products'
+
+  reactivateSave = ->
+    $('.js-save-collection').removeClass('disabled') if $('.js-save-collection').hasClass('disabled')
+
+
+  $('.js-new-collection').on 'click', cm.getModal
+  $('.js-edit-collection').on 'click', cm.getModal
+  $('.js-add-to-collection').on 'click', cm.getModal
+  $('.js-remove-confirm').on 'click', cm.getModal
+  $('body').on 'click', '.js-delete-confirm', cm.getModal
+  $('body').on 'click', '.js-delete-collection', collectionDelete
+  $('body').on 'submit', '#collectionForm', collectionSave
+  $('body').on 'keydown', '#collectionForm input#name', reactivateSave
+
+  return

@@ -1,0 +1,60 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field, radio_field %}
+
+<div class="modal fade" id="imageEdit">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title">
+                    {% if sub_component_data_id %}Edit Image{% else %}New Image{% endif %}
+                </h4>
+            </div>
+            {% if sub_component_data_id %}
+            <form method="POST" class="js-submit" action="{{url_for('product_view.product_image_modal', prod_id=prod_id, data_id=sub_component_data_id)}}" data-component="image">
+            {% else %}
+            <form method="POST" class="js-submit" action="{{url_for('product_view.product_image_modal_new', prod_id=prod_id)}}" data-component="image">
+            {% endif %}
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-12 hidden duplicate-warning">
+                            <p><span class="icon-warning"></span> <i>This is a duplicate image.</i></p>
+                        </div>
+                        <div class="col-md-6">
+                            <span class="icon-rotate js-rotate {% if not form.full_size.data %}disabled{% endif %}"></span>
+                            <a data-target="#image_file" class="image-upload-wrapper js-file-trigger{% if form.errors.full_size %} has-error{% endif %}">
+                                <div class="modal-image-holder js-image-holder text-center">
+                                    {% if sub_component_data_id or form.full_size.data %}
+                                    <img src="{{form.full_size.data}}">
+                                    {% else %}
+                                    <div class="placeholder-image"></div>
+                                    {% endif %}
+                                </div>
+                                <button class="upload-btn btn btn-info text-center">{% if sub_component_data_id %}Update Image{% else %}Upload Image{% endif %}</button>
+                                {% if form.errors.full_size %}
+                                {% for error in form.errors.full_size %}
+                                <span class="help-block">{{ error }}</span>
+                                {% endfor %}
+                                {% endif %}
+                            </a>
+                            <input type="file" id="image_file" name="image_file" accept="image/jpeg, image/jpg, image/png">
+                            <input id="rotation_angle" name="rotation_angle" type="hidden" value="0">
+                            {{ basic_field(form.full_size, hide_label=True) }}
+                            {{ form.thumbnail }}
+                            {{ form.medium }}
+                            {{ form.large }}
+                            {{ checkbox_field(form.default) }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ basic_field(form.caption) }}
+                            {{ radio_field(form.category, label="Image Type", class="unstyled") }}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <input type="submit" class="btn btn-primary pull-right js-image-edit-save" value="Save">
+                    <button class="btn btn-default pull-right" data-dismiss="modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

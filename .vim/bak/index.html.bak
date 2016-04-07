@@ -1,0 +1,185 @@
+<!DOCTYPE HTML>
+<html lang="en">
+    <head>
+        <title>rebase/space</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="css/bootstrap.css" rel="stylesheet">
+        <link href="css/style.css" rel="stylesheet">
+        <link rel="shortcut icon" type="image/png" href="img/favicon.png"/>
+        <link rel='stylesheet' id='prettyphoto-css'  href="css/prettyPhoto.css" type='text/css' media='all'>
+        <link href="css/fontello.css" type="text/css" rel="stylesheet">
+        <!--[if lt IE 7]>
+        <link href="css/fontello-ie7.css" type="text/css" rel="stylesheet">  
+        <![endif]-->
+        <link href='https://fonts.googleapis.com/css?family=Quattrocento:400,700' rel='stylesheet' type='text/css'>
+        <link href='https://fonts.googleapis.com/css?family=Patua+One' rel='stylesheet' type='text/css'>
+        <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'>
+        <style type="text/css">
+            body {
+                padding-top: 60px; /* 60px to make the container go all the way to the bottom of the topbar */
+            }
+        </style>
+        <link href="css/bootstrap-responsive.css" rel="stylesheet">
+        <!--[if lt IE 9]>
+        <script src="js/html5.js"></script>
+        <![endif]-->
+        <script src="js/jquery.js"></script>
+        <script src="js/jquery.scrollTo-1.4.2-min.js"></script>
+        <script src="js/jquery.localscroll-1.2.7-min.js"></script>
+        <script charset="utf-8">
+            $(document).ready(function () {
+                $("a[rel^='prettyPhoto']").prettyPhoto();
+            });
+        </script>
+    </head>
+    <body>
+        <div class="navbar-wrapper">
+            <div class="navbar navbar-inverse navbar-fixed-top">
+                <div class="navbar-inner">
+                    <div class="container"> <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse"> <span class="icon-bar"></span> <span class="icon-bar"></span> <span class="icon-bar"></span> </a>
+                        <h1 class="brand"><a href="/">rebase/space</a></h1>
+                        <nav class="pull-right nav-collapse collapse">
+                            <ul id="menu-main" class="nav">
+                                <li><a title="What's rebasing?" href="#rebase-info">What's rebasing?</a></li>
+                                <li><a title="Sign-in with GitHub" href="/github/begin">Sign-in with GitHub</a></li>
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="top"></div>
+        <div id="headerwrap">
+            <header class="clearfix">
+                <h1>A CI tool to remind you to <a href="">rebase</a> your PR.</h1>
+                <div class="container">
+                    <div class="row">
+                        <div class="span12">
+                            <h2>Interested? Hookup your GitHub repo and we'll get started!</h2>
+                            <form action="/github/begin" method="get">
+                                <input type="submit" value="Integrate with Github" class="cform-submit">
+                            </form>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="span12">
+                            <ul class="icon">
+                                <li><a href="https://medium.freecodecamp.com/git-rebase-and-the-golden-rule-explained-70715eccc372#.vti0ak6ij"><i class="icon-pinterest-circled"></i></a></li>
+                                <li><a href="https://www.atlassian.com/git/tutorials/rewriting-history/git-rebase"><i class="icon-facebook-circled"></i></a></li>
+                                <li><a href="http://stackoverflow.com/a/804156"><i class="icon-twitter-circled"></i></a></li>
+                                <li><a href="https://bradleyberger.wordpress.com/2015/07/01/rebase-explained-with-pictures/"><i class="icon-gplus-circled"></i></a></li>
+                                <li><a href="https://i.imgflip.com/11mrhl.jpg"><i class="icon-skype-circled"></i></a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </header>
+        </div>
+        <div class="scrollblock">
+            <section id="feature">
+                <div class="container">
+                    <div class="row">
+                        <div class="span12">
+                            <article>
+                                <p>Why the hell would I want to</p>
+                                <p>rebase in the first place?</p>
+                                <br>
+                                <p>Excellent question!</p>
+                            </article>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        <hr>
+        <a name="rebase-info"></a>
+        <section id="portfolio" class="single-page scrollblock">
+            <div class="container">
+                <div class="align"><i class="icon-desktop-circled"></i></div>
+                <h1 id="folio-headline">What's rebasing?</h1>
+                <div class="row">
+                    <div class="span4">
+                        <div class="inside">
+                            <h2>You have a main branch<h2>
+                            <img src="img/rebasing/part_01.svg">
+                        </div>
+                    </div>
+                    <div class="span4">
+                        <div class="inside">
+                            <h2>You branch off and modify<h2>
+                            <img src="img/rebasing/part_02.svg">
+                        </div>
+                    </div>
+                    <div class="span4">
+                        <div class="inside">
+                            <h2>You rebase!<h2>
+                            <img src="img/rebasing/part_03.svg">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <hr>
+        <section id="services" class="single-page scrollblock">
+            <div class="container">
+                <div class="align"><i class="icon-cog-circled"></i></div>
+                <h1>Services</h1>
+                <div class="row">
+                    <div class="span3">
+                        <div class="align">
+                            <img src="https://cdn4.iconfinder.com/data/icons/miu-social/60/github-social-media-128.png"></div>
+                        <h2>GitHub Integratio Integrationn</h2>
+                        <p>Check your PRs and make sure they are
+                        pointed off the tip of their branch!</p>
+                    </div>
+                    <div class="span3">
+                        <div class="align">
+                            <img src="https://cdn1.iconfinder.com/data/icons/simple-icons/128/bitbucket-128-black.png"> </div>
+                        <h2>BitBucket Integration</h2>
+                        <p>BitBucket integration is in the works and will be coming soon</p>
+                    </div>
+                    <div class="span3">
+                        <div class="align"> <i class="icon-basket sev_icon"></i></div>
+                        <h2>Coming Soon</h2>
+                        <p></p>
+                    </div>
+                    <div class="span3">
+                        <div class="align"> <i class="icon-mobile-1 sev_icon"></i></div>
+                        <h2>Coming Soon</h2>
+                        <p></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <hr>
+        <section id="testimonials" class="single-page hidden-phone">
+            <div class="container">
+                <div class="row">
+                    <div class="blockquote-wrapper">
+                        <blockquote class="mega">
+                            <div class="span4">
+                                <p class="cite">Some Dev:</p>
+                            </div>
+                            <div class="span8">
+                                <p class="alignright">"Wow!
+                                    <br><span style="margin-left: 5em">So helpful!</em> 
+                                    <br>Totally Useful <span style="margin-left: 5em">Awesome!</span>
+                                    <br><br><span style="margin-left: 3em;">It's amazing"</span></p>
+                            </div>
+                        </blockquote>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <hr>
+        <div class="footer-wrapper">
+            <div class="container">
+                <footer> <small>&copy; 2016 rebase.space | All rights reserved. | Designed with <span style="color: #F1505A">&hearts;</span> by: <a href="http://www.dzyngiri.com">Dzyngiri</a></small> </footer>
+            </div>
+        </div>
+        <script src="js/bootstrap.js"></script>
+        <script src="js/jquery.prettyPhoto.js"></script>
+        <script src="js/site.js"></script>
+    </body>
+</html>

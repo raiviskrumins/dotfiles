@@ -1,0 +1,134 @@
+package config
+
+import (
+	"os"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+// TestBool asserts that a bool-type is returned by Bool.
+func TestBool(t *testing.T) {
+	val := Bool("bool")
+	assert.IsType(t, *new(bool), val)
+}
+
+// TestConfig asserts that a *conf pointer is returned, not null, and containg
+// data.
+func TestConfig(t *testing.T) {
+	cfg := config()
+	if assert.NotNil(t, cfg) {
+		assert.True(t, len(cfg.Data) > 0)
+	}
+}
+
+// TestReadConfigs asserts that the bytes slices of the app and local JSON
+// config files contains some form of data.
+func TestReadConfigs(t *testing.T) {
+	bites1, bites2 := readConfigs()
+
+	assert.NotEmpty(t, bites1)
+	assert.NotEmpty(t, bites2)
+}
+
+// TestUseProgArgs will test overriding settings using program arguments.
+func TestUseProgArgs(t *testing.T) {
+	// Capture original state
+	originalArgs := os.Args
+	original := String("obj", "fizz")
+
+	// Setup test args
+	validTestArgs := []string{"./config_test.go", "-config", "obj.fizz=bar"}
+	os.Args = validTestArgs
+
+	UseProgArgs()
+	assert.Equal(t, "bar", String("obj", "fizz"))
+
+	// Reset changed data
+	validTestArgs = []string{"./config_test.go", "-config", "obj.fizz=" + original}
+	os.Args = validTestArgs
+
+	UseProgArgs()
+	assert.Equal(t, original, String("obj", "fizz"))
+
+	// Reset program args
+	os.Args = originalArgs
+}
+
+// testUseCWD asserts that the Configreturned path to the API package root is not
+// empty.
+func TestUseCWD(t *testing.T) {
+	before := ConfigPath
+	UseCWD()
+	assert.NotEmpty(t, ConfigPath)
+	assert.NotEqual(t, ConfigPath, before)
+}
+
+// TestFloat asserts that a float64-type is returned by Float.
+func TestFloat(t *testing.T) {
+	val := Float("float")
+	assert.IsType(t, *new(float64), val)
+}
+
+// TestGet attempts to get and assert that the specified key equals the expected value.
+func TestGet(t *testing.T) {
+	val := Get("foo")
+	assert.Equal(t, "bar", val.(string))
+}
+
+// TestSet will test settings reachable and unreachable setting paths to a value.
+func TestSet(t *testing.T) {
+	// Reachable
+	original := Get("foo")
+	desired := "some new setting"
+
+	// Change to desired value & test.
+	Set(desired, "foo")
+	assert.Equal(t, desired, Get("foo"))
+
+	// Reset to original value & test.
+	Set(original, "foo")
+	assert.Equal(t, original, Get("foo"))
+
+	// Expect panic on unreachable JSON key-path.
+	assert.Panics(t, func() { Set(desired, "does", "not", "exist") })
+}
+
+// TestGetCanPanic will test that attempting to retrieve an element via keys which
+// do not exist will result in a panic.
+func TestGetCanPanic(t *testing.T) {
+	val := func() { Get("nope!") }
+	assert.Panics(t, val)
+}
+
+// TestGetNested attempts to get a nested element.
+func TestGetNested(t *testing.T) {
+	val := Get("obj", "fizz")
+	assert.Equal(t, "buzz", val.(string))
+}
+
+// TestGetOverridden asserts that a value which is overridden in the local
+// config matches the expected value.
+func TestGetOverridden(t *testing.T) {
+	val := Get("overridden")
+	assert.Equal(t, "after", val.(string))
+}
+
+// TestGetOverriddenNested asserts that a nested value which is overridden in
+// the local config matches the expected value.
+func TestGetOverriddenNested(t *testing.T) {
+	val := Get("obj", "overridden_nested")
+	assert.Equal(t, "after_nested", val.(string))
+}
+
+// TestInt asserts that a int-type is returned by Int.
+func TestInt(t *testing.T) {
+	val := Int("int")
+	assert.IsType(t, *new(int), val)
+}
+
+// TestString asserts that a string-type is returned by String.
+func TestString(t *testing.T) {
+	val := String("string")
+	assert.IsType(t, *new(string), val)
+}

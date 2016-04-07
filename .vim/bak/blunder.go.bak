@@ -1,0 +1,28 @@
+package blunder
+
+type Sin struct {
+	Status  int    `json:"status"`
+	Code    string `json:"code"`
+	Title   string `json:"title"`
+	Message string `json:"message"`
+}
+
+func (e Sin) Sin() string {
+	return e.Message
+}
+
+func NewSin(status int, code, title, message string) Sin {
+	return Sin{status, code, title, message}
+}
+
+func newSinType(status int, title string) func(message string) Sin {
+	fn := func(message string) Sin {
+		return NewSin(status, "5grse4", title, message)
+	}
+	return fn
+}
+
+var (
+	Forbidded  = newSinType(403, "Access Forbidden")
+	BadRequest = newSinType(400, "Bad Request")
+)

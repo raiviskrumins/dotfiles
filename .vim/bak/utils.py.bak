@@ -1,0 +1,147 @@
+from flask import current_app, g
+from amber_portal.lib import get_current_user
+
+import amber_lib
+from amber_lib import client, errors, connection
+
+from redis import Redis
+
+current_user = get_current_user()
+
+
+def amber_api_connection():
+    ctx = amber_api_ctx()
+    return connection.Connection(ctx)
+
+
+def amber_api_ctx():
+    if hasattr(current_user, 'public'):
+        return client.Context(
+            public=current_user.public,
+            private=current_user.private,
+            host=current_app.config['AMBER_URL'],
+            port=current_app.config.get('AMBER_PORT', None)
+        )
+    else:
+        return client.Context(
+            public=current_app.config['AMBER_API_PUBLIC'],
+            private=current_app.config['AMBER_API_PRIVATE'],
+            host=current_app.config['AMBER_URL'],
+            port=current_app.config.get('AMBER_PORT', None)
+        )
+
+
+def pluralize(word):
+    if word.endswith('f'):
+        return ''.join([word[:-1], 'ves'])
+    else:
+        return ''.join([word, 's'])
+
+
+def format_phone(phone):
+    """ Format the given phone number to match the following
+    format: (###) ###-####.
+    It assumes the phone parameter contains only digits.
+    """
+    formatted_number = ''
+
+    if len(phone) < 10:
+        # Return the original phone number if it is not the
+        # minimum necessary length. This should never happen.
+        return phone
+
+    # Format international phone numbers: +#
+    if len(phone) > 10:
+        diff = len(phone) - 10
+        formatted_number = '+' + phone[:diff] + ' '
+        phone = phone[diff:]
+
+    # Format into: (###) ###-####
+    formatted_number += '(' + phone[:3] + ') ' + phone[3:6] + '-' + phone[6:]
+
+    return formatted_number
+
+
+def manufacturer_list(user):
+    api_conn = amber_api_connection()
+    try:
+        mfrs = api_conn.Manufacturer.query()
+        mfrs = sorted(mfrs, key=lambda x: x.name.lower())
+    except errors.NotFound:
+        mfrs = []
+
+    manufacturer_choices = [('none', 'None')]
+    manufacturer_choices += [(str(mfr.id), mfr.name) for mfr in mfrs]
+
+    return manufacturer_choices
+
+
+def format_category(front, back):
+    category = back.replace(
+        front,
+        '',
+        1
+    ).replace(
+        '_',
+        ' '
+    ).lstrip()
+
+    return category
+
+
+def flatten_option_set(product):
+    api_conn = amber_api_connection()
+    option_set_data = {'options': []}
+    for option_set in product['option']['option_sets']:
+        product_option_sets = api_conn.OptionSet.retrieve(
+            option_set['option_set_id']
+        )
+        for option in product_option_sets['options']:
+            base = {
+                'manufacturer_id': product_option_sets[
+                    'manufacturer_id'
+                ],
+                'id': product_option_sets['id'],
+                'set_name': product_option_sets['name'],
+                'set_kind': product_option_sets['set_kind'],
+            }
+            base.update(option)
+            option_set_data['options'].append(base)
+    return option_set_data
+
+
+def partial_product(full_product):
+    # Filters out non-default images
+    default_image_list = [
+        i for i in full_product.images.image_list if i.default
+    ]
+    image_url = ''
+    if default_image_list:
+        image_url = default_image_list[0].full_size
+
+    product = {
+        'id': full_product.id,
+        'image_url': image_url,
+        'name': full_product.identity.name,
+        'sku': full_product.identity.manufacturer_sku
+    }
+    return product
+
+
+def refresh_collection_cache():
+    """ Helper function to overwrite collections stored in g
+    """
+    api_conn = amber_api_connection()
+    g.user = current_user
+    collection_redis = Redis(db=current_app.config['REDIS_DB'])
+    if hasattr(current_user, 'email'):
+        json_dump = ""
+        try:
+            collections = api_conn.Collection.query()
+            json_dump = collections.list_to_json()
+        except errors.NotFound:
+            collections = []
+            json_dump = "[]"
+
+        g.collections = [col for col in collections]
+        collection_redis.set(g.user.id, json_dump)

@@ -1,0 +1,146 @@
+# UI functionality for sales channels
+#
+# UI COMPONENTS:
+# --------------
+# .js-channel-toggle : visibility toggle for the channel
+#
+# .js-channel-off : button in the confirmation modal to turn the channel off.
+#
+# .js-view-image : link that opens a modal displaying a large version of the
+#   image
+
+$(document).ready ->
+
+  # sets the channel visibility off for current manufacturer
+  channelOff = (e) ->
+    id = $(e.currentTarget).data 'channel'
+
+    data = JSON.stringify
+        set_visible: false
+
+    $.ajax "/sales-channels/visibility/#{id}",
+      type: 'PUT'
+      contentType: 'application/json'
+      data: data
+      success: (result) ->
+        if result.success
+          window.location.reload()
+
+  # turns a channel on
+  channelOn = (e) ->
+    id = $(e.currentTarget).data 'channel'
+    data = JSON.stringify
+        set_visible: true
+
+    $.ajax "/sales-channels/visibility/#{id}",
+      type: 'PUT'
+      contentType: 'application/json'
+      data: data
+      success: (result) ->
+        if result.success
+          cm.getModal e
+
+  # gets the confirmation modal for turning a channel off
+  confirmOff = (e) ->
+    $label = $(e.currentTarget)
+    id = $label.data 'id'
+    data = {action: 'turnoff'}
+    
+    $.ajax "/sales-channels/confirm/#{id}",
+      type: 'GET'
+      contentType: 'application/json'
+      data: data
+      success: (result) ->
+        cm.loadModal result
+
+  # gets the confirmation modal for turning a channel off
+  confirmOn = (e) ->
+    id = $(e.currentTarget).data 'id'
+    data = {action: 'turnon'}
+
+    $.ajax "/sales-channels/confirm/#{id}",
+      type: 'GET'
+      contentType: 'application/json'
+      data: data
+      success: (result) ->
+        cm.loadModal result
+
+  # opens a modal to view a sales channel image
+  viewImage = (e) ->
+    e.preventDefault()
+    start = $(@).data 'image'
+    id = $(@).data 'id'
+
+    $.ajax "/sales-channels/#{id}/image",
+      type: 'GET'
+      success: (result) ->
+        modal = $(result).appendTo 'body'
+        image = $(".js-modal-image[data-id=#{start}]").data 'image'
+        $(".js-modal-image[data-id=#{start}]").addClass 'active'
+        $('.js-main-image').attr 'src', image
+        modal.modal('show')
+
+        arrowCheck()
+
+  updateImage = (e) ->
+    e.preventDefault()
+
+    $('.js-modal-image').removeClass 'active'
+    $(@).addClass 'active'
+
+    image = $(@).data 'image'
+    $('.js-main-image').attr 'src', image
+
+    arrowCheck()
+
+  next = (e) ->
+    e.preventDefault()
+    next = $('.active').next()
+    $(next).click() if next.length > 0
+
+  prev = (e) ->
+    e.preventDefault()
+    prev = $('.active').prev()
+    $(prev).click() if prev.length > 0
+
+  arrowCheck = () ->
+    $('.js-prev, .js-next').show()
+
+    if $('.js-modal-image:first-child').hasClass 'active'
+      $('.js-prev').hide()
+    if $('.js-modal-image:last-child').hasClass 'active'
+      $('.js-next').hide()
+
+  # handles form submission. grabs the type from the form method and the url
+  # from the form action. form data is parsed from input fields and serialized
+  formSubmit = (e) ->
+    e.preventDefault()
+    raw_data = $(@).serializeArray()
+    form_data = {}
+
+    _.map raw_data, (key_value) ->
+      form_data[key_value.name] = key_value.value
+
+    url = $(@).attr 'action'
+    type = $(@).attr 'method'
+
+    $.ajax url,
+      type: type,
+      contentType: 'application/json',
+      data: JSON.stringify(form_data),
+      success: (result) ->
+        if result.success
+          window.location.reload()
+        else
+          $('.modal').html $(result).find '.modal-dialog'
+
+  $('body').on 'click', '.js-channel-toggle.on', confirmOff
+  $('body').on 'click', '.js-channel-toggle.off', confirmOn
+  $('body').on 'click', '.js-channel-on', channelOn
+  $('body').on 'click', '.js-channel-off', channelOff
+  $('.js-view-image').on 'click', viewImage
+  $('body').on 'click', '.js-modal-image', updateImage
+  $('body').on 'click', '.js-next', next
+  $('body').on 'click', '.js-prev', prev
+  $('.js-preferences').on 'click', cm.getModal
+  $('body').on 'submit', '.modal form', formSubmit

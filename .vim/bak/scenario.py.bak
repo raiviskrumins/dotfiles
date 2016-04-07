@@ -1,0 +1,17 @@
+import jsonify
+
+class Pokemon(jsonify.Serializable):
+    def __init__(self, name, evolves_from=None):
+        self.name = name
+        self.evolves_from = evolves_from
+
+    def attack(self):
+        print("It's super effective!")
+
+def main():
+    json_str = '{"json": {"evolves_from": {"json": {"evolves_from": {"json": {"evolves_from": null, "name": "Squirtle"}, "evolves_from": null, "name": "Squirtle"}, "name": "Wartortle"}, "evolves_from": {"json": {"evolves_from": null, "name": "Squirtle"}, "evolves_from": null, "name": "Squirtle"}, "name": "Wartortle"}, "name": "Blastoise"}, "class": "Pokemon", "module": "__main__"}'
+    nested = jsonify.create(json_str)
+    print(nested.json)
+
+if __name__ == "__main__":
+    main()

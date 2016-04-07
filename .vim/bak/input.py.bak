@@ -1,0 +1,198 @@
+import math
+
+import pygame
+
+from engine import events
+
+
+
+class Keyboard:
+    def __init__(self):
+        self.keys = []
+        self.mod = mod
+        self.events = events.Events()
+
+        self.events.register(
+            "key_down",
+            "key_up"
+        )
+
+    def __key_down__(self, event):
+        self.keys.append(event.key)
+        self.mod = event.mod
+        self.events.get("key_down").fire(event.key, event.mod)
+
+    def __key_up__(self, event):
+        self.keys.remove(event.key)
+        self.mod = event.mod
+        self.events.get("key_up").fire(event.key, event.mod)
+
+    def update(self):
+        pygame.event.pump()
+        key_events = pygame.event.get([pygame.KEYDOWN, pygame.KEYUP])
+
+        for event in key_events:
+            if event.type == pygame.KEYDOWN:
+                self.__key_down__w(event)
+
+            if event.type == pygame.KEYUP:
+                self.__key_up__(event)
+
+class Mouse:
+    def __init__(self, ratio=1):
+        self.touches = []
+        self.events = events.Events()
+
+        self.events.register(
+            "touch_down",
+            "touch_up",
+            "touch_move"
+        )
+        self.position_ratio = ratio
+
+    def apply_ratio(self, pos):
+        return tuple([int(self.position_ratio * i) for i in pos])
+
+    def __get_distance__(pos1, pos2):
+        return math.sqrt(
+            math.pow((pos1[0] - pos2[0]), 2) + math.pow((pos1[1] - pos2[1]), 2)
+        )
+
+    def __find_closest__(self, pos, button):
+        closest_index = None
+        closest_distance = None
+
+        for index, value  in enumerate(self.touches):
+            current = self.touches[index]
+            if current[1] is not button:
+                continue
+            distance = self.__get_distance__(current[0], self.apply_ratio(pos))
+            if not (closest_index or closest_distance) or closest_distance <= distance:
+                closest_index = index
+                closest_distance = distance
+        return (closest_index, closest_distance)
+
+    def __touch_down__(self, event):
+        pos = self.apply_ration(pos)
+        self.touches.append([pos, event.button])
+        self.events.get("touch_down").fire(pos, event.button)
+    
+    def __touch_up__(self, event):
+        pos = self.apply_ratio(pos)
+        (index, dist) = self.__find_closest__(pos, event.button)
+        if index is not None:
+            self.events.get("touch_up").fire(self.touches[index], pos, dist)
+
+    def __touch_move__(self, event):
+        pos = self.apply_ratio(pos)
+        (index, dist) = self.__find_closest__(pos, event.button)
+        if index is not None:
+            self.events.get("touch_move").fire(self.touches[index], pos, dist)
+            self.touches[index][1] = pos
+
+    def update(self):
+        pygame.event.pump()
+        mouse_events = pygame.event.get([
+            pygame.MOUSEBUTTONDOWN,
+            pygame.MOUSEBUTTONUP,
+            pygame.MOUSEMOTION
+        ])
+
+class Input(object):
+    def __init__(self, ratio = 1):
+        self.keys_down = []
+        self.modifiers
+        self.touches = []
+
+        self.events = events.Events()
+        self.events.register(
+                "keyDown", 
+                "keyUp",
+                "touchDown",
+                "touchUp",
+                "touchMove"
+                )
+
+        self.mouse_ratio = ratio
+
+
+    def apply_ratio(self, tup):
+        return tuple([int(self.mouse_ratio * i) for i in tup])
+
+    def update(self):
+        pygame.event.pump()
+        if len(self.touches) > 0:
+            pass
+
+        def get_distance(pos1, pos2):
+            return math.sqrt(math.pow((pos1[0] - pos2[0]), 2) + \
+                    math.pow((pos1[1] - pos2[1]), 2))
+
+            for event in pygame.event.get([pygame.KEYDOWN, pygame.KEYUP,
+                pygame.MOUSEMOTION, pygame.MOUSEBUTTONUP, pygame.MOUSEBUTTONDOWN]):
+
+                # KEYDOWN EVENT
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RSHIFT:
+                    self.r_shift = True
+                if event.key == pygame.K_LSHIFT:
+                    self.l_shift = True
+                if event.key == pygame.K_CAPSLOCK:
+                    self.capslock = True
+                self.keys_down.append(event.key)
+                self.events.get("keyDown").fire(event.key)
+
+            # KEYUP EVENT
+        elif event.type == pygame.KEYUP:
+            if event.key == pygame.K_RSHIFT:
+                self.rShifted = False
+                if event.key == pygame.K_LSHIFT:
+                    self.lShifted = False
+                if event.key == pygame.K_CAPSLOCK:
+                    self.capslock = False
+                self.keys_down.remove(event.key)
+                self.events.get("keyUp").fire(event.key)
+
+            # MOUSEBUTTONDOWN EVENT
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            self.touches.append([self.apply_ratio(event.pos), event.button])
+                self.events.get("touchDown").fire([self.apply_ratio(event.pos),
+                    event.button])
+
+                # MOUSEBUTTONUP EVENT
+            elif event.type == pygame.MOUSEBUTTONUP:
+                closestIndex = None
+                closestDistance = None
+                for i in range(len(self.touches)):
+                    if self.touches[i][1] != event.button:
+                        continue
+                    dist = get_distance(self.touches[i][0],
+                            self.apply_ratio(event.pos))
+                    if closestIndex is None or closestDistance is None:
+                        closestIndex = i
+                        closestDistance = dist
+                    elif dist <= closestDistance:
+                        closestIndex = i
+                        closestDistance = dist
+                if closestIndex is not None and closestDistance is not None:
+                    self.events.get("touchUp").fire(self.touches[closestIndex])
+                    self.touches.pop(closestIndex)
+
+            # MOUSEMOTION EVENT
+        elif event.type == pygame.MOUSEMOTION:
+            closestIndex = None
+                closestDistance = None
+                for i in range(len(self.touches)):
+                    if self.touches[i][1] != event.buttons:
+                        continue
+                    dist = get_distance(self.touches[i][0],
+                            self.apply_ratio(event.pos))
+                    if closestIndex is None or closestDistance is None:
+                        closestIndex = i
+                        closestDistance = dist
+                    elif dist <= closestDistance:
+                        closestIndex = i
+                        closestDistance = dist
+                if closestIndex is not None and closestDistance is not None:
+                    self.touches[closestIndex][0] = self.apply_ratio(event.pos)
+                    self.events.get("touchMove").fire(self.touches[closestIndex])

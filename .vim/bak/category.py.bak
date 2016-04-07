@@ -1,0 +1,114 @@
+from flask import Blueprint
+from sqlalchemy.sql import text
+
+from amber_api.models import db
+from amber_api.auth import auth_required
+from amber_api.lib.decor import resource, errors
+from amber_api.autodoc import uri_parameter, body_parameter
+from amber_api.auth.permissions import permissions
+
+from amber_api.resource_schemas import category_resource
+category_view = Blueprint('category_view', __name__)
+
+
+@category_view.route('/api/<string:version>/categories', methods=['GET'])
+@resource(
+    resource=category_resource,
+    description='Returns a collection of Categories.',
+    log_message='Get categories',
+    uri_parameters={
+        'version': uri_parameter.version,
+    },
+    body_parameters={
+    }
+)
+@auth_required(view_permission=permissions.category.retrieve)
+@errors()
+def list_categories(version):
+    """ Get collection of categories
+    """
+    categories = db.session.execute(
+        'SELECT DISTINCT(category) FROM category_component'
+    ).fetchall()
+    categories = [c[0] for c in categories if c[0]]
+    categories.sort()
+    response = {'categories': categories}
+    return response
+
+
+@category_view.route(
+    '/api/<string:version>/categories/<string:category_name>',
+    methods=['GET']
+)
+@resource(
+    resource=category_resource,
+    description='Returns a collection of Primary Sub Categories.',
+    log_message='Get primary sub categories',
+    uri_parameters={
+        'version': uri_parameter.version,
+        'category_name': uri_parameter.category_name(
+            description='Name of the category you wish to list the primary '
+                        'sub-categories of.'
+        ),
+    },
+    body_parameters={
+    }
+)
+@auth_required(view_permission=permissions.category.retrieve)
+@errors()
+def list_primary_sub_categories(version, category_name):
+    """ Get collection of categories
+    """
+    conn = db.session.connection()
+    categories = conn.execute(text(
+        'SELECT DISTINCT(primary_sub_category) FROM category_component '
+        'where category = :category_name'
+    ), category_name=category_name.title()).fetchall()
+    categories = [c[0] for c in categories if c[0]]
+    categories.sort()
+    response = {'categories': categories}
+    return response
+
+
+@category_view.route(
+    '/api/<string:version>/categories/<string:category_name>/'
+    '<string:primary_sub_category_name>',
+    methods=['GET']
+)
+@resource(
+    resource=category_resource,
+    description='Returns a collection of Secondary Sub Categories.',
+    log_message='Get secondary sub categories',
+    uri_parameters={
+        'version': uri_parameter.version,
+        'primary_sub_category_name': uri_parameter.primary_sub_category_name(
+            description='Name of the primary sub-category you wish to list '
+                        'the secondary sub-categories of.'
+        ),
+    },
+    body_parameters={
+    }
+)
+@auth_required(view_permission=permissions.category.retrieve)
+@errors()
+def list_secondary_sub_categories(
+    version,
+    category_name,
+    primary_sub_category_name
+):
+    """ Get collection of categories
+    """
+    conn = db.session.connection()
+    categories = conn.execute(
+        text(
+            'SELECT DISTINCT(secondary_sub_category) FROM category_component '
+            'where category = :category_name and primary_sub_category = '
+            ':primary_sub_category_name'
+        ),
+        category_name=category_name.title(),
+        primary_sub_category_name=primary_sub_category_name
+    ).fetchall()
+    categories = [c[0] for c in categories if c[0]]
+    categories.sort()
+    response = {'categories': categories}
+    return response

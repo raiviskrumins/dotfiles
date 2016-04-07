@@ -1,0 +1,79 @@
+$(document).ready ->
+  try
+    Typekit.load()
+  catch load_error
+    # Could not load Typekit
+
+  app = $.sammy '#main', ->
+    @use 'Template', 'html'
+    @use 'modalPlugin'
+    @use 'Flash'
+    @use 'Form'
+    @use 'FormBuilder'
+    @use 'MyPlugin'
+
+    @get '#/', (context) ->
+      @app.swap('');
+      @render('static/templates/home.html').appendTo @$element()
+      @load('/subscribe-modal').appendTo('body')
+      return
+
+    @get '#/channel-manager', (context) ->
+      @partial('static/templates/channel-manager.html', {
+        'location': 'static/img/rebrand/cm/',
+        'images': {
+          'manage':'manage.svg',
+          'control_visibility':'control-visibility.svg',
+          'assistance':'assistance.svg',
+          'arrange':'arrange.svg',
+          'simplify_data_sharing':'simplify-data-sharing.svg',
+          'keep_vendors_updated':'keep-vendors-updated.svg',
+          'distribute':'distribute.svg',
+          'sales_network':'sales-network.svg'
+          }
+      })
+      return
+
+    @get '#/discover', (context) ->
+      @partial('static/templates/discover.html')
+      return
+
+    @get '#/contact', (context) ->
+      data = {
+        'data':{
+          'success_modal': false
+        }
+      }
+
+      data['data']['referrer'] = @params.referrer
+
+      @load('/contact')
+        .then (dataLoad)->
+          form = new Sammy.FormBuilder 'contactForm', dataLoad
+          data['data']['contact_form'] = dataLoad
+
+      @partial('static/templates/contact.html', data)
+      return
+
+    @get '#/team', (context) ->
+      @partial('static/templates/team.html')
+      return
+
+    @get '#/careers', (context) ->
+      @partial('static/templates/careers.html')
+      return
+
+    @get '#/privacy', (context) ->
+      @partial('static/templates/privacy.html')
+      return
+
+    @get '#/terms', (context) ->
+      @partial('static/templates/terms.html', ->
+        $('nav').addClass 'dark'
+      )
+      return
+
+    jQuery.on 'click', 'js-subscribe-modal', =>
+      $('.modal').modal 'show'
+
+  app.run('#/')

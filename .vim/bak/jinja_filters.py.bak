@@ -1,0 +1,197 @@
+from math import ceil
+from datetime import date
+from datetime import datetime
+from dateutil import parser
+import re
+from pytz import timezone
+import pytz
+import json
+import os
+from amber_portal import app
+
+
+def ceiling(value):
+    """Returns the ceiling of a value
+    """
+
+    return ceil(value)
+
+
+def ends_with(value, string):
+    return value.endswith(string)
+
+
+def filter_list(collection, attribute, value):
+    new_collection = [c for c in collection if getattr(c, attribute) == value]
+
+    return new_collection
+
+
+def format_currency(value):
+    if value is not None and len(str(value)) > 0:
+        try:
+            return "${:,.2f}".format(float(value))
+        except:
+            return "$%s" % value
+    else:
+        return value
+
+
+def format_currency_cents(value):
+    if value is not None:
+        try:
+            return "${:,.2f}".format(float(value) / 100)
+        except:
+            return value
+    else:
+        return "$0"
+
+
+def format_percentage(value):
+    if value is not None:
+        return "{:,.2f}%".format(value)
+
+
+def format_phone(value):
+    if isinstance(value, int) or isinstance(value, str):
+        num = str(value)
+        if len(num) == 10:
+            return '(%s) %s-%s' % (num[:3], num[3:6], num[-4:])
+        return num
+    else:
+        if value is None:
+            return ''
+        return value
+
+
+def index(value, item):
+    """ Returns index of item in a list.
+    """
+    return value.index(item)
+
+
+def cache_update(value):
+    path = os.path.join(
+        app.config['ABS_PATH'],
+        'static/js/min/rev-manifest.json'
+    )
+    with open(path) as data_file:
+        data = json.load(data_file)
+
+    for key, val in data.items():
+        valueChunks = value.split('min/', 1)
+        if key == valueChunks[1]:
+            return valueChunks[0]+'min/'+val
+
+
+def preserve_newlines(s):
+    """ Replaces newlines with <br>
+    """
+    return s.replace('\n', '<br>')
+
+
+def role_filter(roles):
+    return ', '.join([r['name'].title() for r in roles])
+
+
+def starts_with(value, string):
+    return value.startswith(string)
+
+
+def contains(value, string):
+    if string in value:
+        return True
+    else:
+        return False
+
+
+def string_date_format(value, format='%m-%d-%y', **kwargs):
+    if value:
+        formatted_date = value
+        if isinstance(value, int):
+            formatted_date = datetime.fromtimestamp(value)
+        elif not isinstance(value, datetime) and not isinstance(value, date):
+            formatted_date = parser.parse(value)
+        return formatted_date.strftime(format)
+    else:
+        return 'n/a'
+
+
+def convert_timezone(value, region='UTC'):
+    """ Returns a datetime in the timezone of the provided region. Assumes the
+        value is an int timestamp, a parseable string timestamp, or a datetime,
+        all in UTC time.
+    """
+    if value:
+        temp_date = value
+        if isinstance(value, int):
+            temp_date = datetime.fromtimestamp(value)
+        elif not isinstance(value, datetime):
+            temp_date = parser.parse(value)
+
+        date = pytz.utc.localize(temp_date)
+        zone = timezone(region)
+
+        return date.astimezone(zone)
+    else:
+        return ''
+
+
+def title(s):
+    """Return a titlecased version of the value. I.e. words will start with
+    uppercase letters, all remaining characters are lowercase.
+    """
+    rv = []
+    if s is not None:
+        for item in re.compile(r'([-\s]+)(?u)').split(s):
+            if not item:
+                continue
+            rv.append(item[0].upper() + item[1:])
+    return ''.join(rv)
+
+
+def update(value, action, k, v=None):
+    """Takes dict, sets or unsets k & v, returns updated
+    """
+    if action == 'set':
+        value[k] = v
+    elif action == 'unset':
+        value.pop(k, None)
+    return value
+
+
+def fix_url(url):
+    if url[:7] == "http://":
+        return url[7:]
+    elif url[:8] == "https://":
+        return url[8:]
+    else:
+        return url
+
+
+def current_year(value):
+    # Value is not used for anything
+    return datetime.now().year
+
+
+filters = [
+    current_year,
+    cache_update,
+    ceiling,
+    contains,
+    ends_with,
+    filter_list,
+    fix_url,
+    format_currency,
+    format_currency_cents,
+    format_percentage,
+    format_phone,
+    index,
+    preserve_newlines,
+    role_filter,
+    starts_with,
+    string_date_format,
+    convert_timezone,
+    title,
+    update
+]

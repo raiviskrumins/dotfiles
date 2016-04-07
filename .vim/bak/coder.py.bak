@@ -1,0 +1,36 @@
+import json
+
+
+def decode(json_dict):
+    """Return a loaded instance of a class based on the provided JSON."""
+    required_keys = ["class", "json", "module"]
+    json_keys = json_dict.keys()
+
+
+    if required_keys != sorted(json_keys):
+        return json_dict
+
+    module_name = json_dict.get("module")
+    class_name = json_dict.get("class")
+    instance_data = json_dict.get("json")
+
+    loaded_class = getattr(
+        __import__(module_name),
+        class_name
+    )
+
+    instance = loaded_class()
+    instance.json = instance_data
+
+    return instance
+
+
+def encode(instance):
+    """Return a JSON-serializable Python dict containing object information."""
+    return instance.json
+    json_dict = {
+        "class": instance.__class__.__name__,
+        "json": instance.json,
+        "module": instance.__module__,
+    }
+    return json_dict

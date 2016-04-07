@@ -1,0 +1,35 @@
+{% extends "base.jinja2" %}
+
+{% block content %}
+<div class="container_12">
+  <div class="wrapper">
+    <div class="grid_12 bg-color3">
+      <div class="indents">
+        <h3 class="p6-1">Gallery</h3>
+        <div class="wrapper indent-bottom4">
+          <figure class="col-3-1">
+          <a class="lightbox-image" href="static/img/image-blank.png" data-gal="prettyPhoto[prettyPhoto]"><img src="static/img/gallery/001.jpg" alt=""></a>
+          </figure>
+          <figure class="col-3-1">
+          <a class="lightbox-image" href="static/img/image-blank.png" data-gal="prettyPhoto[prettyPhoto]"><img src="static/img/gallery/002.jpg" alt=""></a>
+          </figure>
+          <figure class="col-3-1 last-item">
+          <a class="lightbox-image" href="static/img/image-blank.png" data-gal="prettyPhoto[prettyPhoto]"><img src="static/img/gallery/003.jpg" alt=""></a>
+          </figure>
+        </div>
+        <div class="wrapper">
+          <figure class="col-3-1">
+          <a class="lightbox-image" href="static/img/image-blank.png" data-gal="prettyPhoto[prettyPhoto]"><img src="static/img/gallery/004.jpg" alt=""></a>
+          </figure>
+          <figure class="col-3-1">
+          <a class="lightbox-image" href="static/img/image-blank.png" data-gal="prettyPhoto[prettyPhoto]"><img src="static/img/gallery/005.jpg" alt=""></a>
+          </figure>
+          <figure class="col-3-1 last-item">
+          <a class="lightbox-image" href="static/img/image-blank.png" data-gal="prettyPhoto[prettyPhoto]"><img src="static/img/gallery/006.jpg" alt=""></a>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

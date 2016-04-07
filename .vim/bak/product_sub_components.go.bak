@@ -1,0 +1,709 @@
+package models
+
+import (
+	"bytes"
+	"reflect"
+
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/pqdb"
+)
+
+// BoxComponent
+type BoxComponent struct {
+	ComponentBase
+	Weight   lib.FloatField `json:"weight"`
+	Width    lib.FloatField `json:"width"`
+	Height   lib.FloatField `json:"height"`
+	Depth    lib.FloatField `db:"box_depth" json:"depth"`
+	Quantity lib.IntField   `json:"quantity"`
+	Volume   lib.FloatField `json:"volume"`
+}
+
+func (c BoxComponent) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("component_data_id", form.ClassInt, form.Render("Component Data ID", form.ElementHidden)),
+		form.NewField("weight", form.ClassFloat, form.Render("Packaged Weight", form.ElementText)),
+		form.NewField("width", form.ClassFloat, form.Render("Box Width", form.ElementText)),
+		form.NewField("height", form.ClassFloat, form.Render("Box Height", form.ElementText)),
+		form.NewField("depth", form.ClassFloat, form.Render("Box Depth", form.ElementText)),
+		form.NewField("quantity", form.ClassInt, form.Render("Package Quantity", form.ElementText)),
+		form.NewField("volume", form.ClassFloat, form.Render("Box Volume", form.ElementText)),
+	)
+}
+
+func (c BoxComponent) CompBase() ComponentBase {
+	return c.ComponentBase
+}
+
+func (c BoxComponent) IDClauses() []pqdb.Predicate {
+	clauses := []pqdb.Predicate{
+		pqdb.Predicate{"product_id", "=", c.ProductID.Int64},
+		pqdb.Predicate{"component_data_id", "=", c.ComponentDataID.Int64},
+		pqdb.Predicate{"parent_id", "=", c.ParentID.Int64}}
+	return clauses
+}
+
+func (c BoxComponent) CompName() string {
+	return "shipping_information"
+}
+
+func (c BoxComponent) CompID() int64 {
+	return c.ComponentBase.ComponentDataID.Int64
+}
+
+func NewBoxComponent() *BoxComponent {
+	shippingInformationComponent := new(BoxComponent)
+	return shippingInformationComponent
+}
+
+func (c *BoxComponent) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(c).Elem(), DataType: reflect.TypeOf(*c), Current: -1}
+}
+
+func (c *BoxComponent) ColumnNames() []string {
+	return lib.ColumnNames(c.NewIterator())
+}
+
+func (c *BoxComponent) Map() map[string]lib.IteratorItem {
+	return lib.Map(c.NewIterator())
+}
+
+func (c *BoxComponent) SetValue(newComp interface{}) {
+	lib.SetFields(c, newComp)
+}
+
+func (c BoxComponent) MarshalJSON() ([]byte, error) {
+	return MarshalFields(&c)
+}
+
+func (c *BoxComponent) UnmarshalJSON(input []byte) error {
+	var aux struct {
+		ComponentBase
+		Weight   lib.FloatField `json:"weight"`
+		Width    lib.FloatField `json:"width"`
+		Height   lib.FloatField `json:"height"`
+		Depth    lib.FloatField `db:"box_depth" json:"depth"`
+		Quantity lib.IntField   `json:"quantity"`
+		Volume   lib.FloatField `json:"volume"`
+	}
+	aux.ComponentBase = c.ComponentBase
+	aux.Weight = c.Weight
+	aux.Width = c.Width
+	aux.Height = c.Height
+	aux.Depth = c.Depth
+	aux.Quantity = c.Quantity
+	aux.Volume = c.Volume
+
+	e := lib.DecodeJSON(bytes.NewReader(input), &aux)
+	if e == nil {
+		c.ComponentBase = aux.ComponentBase
+		c.Weight = aux.Weight
+		c.Width = aux.Width
+		c.Height = aux.Height
+		c.Depth = aux.Depth
+		c.Quantity = aux.Quantity
+		c.Volume = aux.Volume
+	}
+	return e
+}
+
+func (c BoxComponent) TableName() string { return "box_component" }
+
+// CushionComponent
+type CushionComponent struct {
+	ComponentBase
+	Fill     lib.StringField `json:"fill"`
+	Style    lib.StringField `db:"cushion_style" json:"style"`
+	Height   lib.FloatField  `json:"height"`
+	Width    lib.FloatField  `json:"width"`
+	Depth    lib.FloatField  `db:"cushion_depth" json:"depth"`
+	Quantity lib.IntField    `json:"quantity"`
+}
+
+func (c CushionComponent) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("component_data_id", form.ClassInt, form.Render("Component Data ID", form.ElementHidden)),
+		form.NewField("fill", form.ClassStr, form.Render("Cushion Fill", form.ElementText)),
+		form.NewField("style", form.ClassStr, form.Render("Cushion Style", form.ElementText)),
+		form.NewField("height", form.ClassFloat, form.Render("Cushion Height", form.ElementText)),
+		form.NewField("width", form.ClassFloat, form.Render("Cushion Width", form.ElementText)),
+		form.NewField("depth", form.ClassFloat, form.Render("Cushion Depth", form.ElementText)),
+		form.NewField("quantity", form.ClassInt, form.Render("Cushion Quantity", form.ElementText)),
+	)
+}
+
+func (c CushionComponent) CompBase() ComponentBase {
+	return c.ComponentBase
+}
+
+func (c CushionComponent) IDClauses() []pqdb.Predicate {
+	clauses := []pqdb.Predicate{
+		pqdb.Predicate{"product_id", "=", c.ProductID.Int64},
+		pqdb.Predicate{"component_data_id", "=", c.ComponentDataID.Int64},
+		pqdb.Predicate{"parent_id", "=", c.ParentID.Int64}}
+	return clauses
+}
+
+func (c CushionComponent) CompName() string {
+	return "cushion"
+}
+
+func (c CushionComponent) CompID() int64 {
+	return c.ComponentBase.ComponentDataID.Int64
+}
+
+func (c *CushionComponent) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(c).Elem(), DataType: reflect.TypeOf(*c), Current: -1}
+}
+
+func (c *CushionComponent) ColumnNames() []string {
+	return lib.ColumnNames(c.NewIterator())
+}
+
+func (c *CushionComponent) Map() map[string]lib.IteratorItem {
+	return lib.Map(c.NewIterator())
+}
+
+func (c *CushionComponent) SetValue(newComp interface{}) {
+	lib.SetFields(c, newComp)
+}
+
+func (c CushionComponent) MarshalJSON() ([]byte, error) {
+	return MarshalFields(&c)
+}
+
+func (c CushionComponent) TableName() string { return "cushion_component" }
+
+// DoorComponent
+type DoorComponent struct {
+	ComponentBase
+	Height   lib.FloatField `json:"height"`
+	Width    lib.FloatField `json:"width"`
+	Opening  lib.FloatField `json:"opening"`
+	Depth    lib.FloatField `json:"depth"`
+	Quantity lib.IntField   `json:"quantity"`
+}
+
+func (c DoorComponent) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("component_data_id", form.ClassInt, form.Render("Component Data ID", form.ElementHidden)),
+		form.NewField("height", form.ClassFloat, form.Render("Door Height", form.ElementText)),
+		form.NewField("width", form.ClassFloat, form.Render("Door Width", form.ElementText)),
+		form.NewField("opening", form.ClassFloat, form.Render("Door Opening", form.ElementText)),
+		form.NewField("depth", form.ClassFloat, form.Render("Door Depth", form.ElementText)),
+		form.NewField("quantity", form.ClassInt, form.Render("Door Quantity", form.ElementText)),
+	)
+}
+
+func (c DoorComponent) CompBase() ComponentBase {
+	return c.ComponentBase
+}
+
+func (c DoorComponent) IDClauses() []pqdb.Predicate {
+	clauses := []pqdb.Predicate{
+		pqdb.Predicate{"product_id", "=", c.ProductID.Int64},
+		pqdb.Predicate{"component_data_id", "=", c.ComponentDataID.Int64},
+		pqdb.Predicate{"parent_id", "=", c.ParentID.Int64}}
+	return clauses
+}
+
+func (c DoorComponent) CompName() string {
+	return "door"
+}
+
+func (c DoorComponent) CompID() int64 {
+	return c.ComponentBase.ComponentDataID.Int64
+}
+
+func (c *DoorComponent) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(c).Elem(), DataType: reflect.TypeOf(*c), Current: -1}
+}
+
+func (c *DoorComponent) ColumnNames() []string {
+	return lib.ColumnNames(c.NewIterator())
+}
+
+func (c *DoorComponent) Map() map[string]lib.IteratorItem {
+	return lib.Map(c.NewIterator())
+}
+
+func (c *DoorComponent) SetValue(newComp interface{}) {
+	lib.SetFields(c, newComp)
+}
+
+func (c DoorComponent) MarshalJSON() ([]byte, error) {
+	return MarshalFields(&c)
+}
+
+func (c DoorComponent) TableName() string { return "door_component" }
+
+// DrawerComponent
+type DrawerComponent struct {
+	ComponentBase
+	Height   lib.FloatField `json:"height"`
+	Width    lib.FloatField `json:"width"`
+	Depth    lib.FloatField `db:"drawer_depth" json:"depth"`
+	Quantity lib.IntField   `json:"quantity"`
+}
+
+func (c DrawerComponent) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("component_data_id", form.ClassInt, form.Render("Component Data ID", form.ElementHidden)),
+		form.NewField("height", form.ClassFloat, form.Render("Drawer Height", form.ElementText)),
+		form.NewField("width", form.ClassFloat, form.Render("Drawer Width", form.ElementText)),
+		form.NewField("depth", form.ClassFloat, form.Render("Drawer Depth", form.ElementText)),
+		form.NewField("quantity", form.ClassInt, form.Render("Drawer Quantity", form.ElementText)),
+	)
+}
+
+func (c DrawerComponent) CompBase() ComponentBase {
+	return c.ComponentBase
+}
+
+func (c DrawerComponent) IDClauses() []pqdb.Predicate {
+	clauses := []pqdb.Predicate{
+		pqdb.Predicate{"product_id", "=", c.ProductID.Int64},
+		pqdb.Predicate{"component_data_id", "=", c.ComponentDataID.Int64},
+		pqdb.Predicate{"parent_id", "=", c.ParentID.Int64}}
+	return clauses
+}
+
+func (c DrawerComponent) CompName() string {
+	return "drawer"
+}
+
+func (c DrawerComponent) CompID() int64 {
+	return c.ComponentBase.ComponentDataID.Int64
+}
+
+func (c *DrawerComponent) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(c).Elem(), DataType: reflect.TypeOf(*c), Current: -1}
+}
+
+func (c *DrawerComponent) ColumnNames() []string {
+	return lib.ColumnNames(c.NewIterator())
+}
+
+func (c *DrawerComponent) Map() map[string]lib.IteratorItem {
+	return lib.Map(c.NewIterator())
+}
+
+func (c *DrawerComponent) SetValue(newComp interface{}) {
+	lib.SetFields(c, newComp)
+}
+
+func (c DrawerComponent) MarshalJSON() ([]byte, error) {
+	return MarshalFields(&c)
+}
+
+func (c DrawerComponent) TableName() string { return "drawer_component" }
+
+// FeatureComponent
+type FeatureComponent struct {
+	ComponentBase
+	Description lib.StringField `json:"description"`
+}
+
+func (c FeatureComponent) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("component_data_id", form.ClassInt, form.Render("Component Data ID", form.ElementHidden)),
+		form.NewField("description", form.ClassStr, form.Render("Feature", form.ElementText)),
+	)
+}
+
+func (c FeatureComponent) CompBase() ComponentBase {
+	return c.ComponentBase
+}
+
+func (c FeatureComponent) IDClauses() []pqdb.Predicate {
+	clauses := []pqdb.Predicate{
+		pqdb.Predicate{"product_id", "=", c.ProductID.Int64},
+		pqdb.Predicate{"component_data_id", "=", c.ComponentDataID.Int64},
+		pqdb.Predicate{"parent_id", "=", c.ParentID.Int64}}
+	return clauses
+}
+
+func (c FeatureComponent) CompName() string {
+	return "feature"
+}
+
+func (c FeatureComponent) CompID() int64 {
+	return c.ComponentBase.ComponentDataID.Int64
+}
+
+func (c *FeatureComponent) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(c).Elem(), DataType: reflect.TypeOf(*c), Current: -1}
+}
+
+func (c *FeatureComponent) ColumnNames() []string {
+	return lib.ColumnNames(c.NewIterator())
+}
+
+func (c *FeatureComponent) Map() map[string]lib.IteratorItem {
+	return lib.Map(c.NewIterator())
+}
+
+func (c *FeatureComponent) SetValue(newComp interface{}) {
+	lib.SetFields(c, newComp)
+}
+
+func (c FeatureComponent) MarshalJSON() ([]byte, error) {
+	return MarshalFields(&c)
+}
+
+func (c FeatureComponent) TableName() string { return "feature_component" }
+
+// ImageComponent
+type ImageComponent struct {
+	ComponentBase
+	Default       lib.BoolField       `db:"default_image" json:"default"`
+	Category      lib.StringEnumField `json:"category"`
+	Caption       lib.StringField     `json:"caption"`
+	Description   lib.StringField     `json:"description"`
+	FullSize      lib.StringField     `json:"full_size"`
+	LargeSize     lib.StringField     `json:"large_size"`
+	MediumSize    lib.StringField     `json:"medium_size"`
+	ThumbnailSize lib.StringField     `json:"thumbnail_size"`
+}
+
+func (c ImageComponent) FormSchema() *form.Schema {
+	cat := []string{"setting", "isolated", "other"}
+	catLabels := []string{"In Setting", "White Background", "Other"}
+
+	return form.NewSchema(
+		form.NewField("component_data_id", form.ClassInt, form.Render("Component Data ID", form.ElementHidden)),
+		form.NewField("default", form.ClassBool, form.Render("Default", form.ElementCheckbox)),
+		form.NewField(
+			"category",
+			form.ClassStr,
+			form.Render("Category", form.ElementRadio, form.SelectChoices(cat, catLabels)),
+			form.Required(),
+		),
+		form.NewField("caption", form.ClassStr, form.Render("Caption", form.ElementText)),
+		form.NewField("description", form.ClassStr, form.Render("Description", form.ElementText)),
+		form.NewField("full_size", form.ClassURL, form.Render("Full Size URL", form.ElementHidden)),
+		form.NewField("large_size", form.ClassURL, form.Render("Large URL", form.ElementHidden)),
+		form.NewField("medium_size", form.ClassURL, form.Render("Medium URL", form.ElementHidden)),
+		form.NewField("thumbnail_size", form.ClassURL, form.Render("Thumbnail URL", form.ElementHidden)),
+	)
+}
+
+func (c ImageComponent) CompBase() ComponentBase {
+	return c.ComponentBase
+}
+
+func (c ImageComponent) IDClauses() []pqdb.Predicate {
+	clauses := []pqdb.Predicate{
+		pqdb.Predicate{"product_id", "=", c.ProductID.Int64},
+		pqdb.Predicate{"component_data_id", "=", c.ComponentDataID.Int64},
+		pqdb.Predicate{"parent_id", "=", c.ParentID.Int64}}
+	return clauses
+}
+
+func (c ImageComponent) CompName() string {
+	return "image"
+}
+
+func (c ImageComponent) CompID() int64 {
+	return c.ComponentBase.ComponentDataID.Int64
+}
+
+func NewImageComponent() *ImageComponent {
+	imageComponent := new(ImageComponent)
+	(*imageComponent).Category.AcceptedTerms = imageCategoryTypes
+	return imageComponent
+}
+
+func (c *ImageComponent) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(c).Elem(), DataType: reflect.TypeOf(*c), Current: -1}
+}
+
+func (c *ImageComponent) ColumnNames() []string {
+	return lib.ColumnNames(c.NewIterator())
+}
+
+func (c *ImageComponent) Map() map[string]lib.IteratorItem {
+	return lib.Map(c.NewIterator())
+}
+
+func (c *ImageComponent) SetValue(newComp interface{}) {
+	lib.SetFields(c, newComp)
+}
+
+func (c ImageComponent) MarshalJSON() ([]byte, error) {
+	return MarshalFields(&c)
+}
+
+func (c *ImageComponent) UnmarshalJSON(input []byte) error {
+	var aux struct {
+		ComponentBase
+		Default       lib.BoolField       `db:"default_image" json:"default"`
+		Category      lib.StringEnumField `json:"category"`
+		Caption       lib.StringField     `json:"caption"`
+		FullSize      lib.StringField     `json:"full_size"`
+		LargeSize     lib.StringField     `json:"large_size"`
+		MediumSize    lib.StringField     `json:"medium_size"`
+		ThumbnailSize lib.StringField     `json:"thumbnail_size"`
+	}
+	aux.ComponentBase = c.ComponentBase
+	aux.Default = c.Default
+	aux.Category = c.Category
+	aux.Caption = c.Caption
+	aux.FullSize = c.FullSize
+	aux.LargeSize = c.LargeSize
+	aux.MediumSize = c.MediumSize
+	aux.ThumbnailSize = c.ThumbnailSize
+
+	aux.Category.AcceptedTerms = imageCategoryTypes
+	e := lib.DecodeJSON(bytes.NewReader(input), &aux)
+	if e == nil {
+		c.ComponentBase = aux.ComponentBase
+		c.Default = aux.Default
+		c.Category = aux.Category
+		c.Caption = aux.Caption
+		c.FullSize = aux.FullSize
+		c.LargeSize = aux.LargeSize
+		c.MediumSize = aux.MediumSize
+		c.ThumbnailSize = aux.ThumbnailSize
+	}
+	return e
+}
+
+func (c ImageComponent) TableName() string { return "image_component" }
+
+// OptionSetComponent
+type OptionSetComponent struct {
+	ComponentBase
+	OptionSetID lib.IntField `json:"option_set_id"`
+	OptionSet   OptionSet    `json:"option_set" relation:"OptionSet" rel_field:"OptionSetID"`
+}
+
+func (c OptionSetComponent) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("component_data_id", form.ClassInt, form.Render("Component Data ID", form.ElementHidden)),
+	)
+}
+
+func (c OptionSetComponent) CompBase() ComponentBase {
+	return c.ComponentBase
+}
+
+func (c OptionSetComponent) IDClauses() []pqdb.Predicate {
+	clauses := []pqdb.Predicate{
+		pqdb.Predicate{"product_id", "=", c.ProductID.Int64},
+		pqdb.Predicate{"component_data_id", "=", c.ComponentDataID.Int64},
+		pqdb.Predicate{"parent_id", "=", c.ParentID.Int64}}
+	return clauses
+}
+
+func (c OptionSetComponent) CompName() string {
+	return "option_set"
+}
+
+func (c OptionSetComponent) CompID() int64 {
+	return c.ComponentBase.ComponentDataID.Int64
+}
+
+func (c *OptionSetComponent) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(c).Elem(), DataType: reflect.TypeOf(*c), Current: -1}
+}
+
+func (c *OptionSetComponent) ColumnNames() []string {
+	return lib.ColumnNames(c.NewIterator())
+}
+
+func (c *OptionSetComponent) Map() map[string]lib.IteratorItem {
+	return lib.Map(c.NewIterator())
+}
+
+func (c *OptionSetComponent) SetValue(newComp interface{}) {
+	lib.SetFields(c, newComp)
+}
+
+func (c OptionSetComponent) MarshalJSON() ([]byte, error) {
+	return MarshalFields(&c)
+}
+
+func (c OptionSetComponent) TableName() string { return "option_set_component" }
+
+// PillowComponent
+type PillowComponent struct {
+	ComponentBase
+	Height    lib.FloatField `json:"height"`
+	Width     lib.FloatField `json:"width"`
+	Thickness lib.FloatField `json:"thickness"`
+	Quantity  lib.IntField   `json:"quantity"`
+}
+
+func (c PillowComponent) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("component_data_id", form.ClassInt, form.Render("Component Data ID", form.ElementHidden)),
+		form.NewField("height", form.ClassFloat, form.Render("Pillow Height", form.ElementText)),
+		form.NewField("width", form.ClassFloat, form.Render("Pillow Width", form.ElementText)),
+		form.NewField("thickness", form.ClassFloat, form.Render("Pillow Thickness", form.ElementText)),
+		form.NewField("quantity", form.ClassInt, form.Render("Pillow Quantity", form.ElementText)),
+	)
+}
+
+func (c PillowComponent) CompBase() ComponentBase {
+	return c.ComponentBase
+}
+
+func (c PillowComponent) IDClauses() []pqdb.Predicate {
+	clauses := []pqdb.Predicate{
+		pqdb.Predicate{"product_id", "=", c.ProductID.Int64},
+		pqdb.Predicate{"component_data_id", "=", c.ComponentDataID.Int64},
+		pqdb.Predicate{"parent_id", "=", c.ParentID.Int64}}
+	return clauses
+}
+
+func (c PillowComponent) CompName() string {
+	return "pillow"
+}
+
+func (c PillowComponent) CompID() int64 {
+	return c.ComponentBase.ComponentDataID.Int64
+}
+
+func (c *PillowComponent) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(c).Elem(), DataType: reflect.TypeOf(*c), Current: -1}
+}
+
+func (c *PillowComponent) ColumnNames() []string {
+	return lib.ColumnNames(c.NewIterator())
+}
+
+func (c *PillowComponent) Map() map[string]lib.IteratorItem {
+	return lib.Map(c.NewIterator())
+}
+
+func (c *PillowComponent) SetValue(newComp interface{}) {
+	lib.SetFields(c, newComp)
+}
+
+func (c PillowComponent) MarshalJSON() ([]byte, error) {
+	return MarshalFields(&c)
+}
+
+func (c PillowComponent) TableName() string { return "pillow_component" }
+
+// ShelfComponent
+type ShelfComponent struct {
+	ComponentBase
+	Width     lib.FloatField `json:"width"`
+	Depth     lib.FloatField `db:"shelf_depth" json:"depth"`
+	Thickness lib.FloatField `json:"thickness"`
+	Quantity  lib.IntField   `json:"quantity"`
+}
+
+func (c ShelfComponent) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("component_data_id", form.ClassInt, form.Render("Component Data ID", form.ElementHidden)),
+		form.NewField("width", form.ClassFloat, form.Render("Shelf Width", form.ElementText)),
+		form.NewField("depth", form.ClassFloat, form.Render("Shelf Depth", form.ElementText)),
+		form.NewField("thickness", form.ClassFloat, form.Render("Shelf Height", form.ElementText)),
+		form.NewField("quantity", form.ClassInt, form.Render("Shelf Quantity", form.ElementText)),
+	)
+}
+
+func (c ShelfComponent) CompBase() ComponentBase {
+	return c.ComponentBase
+}
+
+func (c ShelfComponent) IDClauses() []pqdb.Predicate {
+	clauses := []pqdb.Predicate{
+		pqdb.Predicate{"product_id", "=", c.ProductID.Int64},
+		pqdb.Predicate{"component_data_id", "=", c.ComponentDataID.Int64},
+		pqdb.Predicate{"parent_id", "=", c.ParentID.Int64}}
+	return clauses
+}
+
+func (c ShelfComponent) CompName() string {
+	return "shelf"
+}
+
+func (c ShelfComponent) CompID() int64 {
+	return c.ComponentBase.ComponentDataID.Int64
+}
+
+func (c *ShelfComponent) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(c).Elem(), DataType: reflect.TypeOf(*c), Current: -1}
+}
+
+func (c *ShelfComponent) ColumnNames() []string {
+	return lib.ColumnNames(c.NewIterator())
+}
+
+func (c *ShelfComponent) Map() map[string]lib.IteratorItem {
+	return lib.Map(c.NewIterator())
+}
+
+func (c *ShelfComponent) SetValue(newComp interface{}) {
+	lib.SetFields(c, newComp)
+}
+
+func (c ShelfComponent) MarshalJSON() ([]byte, error) {
+	return MarshalFields(&c)
+}
+
+func (c ShelfComponent) TableName() string { return "shelf_component" }
+
+// TableLeafComponent
+type TableLeafComponent struct {
+	ComponentBase
+	Width    lib.FloatField `json:"width"`
+	Depth    lib.FloatField `db:"leaf_depth" json:"depth"`
+	Quantity lib.IntField   `json:"quantity"`
+}
+
+func (c TableLeafComponent) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("component_data_id", form.ClassInt, form.Render("Component Data ID", form.ElementHidden)),
+		form.NewField("width", form.ClassFloat, form.Render("Leaf Width", form.ElementText)),
+		form.NewField("depth", form.ClassFloat, form.Render("Leaf Depth", form.ElementText)),
+		form.NewField("quantity", form.ClassInt, form.Render("Leaf Quantity", form.ElementText)),
+	)
+}
+
+func (c TableLeafComponent) CompBase() ComponentBase {
+	return c.ComponentBase
+}
+
+func (c TableLeafComponent) IDClauses() []pqdb.Predicate {
+	clauses := []pqdb.Predicate{
+		pqdb.Predicate{"product_id", "=", c.ProductID.Int64},
+		pqdb.Predicate{"component_data_id", "=", c.ComponentDataID.Int64},
+		pqdb.Predicate{"parent_id", "=", c.ParentID.Int64}}
+	return clauses
+}
+
+func (c TableLeafComponent) CompName() string {
+	return "table_leaf"
+}
+
+func (c TableLeafComponent) CompID() int64 {
+	return c.ComponentBase.ComponentDataID.Int64
+}
+
+func (c *TableLeafComponent) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(c).Elem(), DataType: reflect.TypeOf(*c), Current: -1}
+}
+
+func (c *TableLeafComponent) ColumnNames() []string {
+	return lib.ColumnNames(c.NewIterator())
+}
+
+func (c *TableLeafComponent) Map() map[string]lib.IteratorItem {
+	return lib.Map(c.NewIterator())
+}
+
+func (c *TableLeafComponent) SetValue(newComp interface{}) {
+	lib.SetFields(c, newComp)
+}
+
+func (c TableLeafComponent) MarshalJSON() ([]byte, error) {
+	return MarshalFields(&c)
+}
+
+func (c TableLeafComponent) TableName() string { return "table_leaf_component" }

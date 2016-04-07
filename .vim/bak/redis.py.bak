@@ -1,0 +1,22 @@
+import json
+
+import redis
+
+
+def cache_resource(opts, uri, resource, oldest_date):
+    if 'host' not in opts:
+        raise Exception('Missing "host" in redis connection options')
+    if 'port' not in opts:
+        raise Exception('Missing "port" in redis connection options')
+    if 'db' not in opts:
+        raise Exception('Missing "db" in redis connection options')
+
+    host = opts['host']
+    port = opts['port']
+    db = opts['db']
+
+    resource['_cache-max-age'] = oldest_date
+
+    r = redis.StrictRedis(host=host, port=port, d=db)
+    r.set(uri, json.dumps(resource))
+

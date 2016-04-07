@@ -1,0 +1,428 @@
+package routes
+
+/*
+// TestCreateOptionSetRelation reads a series of payloads and expected responses from a JSON file and calls the
+// CreateOptionSetRelation route for each set comparing the response to the expectation.
+func TestCreateOptionSetRelation(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("product_relations.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["create-option-set-relation"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var floatProdID float64
+		err = json.Unmarshal(testCaseJSON["product_id"], &floatProdID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		var floatOpSetID float64
+		err = json.Unmarshal(testCaseJSON["option_set_id"], &floatOpSetID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		prodID := strconv.Itoa(int(floatProdID))
+		opSetID := strconv.Itoa(int(floatOpSetID))
+		uri := lib.Join("", "/relations/products/", prodID, "/option_sets/", opSetID)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.CreateOptionSetRelation)), "create-option-set-relation", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "POST", uri, []string{"product_id", prodID}, []string{"option_set_id", opSetID})
+	}
+}
+
+// TestDeleteOptionSetRelation reads a series of payloads and expected responses from a JSON file and calls the
+// DeleteOptionSetRelation route for each set comparing the response to the expectation.
+func TestDeleteOptionSetRelation(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("product_relations.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["delete-option-set-relation"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var floatProdID float64
+		err = json.Unmarshal(testCaseJSON["product_id"], &floatProdID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		var floatOpSetID float64
+		err = json.Unmarshal(testCaseJSON["option_set_id"], &floatOpSetID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		prodID := strconv.Itoa(int(floatProdID))
+		opSetID := strconv.Itoa(int(floatOpSetID))
+		uri := lib.Join("/relations/products/", prodID, "/option_sets/", opSetID)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.DeleteOptionSetRelation)), "delete-option-set-relation", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "DELETE", uri, []string{"product_id", prodID}, []string{"option_set_id", opSetID})
+	}
+}
+
+// TestCreateSalesChannelRelation reads a series of payloads and expected responses from a JSON file and calls the
+// CreateSalesChannelRelation route for each set comparing the response to the expectation.
+func TestCreateSalesChannelRelation(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("product_relations.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["create-sales-channel-relation"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var floatProdID float64
+		err = json.Unmarshal(testCaseJSON["product_id"], &floatProdID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		var floatSalesChannelID float64
+		err = json.Unmarshal(testCaseJSON["sales_channel_id"], &floatSalesChannelID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		prodID := strconv.Itoa(int(floatProdID))
+		scID := strconv.Itoa(int(floatSalesChannelID))
+		uri := lib.Join("", "/relations/products", prodID, "/sales_channels/", scID)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.CreateSalesChannelRelation)), "create-sales-channel-relation", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "GET", uri, []string{"product_id", prodID}, []string{"sales_channel_id", scID})
+	}
+}
+
+// TestDeleteSalesChannelRelation reads a series of payloads and expected responses from a JSON file and calls the
+// DeleteSalesChannelRelation route for each set comparing the response to the expectation.
+func TestDeleteSalesChannelRelation(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("product_relations.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["delete-sales-channel-relation"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var floatProdID float64
+		err = json.Unmarshal(testCaseJSON["product_id"], &floatProdID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		var floatSalesChannelID float64
+		err = json.Unmarshal(testCaseJSON["sales_channel_id"], &floatSalesChannelID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		prodID := strconv.Itoa(int(floatProdID))
+		salesChannelID := strconv.Itoa(int(floatSalesChannelID))
+		uri := lib.Join("/relations/products/", prodID, "/sales_channels/", salesChannelID)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.DeleteSalesChannelRelation)), "delete-sales-channel-relation", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "DELETE", uri, []string{"product_id", prodID}, []string{"sales_channel_id", salesChannelID})
+	}
+}
+
+// TestCreateSalesChannelRelationByManufacturer reads a series of payloads and
+// expected responses from a JSON file and calls the  CreateSalesChannelRelationByManufacturer
+//route for each set comparing the response to the expectation.
+func TestCreateSalesChannelRelationByManufacturer(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("product_relations.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["create-sales-channel-relation-by-manufacturer"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var floatManID float64
+		err = json.Unmarshal(testCaseJSON["manufacturer_id"], &floatManID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		var floatSalesChannelID float64
+		err = json.Unmarshal(testCaseJSON["sales_channel_id"], &floatSalesChannelID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		manID := strconv.Itoa(int(floatManID))
+		scID := strconv.Itoa(int(floatSalesChannelID))
+		uri := lib.Join("", "/relations/manufacturers", manID, "/sales_channels/", scID)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.CreateSalesChannelRelationByManufacturer)), "create-sales-channel-relation-by-manufacturer", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "GET", uri, []string{"manufacturer_id", manID}, []string{"sales_channel_id", scID})
+	}
+}
+
+// TestDeleteSalesChannelRelationByManufacturer reads a series of payloads and
+// expected responses from a JSON file and calls the DeleteSalesChannelRelationByManufacturer
+// route for each set comparing the response to the expectation.
+func TestDeleteSalesChannelRelationByManufacturer(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("product_relations.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["delete-sales-channel-relation-by-manufacturer"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var floatManID float64
+		err = json.Unmarshal(testCaseJSON["manufacturer_id"], &floatManID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		var floatSalesChannelID float64
+		err = json.Unmarshal(testCaseJSON["sales_channel_id"], &floatSalesChannelID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		manID := strconv.Itoa(int(floatManID))
+		salesChannelID := strconv.Itoa(int(floatSalesChannelID))
+		uri := lib.Join("/relations/manufacturers/", manID, "/sales_channels/", salesChannelID)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.DeleteSalesChannelRelationByManufacturer)), "delete-sales-channel-relation-by-manufacturer", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "DELETE", uri, []string{"manufacturer_id", manID}, []string{"sales_channel_id", salesChannelID})
+	}
+}
+
+// TestCreateCollectionRelation reads a series of payloads and expected responses from a JSON file and calls the
+// CreateCollectionRelation route for each set comparing the response to the expectation.
+func TestCreateCollectionRelation(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("product_relations.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["create-collection-relation"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var floatProdID float64
+		err = json.Unmarshal(testCaseJSON["product_id"], &floatProdID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		var floatCollectionID float64
+		err = json.Unmarshal(testCaseJSON["collection_id"], &floatCollectionID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		prodID := strconv.Itoa(int(floatProdID))
+		colID := strconv.Itoa(int(floatCollectionID))
+		uri := lib.Join("", "/relations/products", prodID, "/collections/", colID)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.CreateCollectionRelation)), "create-collection-relation", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "GET", uri, []string{"product_id", prodID}, []string{"collection_id", colID})
+	}
+}
+
+// TestUpdateCollectionRelation reads a series of payloads and expected responses from a JSON file and calls the
+// UpdateCollectionRelation route for each set comparing the response to the expectation.
+func TestUpdateCollectionRelation(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("product_relations.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["update-collection-relation"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var floatProdID float64
+		err = json.Unmarshal(testCaseJSON["product_id"], &floatProdID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		var floatCollectionID float64
+		err = json.Unmarshal(testCaseJSON["collection_id"], &floatCollectionID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		prodID := strconv.Itoa(int(floatProdID))
+		colID := strconv.Itoa(int(floatCollectionID))
+		uri := lib.Join("/relations/products/", prodID, "/collections/", colID)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.CreateCollectionRelation)), "update-collection-relation", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "DELETE", uri, []string{"product_id", prodID}, []string{"collection_id", colID})
+	}
+}
+
+// TestDeleteCollectionRelation reads a series of payloads and expected responses from a JSON file and calls the
+// DeleteCollectionRelation route for each set comparing the response to the expectation.
+func TestDeleteCollectionRelation(t *testing.T) {
+	fileContents, err := ioutil.ReadFile("product_relations.json")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var allJSON map[string]json.RawMessage
+	err = json.Unmarshal(fileContents, &allJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	var testJSON []map[string]json.RawMessage
+	err = json.Unmarshal(allJSON["delete-collection-relation"], &testJSON)
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
+	for index, testCaseJSON := range testJSON {
+		var floatProdID float64
+		err = json.Unmarshal(testCaseJSON["product_id"], &floatProdID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		var floatCollectionID float64
+		err = json.Unmarshal(testCaseJSON["collection_id"], &floatCollectionID)
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		prodID := strconv.Itoa(int(floatProdID))
+		colID := strconv.Itoa(int(floatCollectionID))
+		uri := lib.Join("/relations/products/", prodID, "/collections/", colID)
+
+		handlers := alice.New(context.ClearHandler, RecoverHandlerTesting)
+		test_utils.RouteTest(t, lib.WrapHandler(handlers.ThenFunc(TestRouteCtx.DeleteCollectionRelation)), "delete-collection-relation", index, string(testCaseJSON["payload"]), testCaseJSON["response"], "DELETE", uri, []string{"product_id", prodID}, []string{"collection_id", colID})
+	}
+}
+*/

@@ -1,0 +1,159 @@
+package logit
+
+import (
+	"fmt"
+	"os"
+	"sync"
+	"text/template"
+	"time"
+)
+
+const (
+	Info  = iota
+	Debug = iota
+	Error = iota
+)
+
+const InfoColor = "1;32"
+const DebugColor = "1;34"
+const ErrorColor = "1;31"
+
+func LevelName(level int) string {
+	switch level {
+	case Info:
+		return "brief"
+	case Debug:
+		return "debug"
+	case Error:
+		return "error"
+	default:
+		panic("Invalid logging level.")
+	}
+}
+
+func LevelColor(level int) string {
+	switch level {
+	case Info:
+		return InfoColor
+	case Debug:
+		return DebugColor
+	case Error:
+		return ErrorColor
+	default:
+		panic("Invalid logging level.")
+	}
+}
+
+type Log struct {
+	DateTime string
+	Hour     int
+	Minute   int
+	Second   int
+	Day      int
+	Month    int
+	Year     int
+	Unix     int64
+	Name     string
+	Level    string
+	Message  string
+}
+
+var mapping map[string]*Logger
+
+func Get(name string) *Logger {
+	return mapping[name]
+}
+
+func Set(l *Logger) {
+	if mapping == nil {
+		mapping = make(map[string]*Logger)
+	}
+	mapping[l.Name] = l
+}
+
+func Default(name string) *Logger {
+	l := new(Logger)
+	l.Default()
+	l.Name = name
+
+	return l
+}
+
+type Logger struct {
+	FilePath       string
+	ShortTemplate  string
+	LongTemplate   string
+	Template       string
+	DateTimeFormat string
+	Name           string
+	MessageLength  int
+	Mutex          sync.Mutex
+}
+
+func (l *Logger) Default() {
+	l.DateTimeFormat = time.Stamp
+	l.ShortTemplate = "{{.DateTime}} | {{.Name}}.{{.Level}} ▶  {{.Message}}\n"
+	l.LongTemplate = "{{.DateTime}} | {{.Name}}.{{.Level}} ▼\n{{.Message}}\n"
+	l.Name = "Logger"
+	l.FilePath = "/dev/stdout"
+	l.MessageLength = 80
+}
+
+func (l *Logger) Write(level int, msg string, args ...interface{}) {
+	now := time.Now()
+	log := Log{
+		DateTime: now.Format(l.DateTimeFormat),
+		Hour:     now.Hour(),
+		Minute:   now.Minute(),
+		Second:   now.Second(),
+		Day:      now.Day(),
+		Month:    int(now.Month()),
+		Year:     now.Year(),
+		Unix:     now.Unix(),
+		Name:     l.Name,
+		Level:    LevelName(level),
+		Message:  fmt.Sprintf(msg, args...),
+	}
+
+	var output string
+	if len(log.Message) <= l.MessageLength {
+		output = l.ShortTemplate
+	} else {
+		output = l.LongTemplate
+	}
+	if l.FilePath == "/dev/stdout" || l.FilePath == "/dev/stderr" {
+		output = fmt.Sprintf("\033[%sm%s\033[0m", LevelColor(level), output)
+	}
+
+	t := template.New("Logging Template")
+	t, err := t.Parse(output)
+	if err != nil {
+		panic(err)
+	}
+
+	l.Mutex.Lock()
+	defer l.Mutex.Unlock()
+
+	f, err := os.OpenFile(l.FilePath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	err = t.Execute(f, log)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (l *Logger) Info(msg string, args ...interface{}) {
+	l.Write(Info, msg, args...)
+}
+
+func (l *Logger) Debug(msg string, args ...interface{}) {
+	l.Write(Debug, msg, args...)
+}
+
+func (l *Logger) Error(msg string, args ...interface{}) {
+	l.Write(Error, msg, args...)
+}

@@ -1,0 +1,387 @@
+import boto.ec2, fabric.api, fabric.tasks, os, socket, paramiko, sys
+from fabric.api import task
+
+
+default_user = 'ec2-user'
+production_region = 'us-west-2'
+staging_region = 'us-west-1'
+development_region = 'us-east-1'
+production_env_tag = 'production'
+stage_env_tag = 'stage'
+development_env_tag = 'development'
+production_config = 'config.ProductionConfig'
+staging_config = 'config.StagingConfig'
+development_config = 'config.DevelopmentConfig'
+app_tag_valid_values = [ 'amber-api', 'channel-manager', 'amber-discover', 'AmberEngine.com' ]
+gateway_tag_value = 'gateway'
+amber_lib_repository = 'git+ssh://git@github.com/AmberEngine/amber-lib.git'
+s3_bucket = 'ae-web-assets'
+
+
+class Host:
+    """
+    Contains the required ec2 instance data.
+    """
+    def __init__(self):
+        self.name = None
+        self.instance_id = None
+        self.public_dns_name = None
+        self.key_filename = None
+        self.app = None
+        self.gateway = None
+        self.gateway_key_filename = None
+
+    def has_gateway():
+        return not self.gateway is None
+
+
+def host_contains_tag(public_dns_name, tag_key, tag_value=None, region=development_region):
+    """
+    Checks if a host has a particular instance tag. If tag_value is set, then it will
+        also check that the tag has that value.
+    Args:
+        public_dns_name (str): The public DNS name.
+        tag_key (str): The key of the instance tag to check.
+        tag_value (str, optional): The value of the instance tag to check. Defaults to None.
+        region (str, optional): The AWS region. Defaults to development_region.
+    Returns:
+        bool: True if the instance contains the tag and, if tag_value is set,
+            if it has the tag value.
+    """
+    reservations = boto.ec2.connect_to_region(region).get_all_reservations()
+
+    for reservation in reservations:
+        for instance in reservation.instances:
+            if instance.public_dns_name == public_dns_name:
+                return instance.tags.get(tag_key) == tag_value
+
+    return False
+
+
+def is_dev(public_dns_name):
+    """
+    Checks if a host is tagged as a development environment.
+    Returns:
+        bool: True if the instance is tagged as a development environment.
+    """
+    return host_contains_tag(public_dns_name, 'EnvType', 'dev')
+
+
+def is_stage(public_dns_name):
+    """
+    Checks if a host is tagged as a staging environment.
+    Returns:
+        bool: True if the instance is tagged as a staging environment.
+    """
+    return host_contains_tag(public_dns_name, 'EnvType', 'stage')
+
+
+def is_prod(public_dns_name):
+    """
+    Checks if a host is tagged as a production environment.
+    Returns:
+        bool: True if the instance is tagged as a production environment.
+    """
+    return host_contains_tag(public_dns_name, 'EnvType', 'prod')
+
+
+# TODO if app='all' then we need to set some sort of order or priority
+#      so that api gets done first.
+def get_hosts(region, env, app, env_tag='EnvType', app_tag='AppType'):
+    """
+    Returns a Host list from the ec2 instance data.
+    Args:
+        region (str): The AWS region name.
+        env (str): The environment type: 'production', 'stage' or 'development'.
+        app (str): The name of the application.
+        env_tag (str, optional): The env tag key. Defaults to 'EnvType'.
+        app_tag (str, optional): The app tag key. Defaults to 'AppType'.
+    """
+    reservations = boto.ec2.connect_to_region(region).get_all_reservations()
+    apps = [ value for value in app_tag_valid_values if app == 'all' or value == app ]
+    hosts = []
+    gateway = None
+    gateway_key_filename = None
+
+    if not socket.getfqdn().endswith('.' + region + '.compute.internal'):
+        for reservation in reservations:
+            for instance in reservation.instances:
+                tags = instance.tags
+
+                if tags.get(app_tag) == 'gateway':
+                    gateway = instance.public_dns_name
+                    gateway_key_filename = os.path.join(os.getenv('HOME'), '.ssh/pem', instance.key_name + '.pem')
+
+
+
+    for reservation in reservations:
+        for instance in reservation.instances:
+            tags = instance.tags
+            contains_app = filter(lambda x: tags.get(app_tag) in x, apps)
+
+            if tags.get(env_tag) == env and contains_app:
+                host = Host()
+
+                host.name = tags.get('Name')
+                host.instance_id = instance.id
+                host.public_dns_name = instance.public_dns_name
+                host.key_filename = os.path.join(os.getenv('HOME'), '.ssh/pem', instance.key_name + '.pem')
+                host.app = tags.get(app_tag)
+                
+                if not gateway is None:
+                    host.gateway = gateway
+                    host.gateway_key_filename = gateway_key_filename
+
+                hosts.append(host)
+
+    return hosts
+
+
+@task
+def stage_test(app, env=stage_env_tag, branch='develop', region=staging_region):
+    """
+    Testing on the staging host(s) for all ec2 instances with tag AppType = app.
+    Args:
+        app (str): The application name.
+        env (str, optional): The environment type. Defaults to 'stage'.
+        branch (str, optional): The branch/revision. Defaults to 'develop'.
+        region (str, optional): The AWS region name. Defaults to 'us-west-1'.
+    """
+    fabric.operations.local('ssh-add')
+
+    for host in get_hosts(region, env, app):
+        fabric.api.env.user = default_user
+        fabric.api.env.hosts = host.public_dns_name
+        fabric.api.env.key_filename = host.key_filename
+        fabric.api.env.app_config = staging_config
+
+        if host.has_gateway:
+            fabric.api.env.gateway = host.gateway
+
+            if host.gateway_key_filename is not None:
+                fabric.operations.local("ssh-add %s" % host.gateway_key_filename)
+
+        print "Testing %s Branch %s on %s" % (host.app, branch, host.name)
+
+        fabric.tasks.execute('uname')
+
+
+@task
+def stage(app, env=stage_env_tag, branch='develop'):
+    """
+    Deploys on the staging host(s) for all ec2 instances with tag AppType = app.
+        Instances must be tagged as staging environments.
+        Valid applications: 'amber-api', 'channel-manager', 'amber-discover', 'AmberEngine.com'
+        This task will execute: update, deploy, upload, restart.
+    Args:
+        app (str): The application name.
+        env (str, optional): The environment type. Defaults to 'stage'.
+        branch (str, optional): The branch/revision. Defaults to 'develop'.
+    """
+    requirements_file = 'requirements.txt'
+    fabric.operations.local('ssh-add')
+
+    for host in get_hosts(staging_region, env, app):
+        fabric.api.env.user = default_user
+        fabric.api.env.hosts = host.public_dns_name
+        fabric.api.env.key_filename = host.key_filename
+        fabric.api.env.app_config = staging_config
+
+        if host.has_gateway:
+            fabric.api.env.gateway = host.gateway
+
+            if host.gateway_key_filename is not None:
+                fabric.operations.local("ssh-add %s" % host.gateway_key_filename)
+
+        print "Updating %s" % (host.name)
+
+        fabric.tasks.execute('update')
+
+
+        print "Deploying %s Branch %s on %s" % (host.app, branch, host.name)
+        if host.app == 'amber-discover' or host.app == 'channel-manager':
+            fabric.tasks.execute('deploy', host.app, branch, requirements_file='requirements-staging.txt', restart=False)
+
+            if host.app == 'amber-discover':
+                fabric.tasks.execute('upload', host.app, s3_bucket, 'discover-staging2',  'amber_discover/static')
+            elif host.app == 'channel-manager':
+                fabric.tasks.execute('upload', host.app, s3_bucket, 'channel-manager-staging2',  'amber_portal/static')
+
+            fabric.tasks.execute('restart', app)
+
+        else:
+            fabric.tasks.execute('deploy', host.app, branch)
+
+
+@task
+def set_dev(name):
+    """
+    Sets the EC2 instance to connect to from the user's ssh config.
+        Use this task can only be used for development environments.
+        Usage: fab set_dev:name=murphy-dev1 <task[:arg1=value[,argN=value]] ...>
+        
+    Args:
+        name (str): The HostName value of the remote host as it is configured in your ssh config.
+    """
+    config_file = file(os.path.expanduser(fabric.api.env.ssh_config_path))
+    config = paramiko.config.SSHConfig()
+    app_config = development_config
+
+    config.parse(config_file)
+
+    host_config = config.lookup(name)
+    fabric.api.env.forward_agent = True
+    fabric.api.env.hosts = host_config.get('hostname', None)
+    fabric.api.env.key_filename = host_config.get('identityfile', None)[0]
+    fabric.api.env.user = host_config.get('user', default_user)
+    fabric.api.env.app_config = app_config
+
+    if not is_dev(fabric.api.env.hosts):
+        print "Error: %s (%s) is not tagged as a development instance." % (name, fabric.api.env.hosts)
+        exit(1)
+
+    fabric.operations.local('ssh-add')
+
+
+@task
+def ssh():
+    """
+    Test SSH connectivity to github on the remote host.
+    """
+    with fabric.api.settings(warn_only=True):
+        fabric.api.run('ssh -T git@github.com')
+
+
+@task
+def help():
+    """
+    Shows usage.
+    """
+    print "\nStaging environment usage: fab stage:app=application"
+    print "Development environment usage: fab set_dev:name=murphy-dev1 <task[:arg1=value[,argN=value]] ...>"
+    print "\nFor a list of tasks, run: fab -l"
+    print "For task details, run: fab -d task"
+
+    exit(2)
+
+
+@task
+def uname():
+    """
+    Like... testing stuff and stuff.
+    """
+    fabric.api.run('uname -a')
+
+
+@task
+def restart(app):
+    """
+    Restart application.
+    Args:
+        app (str): The application.
+    """
+    fabric.api.run("sudo supervisorctl restart %s" % app)
+
+    if app == 'amber-api':
+        fabric.api.run('sudo service redis restart')
+    elif app == 'channel-manager':
+        fabric.api.run('sudo service image_worker restart')
+
+
+@task
+def update():
+    """
+    Execute server updates.
+    """
+    fabric.api.run('sudo yum update -y')
+
+
+@task
+def upload(app, s3_bucket, s3_path, s3_directory, venv=None):
+    """
+    Upload static pages to s3
+    Args:
+        app (str): The application.
+        s3_bucket (str): The S3 bucket name.
+        s3_path (str): The S3 path.
+        s3_directory (str): The environment specific directory located in the S3:/path.
+        venv (str, optional): The virtual environment to work on. Defaults to None.
+    """
+    cmd = "python scripts/deploy_to_s3.py --bucket %s --path '/%s/static/' --directory %s" % (s3_bucket, s3_path, s3_directory)
+
+    if venv is None:
+        venv = app
+
+    with fabric.api.prefix("workon %s" % venv):
+        with fabric.api.cd(app):
+            with fabric.api.shell_env(AMBER_CONFIG=fabric.api.env.app_config):
+                fabric.api.run("%s" % cmd)
+
+
+# TODO find a way to turn the command line argument into a boolean value
+@task
+def deploy(app, branch='develop', venv=None, requirements_file='requirements.txt', restart=True, add_swap=True, db_update=True):
+    """
+    Deploy an application
+    Args:
+        app (str): The application name.
+        branch (str, optional): The branch/revision. Defaults to 'develop'.
+        venv (str, optional): The virtual environment name to work on. Defaults to the application name.
+        requirements_file (str, optional): The pip requirements file. Defaults to 'requirements.txt'.
+        add_swap (str, optional): Add 4gb of swap space in case the scripts bomb out. Defaults to True
+        db_update (str, optional): Run python scripts. Defaults to True
+    """
+    if venv is None:
+        venv = app
+
+    with fabric.api.prefix("workon %s" % venv):
+        with fabric.api.cd(app):
+            with fabric.api.shell_env(AMBER_CONFIG=fabric.api.env.app_config):
+                fabric.api.run("git reset --hard HEAD")
+                fabric.api.run("git fetch origin -p")
+                fabric.api.run("git checkout %s" % branch)
+                fabric.api.run("git pull --ff-only")
+                fabric.api.run("pip --quiet --exists-action w install -r %s" % requirements_file)
+
+                if app == 'amber-api':
+                    swapfile = '/var/swap.deploy'
+
+                    if add_swap:
+                        with fabric.api.settings(warn_only=True):
+                            pass
+                            #fabric.api.run('SWAP=$(/sbin/swapon --show=NAME --noheadings); test ! -z $SWAP && sudo /sbin/swapoff $SWAP && sudo rm $SWAP')
+
+                        #fabric.api.run("sudo /bin/dd if=/dev/zero of=%s bs=4M count=1024 && sudo chmod 600 %s && sudo /sbin/mkswap %s && sudo /sbin/swapon %s" %
+                        #              (swapfile, swapfile, swapfile, swapfile))
+
+                    if db_update:
+                        fabric.api.run('python app.py db upgrade')
+                        fabric.api.run('python app.py update_functions')
+                        fabric.api.run('python scripts/max_id.py')
+
+                    #fabric.api.run('python scripts/update_product_caches.py')
+                    #fabric.api.run('python scripts/create_elastic_index.py')
+
+                    if add_swap:
+                        with fabric.api.settings(warn_only=True):
+                            pass
+                            #fabric.api.run('SWAP=$(/sbin/swapon --show=NAME --noheadings); test ! -z $SWAP && sudo /sbin/swapoff $SWAP && sudo rm $SWAP')
+
+                elif app == 'channel-manager':
+                    fabric.api.run('npm install && gulp')
+
+                    if db_update:
+                        fabric.api.run('python app.py db upgrade')
+                        fabric.api.run('python scripts/max_ids.py')
+
+                elif app == 'amber-discover':
+                    fabric.api.run('npm install && gulp')
+
+                    if db_update:
+                        fabric.api.run('python app.py db upgrade')
+                    
+                elif app == 'AmberEngine.com':
+                    fabric.api.run('npm install && gulp')
+
+    if restart:
+        fabric.tasks.execute('restart', app)

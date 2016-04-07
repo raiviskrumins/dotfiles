@@ -1,0 +1,56 @@
+{% extends 'index.jinja2' %}
+
+{% block javascript %}
+{{super()}}
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/options.min.js')|cache_update }}"></script>
+{% endblock %}
+
+{% block content_main %}
+<div class="col-md-12">
+    <a href="{{url_for('options_view.set_new')}}" class="btn btn-primary pull-right js-new-optionset">+ New Option Set</a>
+    <h1>Option Sets</h1>
+    <div class="panel-group" id="option_sets">
+        {% for set in sets|sort(attribute='name')|sort(attribute='kind') %}
+        {% set set_name = 'option' + set.id|string %}
+        <div class="panel panel-top">
+            <div class="panel-heading">
+                <h3>
+                    <a href="#option{{set.id}}" data-toggle="collapse">
+                        <span class="plus-minus{% if set_name in session.panels.option %} icon-minus{% else %} icon-plus{% endif %}"></span>
+                        {{set.kind}}: {{set.name}}
+                    </a>
+                    <a href="{{url_for('options_view.set_edit', set_id=set.id)}}" class="js-edit-optionset edit-btn"{% if set_name in session.panels.option %} style="display:inline;"{% endif %}>
+                        <span class="icon-pencil"></span>
+                    </a>
+                </h3>
+            </div>
+            <div id="option{{set.id}}" class="panel-collapse{% if set_name in session.panels.option %} in{% else %} collapse{% endif %}">
+                <div class="panel-body">
+                    <a href="{{url_for('options_view.option_new', set_id=set.id)}}" class="btn btn-primary pull-right">+ New Option</a>
+                    {% for option in set.option_list %}
+                    <a href="{{url_for('options_view.option_edit', set_kind=set.kind, option_id=option.id)}}" class="text-center">
+                        <div class="option-image text-center">
+                            <span style="background-image:url('{{option.image}}');"
+                                {% if option.name and option.name|length > 22 %}
+                                    data-toggle="tooltip" data-placement="bottom" title="{{ option.name or '' }}" data-original-title="{{ option.name or '' }}"
+                                {% endif %}>
+                            </span>
+                            <p>{{ (option.name or '')|truncate(22, True) }}</p>
+                        </div>
+                    </a>
+                    {% else %}
+                    <p>You haven't added any options to this option set. Start adding options<br>by clicking on the "+ New Option" button above.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center no-options">
+            <img class="empty-page-icon" src="static/img/optionset-empty.svg">
+            <h3>You haven't added any option sets.</h3>
+            <p>Use this section to organize your options for quick addition<br>to products. Add new option sets <a href="{{url_for('options_view.set_new')}}" class="js-new-optionset">here</a> or by clicking<br>on the "+ New Option Set" button above.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,801 @@
+package routes
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/AmberEngine/api/es"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/models"
+	"github.com/AmberEngine/api/oops"
+	perm "github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+	"github.com/gorilla/context"
+	"github.com/julienschmidt/httprouter"
+	"github.com/justinas/alice"
+)
+
+func extractAssemblage(prod *map[string]interface{}) (lib.Resource, oops.Error) {
+	ass := (*prod)["assemblage"].(map[string]interface{})
+	id := strconv.Itoa(int(ass["id"].(float64)))
+
+	res, e := lib.NewResource(ass)
+	if e != nil {
+		return (lib.Resource{}), e
+	}
+
+	res.AddLink("self", lib.HALHref{Endpoint: lib.Join("/", "/assemblages", id)})
+
+	obj := make(map[string]interface{})
+	obj["kind"] = "assemblages"
+	obj["self"] = lib.Join("/", "/assemblages", id)
+
+	(*prod)["assemblage"] = obj
+	delete((*prod), "assemblage")
+
+	return *res, nil
+}
+
+func DefineProductRoutes(router *lib.Router, appC *RouteContext, commonHandlers alice.Chain) {
+	router.Post("/products", appC.CreateProduct(commonHandlers))
+	router.Get("/products_search", appC.ProductSearch(commonHandlers))
+	router.Get("/products", appC.ListProducts(commonHandlers))
+	router.Put("/products/:id", appC.UpdateProduct(commonHandlers))
+	router.Delete("/products", appC.DeleteProducts(commonHandlers))
+	router.Delete("/products/:id", appC.DeleteProduct(commonHandlers))
+	router.Get("/products/:id", appC.RetrieveProduct(commonHandlers))
+}
+
+func (c *RouteContext) RetrieveProduct(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("Product", perm.ProductRetrieveOwn|perm.ProductRetrieveAll|perm.ProductRetrieveGroup|perm.ProductRetrieveVisible)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		// Route logic goes here
+		params := context.Get(r, "params").(httprouter.Params)
+		productID, err := strconv.Atoi(params.ByName("id"))
+		if err != nil {
+			panic(err)
+		}
+
+		prodJSON, e := models.RetrieveProductJSON(c.Context, productID)
+		if e != nil {
+			panic(e)
+		}
+
+		product := make(map[string]interface{})
+		err = json.Unmarshal(prodJSON, &product)
+		if err != nil {
+			panic(oops.ServerError("", err))
+		}
+		delete(product, "assemblage")
+
+		resource, e := lib.NewResource(product)
+		if e != nil {
+			panic(e)
+		}
+
+		selfLink := lib.HALHref{Endpoint: "/products/" + strconv.Itoa(int(product["id"].(float64)))}
+		resource.AddLink("self", selfLink)
+
+		jsonResponse, err := json.Marshal(resource)
+		if err != nil {
+			panic(err)
+		}
+
+		w.Header().Set("Cache-Control", "max-age=3600")
+		w.Header().Set("Content-Type", "application/hal+json")
+		fmt.Fprint(w, string(jsonResponse))
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func (c *RouteContext) CreateProduct(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("Product", perm.ProductCreateAll|perm.ProductCreateGroup|perm.ProductCreateOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		body := r.Body
+		product, e := models.InsertProduct(c.Context, body)
+		if e != nil {
+			panic(e)
+		}
+
+		e = es.CreateUpdateSearchProduct(c.Context, product)
+		if e != nil {
+			panic(e)
+		}
+
+		// Chris & Curtis in 6 months in the future: We were thinking we wanted to easily get around this.
+		// Fucking deal with it!
+		prodMap := make(map[string]interface{})
+
+		bites, err := json.Marshal(product)
+		if err != nil {
+			panic(err)
+		}
+
+		err = json.Unmarshal(bites, &prodMap)
+		if err != nil {
+			panic(err)
+		}
+
+		res, e := lib.NewResource(prodMap)
+		if e != nil {
+			panic(e)
+		}
+
+		selfLink := lib.HALHref{Endpoint: "/products/" + strconv.Itoa(int(product.ID.Int64))}
+		res.AddLink("self", selfLink)
+
+		jsonResponse, err := json.Marshal(res)
+		if err != nil {
+			panic(oops.ServerError("", "Failed to marshal product to JSON.", err))
+		}
+
+		w.Header().Set("Cache-Control", "max-age=3600")
+		w.Header().Set("Content-Type", "application/hal+json")
+		fmt.Fprint(w, string(jsonResponse))
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+// ListProducts writes a JSON encoded collection of Products Resource to the http.ResponseWriter response.
+func (c *RouteContext) ListProducts(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("Product", perm.ProductRetrieveOwn|perm.ProductRetrieveAll|perm.ProductRetrieveGroup|perm.ProductRetrieveVisible)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/hal+json")
+		// Needs to filter results based on permissions of API key used and mfr ID or sales channel ID
+		// Needs to filter results to active only for sales channels
+		// Determine query to run to get list of product IDs
+		//
+		reqPayload, e := lib.RequestData(r)
+		if e != nil {
+			panic(e)
+		}
+		publicKey := reqPayload.PublicKey
+
+		var err error
+		var payload map[string]interface{}
+
+		if reqPayload.Data != nil {
+			err = json.Unmarshal(reqPayload.Data, &payload)
+			if err != nil {
+				panic(oops.BadJSON(string(reqPayload.Data), err))
+			}
+		}
+
+		apiKey, e := models.RetrieveAPIKeyByPublic(c.Context, publicKey)
+		if e != nil {
+			panic(e)
+		}
+
+		var fields, uriParam string
+		var limit, offset int
+
+		var sortBy, sortCompName, sortColumnName string
+		var sortAsc bool
+
+		// Variable priority: URI 'limit' > JSON payload 'limit' > default to 500
+		if uriParam = r.URL.Query().Get("limit"); len(uriParam) == 0 {
+			limit = 500
+			if val, ok := payload["limit"]; ok {
+				limit = int(val.(float64))
+			}
+		} else {
+			limit, err = strconv.Atoi(uriParam)
+			if err != nil {
+				panic(oops.ServerError("", "Failed to convert (string) uriParam to integer.", err, uriParam))
+			}
+		}
+
+		// Variable priority: URI 'offset' > JSON payload 'offset' > default to 0
+		if uriParam = r.URL.Query().Get("offset"); len(uriParam) == 0 {
+			offset = 0
+			if val, ok := payload["offset"]; ok {
+				offset = int(val.(float64))
+			}
+		} else {
+			offset, err = strconv.Atoi(uriParam)
+			if err != nil {
+				panic(oops.ServerError("", "Failed to convert (string) uriParam to integer.", err, uriParam))
+			}
+		}
+
+		if uriParam = r.URL.Query().Get("fields"); len(uriParam) == 0 {
+			fields = ""
+			if val, ok := payload["fields"]; ok {
+				fields = val.(string)
+			}
+		} else {
+			fields = uriParam
+		}
+
+		if uriParam = r.URL.Query().Get("sort_by"); len(uriParam) == 0 {
+			sortBy = ""
+		} else {
+			sortBy = uriParam
+		}
+
+		if uriParam = r.URL.Query().Get("sort_dir"); len(uriParam) == 0 {
+			// Sort ASC by default
+			sortAsc = true
+		} else {
+			if uriParam != "asc" && uriParam != "desc" {
+				panic(oops.BadRequest("Invalid sort direction", "Must be asc or desc"))
+			}
+			if uriParam == "asc" {
+				sortAsc = true
+			} else if uriParam == "desc" {
+				sortAsc = false
+			}
+		}
+
+		var filtering map[string]interface{}
+		if val, ok := payload["filtering"]; ok {
+			filtering = val.(map[string]interface{})
+		}
+
+		sortSlice := strings.Split(sortBy, ".")
+		if len(sortSlice) == 1 {
+			sortColumnName = sortSlice[0]
+		} else if len(sortSlice) == 2 {
+			sortCompName = sortSlice[0]
+			sortColumnName = sortSlice[1]
+		}
+
+		var col *pqdb.Column
+		if len(sortCompName) > 0 {
+			comp, e := models.CreateComponent(c.Context, sortCompName, nil, nil)
+			if e != nil {
+				panic(e)
+			}
+
+			tbl := pqdb.NewTable(comp.TableName())
+			col = tbl.Column(sortColumnName)
+		} else if len(sortColumnName) > 0 {
+			col = pqdb.NewColumn(sortColumnName)
+		}
+
+		var orderBy pqdb.OrderExpression
+		if col != nil {
+			orderBy = pqdb.OrderExpression{*col, sortAsc, false}
+		}
+
+		products, total, e := models.RetrieveProducts(c.Context, limit, offset, apiKey, filtering, orderBy)
+		if e != nil {
+			panic(e)
+		}
+
+		resultMap := make(map[string]int)
+		resultMap["total"] = total
+		resultMap["count"] = len(products)
+
+		responseResource, e := lib.NewResource(resultMap)
+		if e != nil {
+			panic(e)
+		}
+
+		selfLink := new(lib.HALHref)
+		selfLink.FromURI(r.RequestURI)
+		responseResource.AddLink("self", *selfLink)
+
+		responseResource.AddNavLinks(total, offset, limit)
+
+		for _, prod := range products {
+			var res *lib.Resource
+			delete(prod, "assemblage")
+			if len(fields) == 0 {
+				res, e = lib.NewResource(prod)
+				if e != nil {
+					panic(e)
+				}
+
+				id := strconv.Itoa(int(prod["id"].(float64)))
+				res.AddLink("self", lib.HALHref{Endpoint: lib.Join("/", "/products", id)})
+			} else {
+				fieldsSlice := strings.Split(fields, ",")
+				fieldsSlice = append(fieldsSlice, []string{"identity", "id", "visibility"}...)
+				newState := make(map[string]interface{})
+				for _, field := range fieldsSlice {
+					if _, ok := prod[field]; ok {
+						newState[field] = prod[field]
+					} else {
+						panic(oops.BadRequest(lib.Join(" ", "Field: ", field, "is not valid."), field))
+					}
+					res, e = lib.NewResource(newState)
+					if e != nil {
+						panic(e)
+					}
+
+					id := strconv.Itoa(int(prod["id"].(float64)))
+					res.AddLink("self", lib.HALHref{Endpoint: lib.Join("/", "/products", id)})
+				}
+			}
+
+			responseResource.EmbedIn("products", res)
+		}
+
+		resJSON, err := json.Marshal(responseResource)
+		if err != nil {
+			panic(oops.ServerError("", "Failed to marshal prodsRes to JSON.", err))
+		}
+
+		w.Header().Set("Cache-Control", "max-age=3600")
+		w.Header().Set("Content-Type", "application/hal+json")
+		fmt.Fprint(w, string(resJSON))
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func (c *RouteContext) UpdateProduct(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("Product", perm.ProductUpdateAll|perm.ProductUpdateGroup|perm.ProductUpdateOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		params := context.Get(r, "params").(httprouter.Params)
+
+		if len(params.ByName("id")) == 0 {
+			panic(oops.BadRequest("Must provide a Product ID GET-parameter."))
+		}
+
+		productID, err := strconv.Atoi(params.ByName("id"))
+		if err != nil {
+			panic(err)
+		}
+
+		body := r.Body
+		product, e := models.UpdateProduct(c.Context, productID, body)
+		if e != nil {
+			panic(e)
+		}
+
+		e = es.CreateUpdateSearchProduct(c.Context, product)
+		if e != nil {
+			panic(e)
+		}
+
+		// Chris & Curtis in 6 months in the future: We were thinking we wanted to easily get around this.
+		// Fucking deal with it!
+		prodMap := make(map[string]interface{})
+
+		bites, err := json.Marshal(product)
+		if err != nil {
+			panic(err)
+		}
+		delete(prodMap, "assemblage")
+
+		err = json.Unmarshal(bites, &prodMap)
+		if err != nil {
+			panic(err)
+		}
+
+		resource, e := lib.NewResource(prodMap)
+		if e != nil {
+			panic(e)
+		}
+
+		selfLink := new(lib.HALHref)
+		selfLink.FromURI(r.RequestURI)
+		resource.AddLink("self", *selfLink)
+
+		jsonResponse, err := json.Marshal(resource)
+		if err != nil {
+			panic(err)
+		}
+
+		w.Header().Set("Cache-Control", "max-age=3600")
+		w.Header().Set("Content-Type", "application/hal+json")
+		fmt.Fprint(w, string(jsonResponse))
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func (c *RouteContext) DeleteProduct(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("Product", perm.ProductDeleteAll|perm.ProductDeleteGroup|perm.ProductDeleteOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		params := context.Get(r, "params").(httprouter.Params)
+		productID, err := strconv.Atoi(params.ByName("id"))
+		if err != nil {
+			panic(oops.ServerError("", "Failed to convert (string) id to integer.", err))
+		}
+
+		e := models.DeleteProducts(c.Context, productID)
+		if e != nil {
+			panic(e)
+		}
+
+		e = es.DeleteSearchProduct(c.Context, productID)
+		if e != nil {
+			panic(e)
+		}
+
+		w.Header().Set("Cache-Control", "max-age=3600")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{}`)
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+// DeleteProducts attempts to delete a collection of products as specified
+// by a JSON-provided list of product ID numbers.
+func (c *RouteContext) DeleteProducts(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("Product", perm.ProductDeleteAll|perm.ProductDeleteGroup|perm.ProductDeleteOwn)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		reqPayload, e := lib.RequestData(r)
+		if e != nil {
+			panic(e)
+		}
+
+		var ids []int
+		var uriParam string
+		if uriParam = r.URL.Query().Get("product_ids"); len(uriParam) > 0 {
+			idSlice := strings.Split(uriParam, ",")
+			for _, id := range idSlice {
+				intID, err := strconv.Atoi(id)
+				if err != nil {
+					panic(oops.ServerError("", err, "ID:", id))
+				}
+				ids = append(ids, intID)
+			}
+		} else {
+			var data map[string]interface{}
+			err := json.Unmarshal(reqPayload.Data, &data)
+			if err != nil {
+				panic(oops.BadJSON("Invlaid payload data JSON", err))
+			}
+
+			if val, ok := data["product_ids"]; ok {
+				for _, id := range val.([]interface{}) {
+					ids = append(ids, int(id.(float64)))
+				}
+			}
+		}
+
+		if len(ids) == 0 {
+			panic(oops.BadRequest("Must specify at least one product to delete"))
+		}
+
+		e = models.DeleteProducts(c.Context, ids...)
+		if e != nil {
+			panic(e)
+		}
+
+		for _, id := range ids {
+			e = es.DeleteSearchProduct(c.Context, id)
+			if e != nil {
+				panic(e)
+			}
+		}
+
+		w.Header().Set("Cache-Control", "max-age=3600")
+		w.Header().Set("Content-Type", "application/hal+json")
+		fmt.Fprint(w, "{}")
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}
+
+func (c *RouteContext) ProductSearch(ch alice.Chain) http.Handler {
+	fn := c.PermissionsHandler("Product", perm.ProductSearchAll|perm.ProductSearchOwn|perm.ProductSearchGroup|perm.ProductSearchVisible)
+	routeFN := func(w http.ResponseWriter, r *http.Request) {
+		reqPayload, e := lib.RequestData(r)
+		if e != nil {
+			panic(e)
+		}
+
+		var terms, category string
+		var limit, offset, manufacturerID int
+		var fields, uriParam string
+
+		var sortBy, sortCompName, sortColumnName, sortDirection string
+		var sortAsc bool
+
+		publicKey := reqPayload.PublicKey
+
+		var payload map[string]interface{}
+		json.Unmarshal(reqPayload.Data, &payload)
+
+		apiKey, e := models.RetrieveAPIKeyByPublic(c.Context, publicKey)
+		if e != nil {
+			panic(e)
+		}
+
+		if limitStr := r.URL.Query().Get("limit"); len(limitStr) == 0 {
+			if val, ok := payload["limit"]; ok {
+				limit = val.(int)
+			}
+		} else {
+			var err error
+			limit, err = strconv.Atoi(limitStr)
+			if err != nil {
+				panic(oops.ServerError("", err))
+			}
+		}
+		if limit == 0 {
+			limit = 500
+		}
+
+		if offsetStr := r.URL.Query().Get("offset"); len(offsetStr) == 0 {
+			if val, ok := payload["offset"]; ok {
+				offset = val.(int)
+			}
+		} else {
+			var err error
+			offset, err = strconv.Atoi(offsetStr)
+			if err != nil {
+				panic(oops.ServerError("", err))
+			}
+		}
+
+		if terms = r.URL.Query().Get("terms"); len(terms) == 0 {
+			if val, ok := payload["terms"]; ok {
+				terms = val.(string)
+			}
+		} else {
+			ter := strings.Split(terms, ",")
+			terms = lib.Join(" ", ter...)
+		}
+		if manufacturerIDStr := r.URL.Query().Get("manufacturer_id"); len(manufacturerIDStr) == 0 {
+			if val, ok := payload["manufacturer_id"]; ok {
+				manufacturerID = val.(int)
+			}
+		} else {
+			var err error
+			manufacturerID, err = strconv.Atoi(manufacturerIDStr)
+			if err != nil {
+				panic(oops.ServerError("", err))
+			}
+		}
+
+		if val, ok := payload["category"]; ok {
+			category = val.(string)
+		}
+
+		if uriParam = r.URL.Query().Get("fields"); len(uriParam) == 0 {
+			fields = ""
+			if val, ok := payload["fields"]; ok {
+				fields = val.(string)
+			}
+		} else {
+			fields = uriParam
+		}
+
+		if uriParam = r.URL.Query().Get("sort_by"); len(uriParam) == 0 {
+			sortBy = ""
+		} else {
+			sortBy = uriParam
+		}
+
+		if uriParam = r.URL.Query().Get("sort_dir"); len(uriParam) == 0 {
+			// Sort ASC by default
+			sortAsc = true
+			sortDirection = "asc"
+		} else {
+			if uriParam != "asc" && uriParam != "desc" {
+				panic(oops.BadRequest("Invalid sort direction", "Must be asc or desc"))
+			}
+			if uriParam == "asc" {
+				sortAsc = true
+				sortDirection = "asc"
+			} else if uriParam == "desc" {
+				sortAsc = false
+				sortDirection = "desc"
+			}
+		}
+
+		var filtering map[string]interface{}
+		if val, ok := payload["filtering"]; ok {
+			filtering = val.(map[string]interface{})
+		}
+		sortSlice := strings.Split(sortBy, ".")
+		if len(sortSlice) == 1 {
+			sortColumnName = sortSlice[0]
+		} else if len(sortSlice) == 2 {
+			sortCompName = sortSlice[0]
+			sortColumnName = sortSlice[1]
+		}
+
+		var col *pqdb.Column
+		if len(sortCompName) > 0 {
+			comp, e := models.CreateComponent(c.Context, sortCompName, nil, nil)
+			if e != nil {
+				panic(e)
+			}
+
+			tbl := pqdb.NewTable(comp.TableName())
+			col = tbl.Column(sortColumnName)
+		} else if len(sortColumnName) > 0 {
+			col = pqdb.NewColumn(sortColumnName)
+		}
+
+		var orderBy pqdb.OrderExpression
+		if col != nil {
+			orderBy = pqdb.OrderExpression{*col, sortAsc, false}
+		}
+
+		var prodIDs []int
+		var total int
+
+		// Get slice of all product IDs for the given terms
+		if len(terms) > 0 {
+			ep := models.ElasticProduct{
+				Terms:          terms,
+				Limit:          10000,
+				ManufacturerID: manufacturerID,
+				SortKey:        sortColumnName,
+				SortDirection:  sortDirection, //todo fix
+				Category:       category,
+				Active:         false,
+				MeetsPostingRequirements: false,
+			}
+
+			if c.Role["Product"]&perm.ProductSearchVisible != 0 {
+				ep.Active = true
+				ep.MeetsPostingRequirements = true
+			}
+			prodIDs, total, e = models.SearchProducts(c.Context, &ep, apiKey)
+			if e != nil {
+				panic(e)
+			}
+		}
+
+		if len(prodIDs) > 0 || len(terms) == 0 {
+			// Get slice of all allowed product IDs for the current APIKey
+			noneAllowed := false
+
+			q, e := pqdb.NewSelectQuery(c.Context)
+			if e != nil {
+				panic(e)
+			}
+			ptr, e := models.Factory("product")
+			if e != nil {
+				panic(e)
+			}
+			pp := ptr.(*models.AEProduct)
+			table := pqdb.NewTable(pp.TableName())
+			q.AddTable(table)
+			q.AddColumn(table.Column("id"))
+			var wheres []pqdb.WhereItem
+			if c.Role != nil && c.Role["Product"]&perm.ProductSearchAll == 0 {
+				if c.Role["Product"]&perm.ProductSearchVisible != 0 {
+					t := pqdb.NewTable("visibility_component")
+					q.LeftJoin(t, pqdb.Predicate{t.Column("product_id"), "=", table.Column("id")})
+					q.SetWhere(pqdb.MakeWhereItem("", pqdb.Predicate{t.Column("active"), "=", true}))
+				} else {
+					t := pqdb.NewTable("manufacturer_component")
+					q.LeftJoin(t, pqdb.Predicate{t.Column("product_id"), "=", table.Column("id")})
+					q.SetWhere(pqdb.MakeWhereItem("", pqdb.Predicate{t.Column("manufacturer_id"), "=", c.APIKey.(*models.APIKey).ManufacturerID.Int64}))
+				}
+			}
+			//products, total, e := models.RetrieveProducts(c.Context, limit, offset, apiKey, filtering, orderBy) //todo
+
+			var orderByClause pqdb.OrderClause
+			if orderBy != (pqdb.OrderExpression{}) {
+				t := orderBy.Column.Table
+				q.LeftJoin(t, pqdb.Predicate{t.Column("product_id"), "=", table.Column("id")})
+				orderByClause.Order = append(orderByClause.Order, orderBy)
+			}
+
+			orderByClause.Order = append(orderByClause.Order, pqdb.OrderExpression{*table.Column("id"), true, false})
+			q.OrderBy = orderByClause
+
+			joins := make(map[string]pqdb.Table)
+			where, e := models.UnravelNestedFilter(c.Context, pp, q, table, joins, filtering)
+			if e != nil {
+				panic(e)
+			}
+
+			if len(where.Items) > 0 {
+				wheres = append(wheres, where)
+			} else if where.Pred != (pqdb.Predicate{}) {
+				wheres = append(wheres, where)
+			}
+
+			for _, whereItem := range wheres {
+				if len(q.Where.Items) > 0 || q.Where.Pred != (pqdb.Predicate{}) {
+					whereItem.Operand = "AND"
+				}
+				q.Where.Items = append(q.Where.Items, whereItem)
+			}
+
+			rows, e := q.Run()
+			if e != nil {
+				panic(e)
+			}
+			defer rows.Close()
+
+			var allowedIDs []int
+			for rows.Next() {
+				var aid int
+				err := rows.Scan(&aid)
+				if err != nil {
+					panic(oops.ServerError("", "Unable to scan id."))
+				}
+				allowedIDs = append(allowedIDs, aid)
+			}
+			if err := rows.Err(); err != nil {
+				panic(oops.ServerError("", "SQL Row error.", err))
+			}
+			if len(allowedIDs) == 0 {
+				noneAllowed = true
+			}
+
+			if len(terms) > 0 {
+				prodIDs = lib.Intersection(prodIDs, allowedIDs)
+				total = len(prodIDs)
+			} else {
+				prodIDs = allowedIDs
+				total = len(allowedIDs)
+			}
+
+			// Get a slice of product IDs that is equal to the batch size requested
+			end := offset + limit
+			if end > len(prodIDs) {
+				end = len(prodIDs)
+			}
+
+			prodIDs = prodIDs[offset:end]
+
+			var products []map[string]interface{}
+			if noneAllowed == false {
+				var e oops.Error
+				products, e = models.RetrieveProductsIn(
+					c.Context,
+					prodIDs,
+					apiKey,
+					strings.Split(fields, ","))
+				if e != nil {
+					panic(e)
+				}
+			}
+
+			resultMap := make(map[string]int)
+			resultMap["total"] = total
+			resultMap["count"] = len(products)
+
+			responseResource, e := lib.NewResource(resultMap)
+			if e != nil {
+				panic(e)
+			}
+
+			selfLink := new(lib.HALHref)
+			selfLink.FromURI(r.RequestURI)
+			responseResource.AddLink("self", *selfLink)
+			responseResource.AddNavLinks(total, offset, limit)
+
+			// Sort products based on order of prodIDs
+			var sortedProducts []map[string]interface{}
+			for _, id := range prodIDs {
+				fid := float64(id)
+				for _, prod := range products {
+					if prod["id"] == fid {
+						sortedProducts = append(sortedProducts, prod)
+						continue
+					}
+				}
+
+			}
+			for _, prod := range sortedProducts {
+				delete(prod, "assemblage")
+
+				var res *lib.Resource
+				res, e = lib.NewResource(prod)
+				if e != nil {
+					panic(e)
+				}
+
+				id := strconv.Itoa(int(prod["id"].(float64)))
+				res.AddLink("self", lib.HALHref{Endpoint: "/products/" + id})
+
+				responseResource.EmbedIn("products", res)
+			}
+
+			resJSON, err := json.Marshal(responseResource)
+			if err != nil {
+				panic(oops.ServerError("", "Failed to marshal prodsRes to JSON.", err))
+			}
+
+			w.Header().Set("Cache-Control", "max-age=3600")
+			w.Header().Set("Content-Type", "application/hal+json")
+			fmt.Fprint(w, string(resJSON))
+		}
+	}
+	return ch.Append(fn).ThenFunc(routeFN)
+}

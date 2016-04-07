@@ -1,0 +1,10 @@
+#sidebar {
+    background-color: red;
+    ul {
+        list-style-type: none;
+    }
+}
+
+#content {
+    background-color: green;
+}

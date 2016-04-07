@@ -1,0 +1,36 @@
+import jsonify.classes
+
+
+class ApiPayload(jsonify.classes.All):
+    def __init__(self):
+        self.status = 200
+        self.errors = []
+        self.data = {}
+
+    def add_error(self, msg):
+        self.errors.append(msg)
+    
+
+def handle_some_route(path):
+    payload = ApiPayload()
+    
+    
+    if path == "index":
+        payload.data = {"foo": "bar", "fizz": "buzz"}
+    else:
+        payload.status = 404
+        payload.add_error("Could not process request.")
+
+    return payload.json
+
+
+def main():
+    response = handle_some_route("index")
+    print(response)
+
+    response = handle_some_route("does/not/exist")
+    print(response)
+
+
+if __name__ == "__main__":
+    main()

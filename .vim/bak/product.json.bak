@@ -1,0 +1,1128 @@
+{
+    "instance": {
+        "_embedded": {
+            "type": "object",
+            "object": {
+                "assemblages": {
+                    "type": "list",
+                    "template": "product_components.json:assemblage"
+                }
+            }
+        },        
+        "id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "assemblage": {
+            "type": "object",
+            "template": "product_components.json:embedded"
+        },
+        "arm": {
+            "type": "object",
+            "template": "product_components.json:arm",
+            "required": false
+        },
+        "audit": {
+            "type": "object",
+            "template": "product_components.json:audit",
+            "required": false
+        },
+        "base": {
+            "type": "object",
+            "template": "product_components.json:base",
+            "required": false
+        },
+        "bulb": {
+            "type": "object",
+            "template": "product_components.json:bulb",
+            "required": false
+        },
+        "category": {
+            "type": "object",
+            "template": "product_components.json:category",
+            "required": false
+        },
+        "collection": {
+            "type": "object",
+            "template": "product_components.json:collection",
+            "required": false
+        },
+        "construction_information": {
+            "type": "object",
+            "template": "product_components.json:construction_information",
+            "required": false
+        },
+        "cushions": {
+            "type": "object",
+            "template": "product_components.json:cushions",
+            "required": false
+        },
+        "description": {
+            "type": "object",
+            "template": "product_components.json:description",
+            "required": false
+        },
+        "doors": {
+            "type": "object",
+            "template": "product_components.json:doors",
+            "required": false
+        },
+        "drawers": {
+            "type": "object",
+            "template": "product_components.json:drawers",
+            "required": false
+        },
+        "durability": {
+            "type": "object",
+            "template": "product_components.json:durability",
+            "required": false
+        },
+        "electrical": {
+            "type": "object",
+            "template": "product_components.json:electrical",
+            "required": false
+        },
+        "fiber": {
+            "type": "object",
+            "template": "product_components.json:fiber",
+            "required": false
+        },
+        "flame": {
+            "type": "object",
+            "template": "product_components.json:flame",
+            "required": false
+        },
+        "footboard": {
+            "type": "object",
+            "template": "product_components.json:footboard",
+            "required": false
+        },
+        "footrest": {
+            "type": "object",
+            "template": "product_components.json:footrest",
+            "required": false
+        },
+        "frame": {
+            "type": "object",
+            "template": "product_components.json:frame",
+            "required": false
+        },
+        "glass": {
+            "type": "object",
+            "template": "product_components.json:glass",
+            "required": false
+        },
+        "headboard": {
+            "type": "object",
+            "template": "product_components.json:headboard",
+            "required": false
+        },
+        "identity": {
+            "type": "object",
+            "template": "product_components.json:identity",
+            "required": false
+        },
+        "images": {
+            "type": "object",
+            "template": "product_components.json:images",
+            "required": false
+        },
+        "instruction": {
+            "type": "object",
+            "template": "product_components.json:instruction",
+            "required": false
+        },
+        "interior_dimension": {
+            "type": "object",
+            "template": "product_components.json:interior_dimension",
+            "required": false
+        },
+        "leather": {
+            "type": "object",
+            "template": "product_components.json:leather",
+            "required": false
+        },
+        "manufacturer": {
+            "type": "object",
+            "template": "product_components.json:manufacturer",
+            "required": false
+        },
+        "option_sets": {
+            "type": "object",
+            "template": "product_components.json:option_sets",
+            "required": false
+        },
+        "ordering_information": {
+            "type": "object",
+            "template": "product_components.json:ordering_information",
+            "required": false
+        },
+        "overall_dimension": {
+            "type": "object",
+            "template": "product_components.json:overall_dimension",
+            "required": false
+        },
+        "pattern": {
+            "type": "object",
+            "template": "product_components.json:pattern",
+            "required": false
+        },
+        "pedestal": {
+            "type": "object",
+            "template": "product_components.json:pedestal",
+            "required": false
+        },
+        "pillows": {
+            "type": "object",
+            "template": "product_components.json:pillows",
+            "required": false
+        },
+        "pricing": {
+            "type": "object",
+            "template": "product_components.json:pricing",
+            "required": false
+        },
+        "promotional_tag": {
+            "type": "object",
+            "template": "product_components.json:promotional_tag",
+            "required": false
+        },
+        "seat": {
+            "type": "object",
+            "template": "product_components.json:seat",
+            "required": false
+        },
+        "shade": {
+            "type": "object",
+            "template": "product_components.json:shade",
+            "required": false
+        },
+        "shelves": {
+            "type": "object",
+            "template": "product_components.json:shelves",
+            "required": false
+        },
+        "shipping_information": {
+            "type": "object",
+            "template": "product_components.json:shipping_information",
+            "required": false
+        },
+        "side_rail": {
+            "type": "object",
+            "template": "product_components.json:side_rail",
+            "required": false
+        },
+        "suspension_point": {
+            "type": "object",
+            "template": "product_components.json:side_rail",
+            "required": false
+        },
+        "table_leaves": {
+            "type": "object",
+            "template": "product_components.json:table_leaves",
+            "required": false
+        },
+        "textile": {
+            "type": "object",
+            "template": "product_components.json:textile",
+            "required": false
+        },
+        "visibility": {
+            "type": "object",
+            "template": "product_components.json:visibility",
+            "required": false
+        },
+        "weight": {
+            "type": "object",
+            "template": "product_components.json:weight",
+            "required": false
+        }
+    },
+    "collection": {
+        "total": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "count": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "_embedded": {
+            "type": "object",
+            "object": {
+                "products": {
+                    "type": "list",
+                    "element": {
+                        "type": "object",
+                        "template": "product.json:instance"
+                    }
+                }
+            },
+            "required": false
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        }
+    },
+    "delete-product": [
+        {
+            "id": 20,
+            "payload": {
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "object": {
+                    "": {
+                        "type": "",
+                        "required": false
+                    }
+                }
+            }
+        },
+        {
+            "id": 22,
+            "payload": {
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "object": {
+                    "": {
+                        "type": "",
+                        "required": false
+                    }
+                }
+            }
+        },
+        {
+            "id": -12,
+            "payload": {
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "delete-products-by-json": [
+        {
+            "payload": {
+                "data": {
+                    "product_ids": [
+                        40,
+                        41,
+                        42
+                    ]
+                },
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "object": {
+                    "": {
+                        "type": "",
+                        "required": false
+                    }
+                }
+            }
+        },
+        {
+            "payload": {
+                "data": {
+                    "product_ids": [
+                        1,
+                        -12,
+                        3,
+                        4,
+                        5,
+                        6
+                    ]
+                },
+                "public_key": "@b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        },
+        {
+            "payload": {
+                "data": {
+                    "product_ids": [
+                        9999999
+                    ]
+                },
+                "public_key": "#b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "delete-products-by-uri": [
+        {
+            "product_ids": "23,24",
+            "payload": {
+                "public_key": "!b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "object": {
+                    "": {
+                        "type": "",
+                        "required": false
+                    }
+                }
+            }
+        },
+        {
+            "product_ids": "1,-12,3,4,5,6",
+            "payload": {
+                "public_key": "@b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "list-products-fields": [
+        {
+            "fields": "THESE,FIELDS,DONT,EXIST",
+            "payload": {
+                "data": {
+                    "limit": 1,
+                    "offset": 0
+                },
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:400"
+            }
+        },
+        {
+            "fields": "",
+            "payload": {
+                "data": {
+                    "limit": 1,
+                    "offset": 0
+                },
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "product.json:collection"
+            }
+        },
+        {
+            "fields": "id,identity",
+            "payload": {
+                "data": {
+                    "limit": 1,
+                    "offset": 0
+                },
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "product.json:collection"
+            }
+        }
+    ],
+    "list-products-uri": [
+        {
+            "limit": 1,
+            "offset": 10,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "product.json:collection"
+            }
+        },
+        {
+            "limit": 2,
+            "offset": 0,
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284"
+            },
+            "response": {
+                "type": "object",
+                "template": "product.json:collection"
+            }
+        }
+    ],
+    "list-products-json": [
+        {
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284",
+                "data": {
+                    "limit": 1,
+                    "offset": 10
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "product.json:collection"
+            }
+        },
+        {
+            "payload": {
+                "public_key": "b0b25435a85a72dbf500c780ca2229ff226bb43bb7308c01a81fad1027cb3284",
+                "data": {
+                    "limit": 2,
+                    "offset": 0
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "product.json:collection"
+            }
+        }
+    ],
+    "insert-products": [
+        {
+            "id": null,
+            "payload": {
+                "data": {
+                    "visibility": {
+                        "active": true,
+                        "meets_posting_requirements": false,
+                        "parent_id": null,
+                        "parent_name": null
+                    },
+                    "pricing": {
+                        "dealer_price": null,
+                        "minimum_internet_price": null,
+                        "msrp": 103000,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "trade_price": 82400,
+                        "wholesale": null
+                    },
+                    "promotional_tag": {
+                        "best_seller": null,
+                        "discontinued": null,
+                        "limited_stock": null,
+                        "new_product": null,
+                        "parent_id": null,
+                        "parent_name": null
+                    },
+                    "identity": {
+                        "alternate_name": "it works!!!!!!!!!!!!",
+                        "manufacturer_sku": null,
+                        "name": "yeah",
+                        "parent_id": null,
+                        "parent_name": null,
+                        "source_url": "http://designerfluff.com/"
+                    },
+                    "category": {
+                        "parent_id": null,
+                        "parent_name": null,
+                        "primary": "casegood",
+                        "secondary": "casegood_dresser",
+                        "tertiary": null
+                    },
+                    "description": {
+                        "alternate": null,
+                        "designer": null,
+                        "features": null,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "primary": "Hand carved wood mirror with an inset. \\u003c/p\\u003e\\u003cp\\u003eCustom sizing and finish available, please call or inquire for details.",
+                        "retail": null
+                    },
+                    "manufacturer": {
+                        "manufacturer": {
+                            "id": 4,
+                            "name": "Andi-Le",
+                            "bio": "Andi-Le is a boutique manufacturer of custom accent furniture including, Consoles, benches, tables as well as â€œOne of a Kindsâ€\r\nThe Andi-le aesthetic consists of bold and strong components that are embellished with textures and elements. Our work is filled with old world traditions and a contemporary edge that is unique, cultural and sculptural. Andi-le accent pieces blend seamlessly in the dÃ©cor and stand alone as art.\r\nAll of our furniture is made on demand and handcrafted to the specifications of each client. The style can change with the many choices to create the perfect piece and collaboration is always encouraged.  From mountain contemporary to urban chic, Andi-le can add a touch of wow to any dÃ©cor.\r\n\r\nAndrea Lewin Wendel is the founder and designer/builder at Andi-Le\r\nAs a artist/sculptor, Andrea was represented in galleries and her work is included in prominent art collections across the country. Andrea has been designing and building furniture for over 15 years and launched the Andi-Le line in 2011 in Aspen, Colorado. ",
+                            "url": "http://www.andi-le.com/",
+                            "logo_url": "https://d10tvxxsvg1qy.cloudfront.net/andil/logos/web.jpg",
+                            "date_added": "2014-10-05T10:07:57.539019Z",
+                            "date_updated": "2014-10-05T10:07:57.539019Z",
+                            "updated_by_api_key": "8abebf3699d76c1707cc192a1627a100888b873e567c85765c0ce52d51129523",
+                            "active": true,
+                            "city": null,
+                            "email": null,
+                            "facebook_url": null,
+                            "google_plus_url": null,
+                            "legal": null,
+                            "linkedin_url": null,
+                            "phone": null,
+                            "pinterest_url": null,
+                            "restock_fee": null,
+                            "return_period": null,
+                            "returnable": null,
+                            "state": null,
+                            "street_address_1": null,
+                            "street_address_2": null,
+                            "twitter_url": null,
+                            "zipcode": null,
+                            "featured": null
+                        },
+                        "manufacturer_id": 3,
+                        "parent_id": null,
+                        "parent_name": null
+                    },
+                    "collection": {
+                        "collection": {
+                            "id": 1,
+                            "manufacturer_id": 3,
+                            "name": null,
+                            "description": null,
+                            "designed_by": "Andrea Lewin Wendel"
+                        },
+                        "collection_id": 1,
+                        "parent_id": null,
+                        "parent_name": null
+                    },
+                    "shipping_information": {
+                        "packaged_depth": null,
+                        "packaged_height": null,
+                        "packaged_weight": null,
+                        "packaged_width": null,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "ships_from": null,
+                        "ships_via": "standard",
+                        "volume": null
+                    },
+                    "instruction": {
+                        "cleaning_directions": null,
+                        "installation_directions": null,
+                        "parent_id": null,
+                        "parent_name": null
+                    },
+                    "construction_information": {
+                        "joinery_type": null,
+                        "material": "Poplar",
+                        "parent_id": null,
+                        "parent_name": null
+                    },
+                    "audit": {
+                        "date_added": "2015-07-03T00:00:00Z",
+                        "date_updated": "2014-07-08T18:18:12.302986Z",
+                        "parent_id": null,
+                        "parent_name": null,
+                        "updated_by_api_key": "18defb6d77091cc3c639efa29d693c8e19ee02c6d4d5aa0683a40e200ef7c3e2"
+                    },
+                    "overall_dimension": {
+                        "depth": 1.25,
+                        "diameter": null,
+                        "height": 36,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "width": 30
+                    },
+                    "weight": {
+                        "parent_id": null,
+                        "parent_name": null,
+                        "weight": null
+                    },
+                    "tag": {
+                        "parent_id": null,
+                        "parent_name": null,
+                        "tags": null
+                    },
+                    "ordering_information": {
+                        "discontinued": true,
+                        "lead_time": "6-8 weeks",
+                        "minimum_quantity": 1,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "quick_ship": null,
+                        "stock": null,
+                        "unit": "each"
+                    },
+                    "option": {
+                        "option_sets": null,
+                        "parent_id": null,
+                        "parent_name": null
+                    },
+                    "image": {
+                        "images": [
+                            {
+                                "caption": "YES",
+                                "category": "isolated",
+                                "default": true,
+                                "full_size": "https://d10tvxxsvg1qy.cloudfront.net/andil/andil_013SM_0_l.jpg",
+                                "large_size": null,
+                                "medium_size": null,
+                                "parent_id": 27133,
+                                "parent_name": null,
+                                "thumbnail_size": null
+                            },
+                            {
+                                "caption": "why",
+                                "category": "isolated",
+                                "default": true,
+                                "full_size": "https://d10tvxxsvg1qy.cloudfront.net/andil/andil_013SM_0_l.jpg",
+                                "large_size": null,
+                                "medium_size": null,
+                                "parent_id": 27133,
+                                "parent_name": null,
+                                "thumbnail_size": null
+                            },
+                            {
+                                "caption": "not",
+                                "category": "other",
+                                "default": false,
+                                "full_size": "https://d10tvxxsvg1qy.cloudfront.net/andil/andil_013SM_1_l.jpg",
+                                "large_size": null,
+                                "medium_size": null,
+                                "parent_id": 27133,
+                                "parent_name": null,
+                                "thumbnail_size": null
+                            }
+                        ],
+                        "parent_id": null,
+                        "parent_name": null
+                    }
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "product.json:instance"
+            }
+        }
+    ],
+    "retrieve-products": [
+        {
+            "id": 20,
+            "payload": {},
+            "response": {
+                "type": "object",
+                "template": "product.json:instance"
+            }
+        }
+    ],
+    "update-products": [
+        {
+            "id": 6716,
+            "payload": {
+                "data": {
+                    "id": 14,
+                    "assemblage": {
+                        "id": 38,
+                        "name": "accessory_wall_clocks",
+                        "description": "Clocks",
+                        "components": [
+                            {
+                                "child_components": null,
+                                "class_name": "ManufacturerComponent",
+                                "description": null,
+                                "id": 12,
+                                "name": "manufacturer",
+                                "parent_name": null,
+                                "table_name": "manufacturer_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "CollectionComponent",
+                                "description": null,
+                                "id": 32,
+                                "name": "collection",
+                                "parent_name": null,
+                                "table_name": "collection_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "IdentityComponent",
+                                "description": null,
+                                "id": 27,
+                                "name": "identity",
+                                "parent_name": null,
+                                "table_name": "identity_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "CategoryComponent",
+                                "description": null,
+                                "id": 53,
+                                "name": "category",
+                                "parent_name": null,
+                                "table_name": "category_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "DescriptionComponent",
+                                "description": null,
+                                "id": 25,
+                                "name": "description",
+                                "parent_name": null,
+                                "table_name": "description_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "AuditComponent",
+                                "description": null,
+                                "id": 7,
+                                "name": "audit",
+                                "parent_name": null,
+                                "table_name": "audit_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "OverallDimensionComponent",
+                                "description": null,
+                                "id": 18,
+                                "name": "overall_dimension",
+                                "parent_name": null,
+                                "table_name": "overall_dimension_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "VisibilityComponent",
+                                "description": null,
+                                "id": 1,
+                                "name": "visibility",
+                                "parent_name": null,
+                                "table_name": "visibility_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "WeightComponent",
+                                "description": null,
+                                "id": 28,
+                                "name": "weight",
+                                "parent_name": null,
+                                "table_name": "weight_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "InstructionComponent",
+                                "description": null,
+                                "id": 10,
+                                "name": "instruction",
+                                "parent_name": null,
+                                "table_name": "instruction_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "OrderingInformationComponent",
+                                "description": null,
+                                "id": 36,
+                                "name": "ordering_information",
+                                "parent_name": null,
+                                "table_name": "ordering_information_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "ShippingInformationComponent",
+                                "description": null,
+                                "id": 34,
+                                "name": "shipping_information",
+                                "parent_name": null,
+                                "table_name": "shipping_information_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "PricingComponent",
+                                "description": null,
+                                "id": 4,
+                                "name": "pricing",
+                                "parent_name": null,
+                                "table_name": "pricing_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "ConstructionInformationComponent",
+                                "description": null,
+                                "id": 22,
+                                "name": "construction_information",
+                                "parent_name": null,
+                                "table_name": "construction_information_component"
+                            },
+                            {
+                                "child_components": {
+                                    "child_components": null,
+                                    "class_name": "OptionSetComponent",
+                                    "description": null,
+                                    "id": 41,
+                                    "name": "option_set",
+                                    "parent_name": "option_sets",
+                                    "table_name": "option_set_component"
+                                },
+                                "class_name": "OptionSetsComponent",
+                                "description": null,
+                                "id": 8,
+                                "name": "option_sets",
+                                "parent_name": null,
+                                "table_name": "option_sets_component"
+                            },
+                            {
+                                "child_components": {
+                                    "child_components": null,
+                                    "class_name": "ImageComponent",
+                                    "description": null,
+                                    "id": 37,
+                                    "name": "image",
+                                    "parent_name": "images",
+                                    "table_name": "image_component"
+                                },
+                                "class_name": "ImagesComponent",
+                                "description": null,
+                                "id": 20,
+                                "name": "images",
+                                "parent_name": null,
+                                "table_name": "images_component"
+                            },
+                            {
+                                "child_components": null,
+                                "class_name": "PromotionalTagComponent",
+                                "description": null,
+                                "id": 54,
+                                "name": "promotional_tag",
+                                "parent_name": null,
+                                "table_name": "promotional_tag_component"
+                            }
+                        ]
+                    },
+                    "category": {
+                        "component_data_id": 11446,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "primary": "accessory",
+                        "product_id": 14,
+                        "secondary": "accessory_wall",
+                        "tertiary": "accessory_wall_clocks"
+                    },
+                    "overall_dimension": {
+                        "component_data_id": 11446,
+                        "depth": 0,
+                        "diameter": 6,
+                        "height": 8,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14,
+                        "width": 0
+                    },
+                    "weight": {
+                        "component_data_id": 11446,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14,
+                        "weight": null
+                    },
+                    "pricing": {
+                        "component_data_id": 11446,
+                        "dealer_price": null,
+                        "minimum_internet_price": null,
+                        "msrp": null,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14,
+                        "trade_price": 15000,
+                        "wholesale": null
+                    },
+                    "option": {
+                        "component_data_id": 11446,
+                        "option_sets": [],
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14
+                    },
+                    "tag": {
+                        "component_data_id": 11446,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14,
+                        "tags": []
+                    },
+                    "collection": {
+                        "collection": {
+                            "id": null,
+                            "manufacturer_id": null,
+                            "name": null,
+                            "description": null,
+                            "designed_by": null
+                        },
+                        "collection_id": null,
+                        "component_data_id": 11446,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14
+                    },
+                    "identity": {
+                        "alternate_name": null,
+                        "component_data_id": 11446,
+                        "manufacturer_sku": "498",
+                        "name": "X-Clock with Hook in Antique Brass",
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14,
+                        "source_url": "http://www.barbaracosgrovelamps.com/"
+                    },
+                    "visibility": {
+                        "active": false,
+                        "component_data_id": 11446,
+                        "meets_posting_requirements": true,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14
+                    },
+                    "shipping_information": {
+                        "component_data_id": 11446,
+                        "packaged_depth": null,
+                        "packaged_height": null,
+                        "packaged_weight": null,
+                        "packaged_width": null,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14,
+                        "ships_from": null,
+                        "ships_via": "standard",
+                        "volume": null
+                    },
+                    "image": {
+                        "component_data_id": 11446,
+                        "images": [
+                            {
+                                "caption": "",
+                                "category": "isolated",
+                                "component_data_id": 19364,
+                                "default": true,
+                                "full_size": "https://d10tvxxsvg1qy.cloudfront.net/barba/barba_X-ClockwithHookAntiqueBrass_0_l.jpg",
+                                "large_size": null,
+                                "medium_size": null,
+                                "parent_id": 11446,
+                                "parent_name": null,
+                                "product_id": 14,
+                                "thumbnail_size": null
+                            },
+                            {
+                                "caption": "",
+                                "category": "other",
+                                "default": true,
+                                "full_size": "https://d10tvxxsvg1qy.cloudfront.net/barba/barba_X-ClockwithHookAntiqueBrass_0_l.jpg",
+                                "large_size": "https://d10tvxxsvg1qy.cloudfront.net/barba/barba_X-ClockwithHookAntiqueBrass_0_l.jpg",
+                                "medium_size": "https://d10tvxxsvg1qy.cloudfront.net/barba/barba_X-ClockwithHookAntiqueBrass_0_l.jpg",
+                                "parent_id": 11446,
+                                "parent_name": null,
+                                "product_id": 14,
+                                "thumbnail_size": "https://d10tvxxsvg1qy.cloudfront.net/barba/barba_X-ClockwithHookAntiqueBrass_0_l.jpg"
+                            }
+                        ],
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14
+                    },
+                    "promotional_tag": {
+                        "best_seller": null,
+                        "component_data_id": 14,
+                        "discontinued": null,
+                        "limited_stock": null,
+                        "new_product": null,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14
+                    },
+                    "manufacturer": {
+                        "component_data_id": 11446,
+                        "manufacturer": {
+                            "id": 9,
+                            "name": "Barbara Cosgrove",
+                            "bio": "Twelve years ago Barbara Cosgrove Lamps was launched in a residential garage. The lamps assembled there were a collection of clean lined, elegant, well-proportioned designs. As the company's customer list and warehouse space grew, BCL was introduced. BCL is a lower price point companion to the Collection's group of statement pieces, and it clearly fills a need. Customers who seek out Collection lamps often add BCL to their purchase.A new group of buyers finds the classic timeless attitude of Barbara Cosgrove Lamps available at a lower price that fit their budget. In the current economy, the combination of the Collection and BCL is more important than ever.",
+                            "url": "http://www.barbaracosgrovelamps.com/",
+                            "logo_url": "https://d10tvxxsvg1qy.cloudfront.net/barba/logos/web.jpg",
+                            "date_added": "2014-10-05T10:07:57.539019Z",
+                            "date_updated": "2014-10-05T10:07:57.539019Z",
+                            "updated_by_api_key": "8abebf3699d76c1707cc192a1627a100888b873e567c85765c0ce52d51129523",
+                            "active": true,
+                            "city": null,
+                            "email": null,
+                            "facebook_url": null,
+                            "google_plus_url": null,
+                            "legal": null,
+                            "linkedin_url": null,
+                            "phone": null,
+                            "pinterest_url": null,
+                            "restock_fee": null,
+                            "return_period": null,
+                            "returnable": null,
+                            "state": null,
+                            "street_address_1": null,
+                            "street_address_2": null,
+                            "twitter_url": null,
+                            "zipcode": null,
+                            "featured": null
+                        },
+                        "manufacturer_id": 9,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14
+                    },
+                    "description": {
+                        "alternate": null,
+                        "component_data_id": 11446,
+                        "designer": null,
+                        "features": null,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "primary": "This is a new description",
+                        "product_id": 14,
+                        "retail": null
+                    },
+                    "audit": {
+                        "component_data_id": 11446,
+                        "date_added": "2014-07-03T00:00:00Z",
+                        "date_updated": "2014-08-28T20:49:06.792998Z",
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14,
+                        "updated_by_api_key": "18defb6d77091cc3c639efa29d693c8e19ee02c6d4d5aa0683a40e200ef7c3e2"
+                    },
+                    "instruction": {
+                        "cleaning_directions": null,
+                        "component_data_id": 11446,
+                        "installation_directions": null,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14
+                    },
+                    "ordering_information": {
+                        "component_data_id": 11446,
+                        "discontinued": true,
+                        "lead_time": "1 - 2 weeks",
+                        "minimum_quantity": 1,
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14,
+                        "quick_ship": null,
+                        "stock": null,
+                        "unit": "each"
+                    },
+                    "construction_information": {
+                        "component_data_id": 11446,
+                        "joinery_type": null,
+                        "material": "Antique Brass with Brass Workings",
+                        "parent_id": null,
+                        "parent_name": null,
+                        "product_id": 14
+                    }
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "product.json:instance"
+            }
+        }
+    ]
+}

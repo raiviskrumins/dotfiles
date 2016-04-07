@@ -1,0 +1,53 @@
+{% extends "index.jinja2" %}
+
+{% block title %}News Feed{% endblock title %}
+
+{% block content_main %}
+<div class="row news-feed-header">
+  <div class="col-md-12">
+    <h1 class="hidden-xs hidden-sm">Welcome Back,&nbsp;
+      <span class="user-name">{{ g.user.name or 'Administrator' }}</span>!</h1>
+    <h1 class="hidden-md hidden-lg">News Feed</h1>
+  </div>
+</div>
+
+<div class="news-feed">
+  {% for event in feed %}
+    <div class="row">
+      <div class="col-md-12">
+        <div class="news-item {{ loop.cycle('odd', 'even') }}">
+          {%- if event.event == 'manufacturer added' -%}
+            <p class="manufacturer-newsline"><a href="{{ url_for('manufacturer_view.manufacturer_get', mfr_id=event.manufacturer_id) }}" target="_self">{{ event.manufacturer_name }}</a> has been added to Manufacturers.</p>
+            <div class="clearfix visible-xs-block"></div><p class="date-tag">{{ event.time_ago }}</p><div class="clearfix"></div>
+            <p class="manufacturer-categories">{{ event.categories|sort|join(', ') }}</p>
+          {%- elif event.event == 'products added' -%}
+          <p class="manufacturer-newsline"><a href="{{ url_for('manufacturer_view.manufacturer_get', mfr_id=event.manufacturer_id) }}" target="_self">
+            {{ event.manufacturer_name }}</a> has added {{ event.products|count }} new product{% if event.products|count > 1 -%} s {%- endif %}.
+          </p>
+            <div class="clearfix visible-xs-block"></div><p class="date-tag">{{ event.time_ago }}</p><div class="clearfix"></div>
+            {%- for product in event.products -%}
+              {%- if loop.index < 7 -%}
+                <a href="{{ url_for('product_view.prod_get', prod_id=product.id) }}">
+                  {%- if product.thumbnail_image or product.full_size_image -%}
+                    <div style="background-image: url({{ product.thumbnail_image or product.full_size_image }});" class="product-preview-thumb"></div>
+                  {%- else -%}
+                    <div style="background-image: url({{ url_for('static', filename='img/branding/defaultfeatureimage.png') }});" class="product-preview-thumb"></div>
+                  {%- endif -%}
+                </a>
+              {%- endif -%}
+            {%- endfor -%}
+            <a href="{{ url_for('manufacturer_view.manufacturer_products', mfr_id=event.manufacturer_id) }}">
+              <div class="product-preview-thumb last">
+                <div class="new-prod-link">
+                  <span>VIEW<br/>
+                  ALL</span>
+                </div>
+              </div>
+            </a>
+          {%- endif -%}
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endblock content_main %}

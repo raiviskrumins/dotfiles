@@ -1,0 +1,479 @@
+# functionality for product listings. includes filter, sort, search, and action
+# button toggles
+#
+# UI COMPONENTS:
+# --------------
+# .js-product-search : text input to search through the list of products
+# .js-product-delete : deletion of a list of products
+# .js-category-select : select input to filter list of products by category
+# .js-visible-count : shows the number of products when a search/filter is
+#     applied.
+# #product_list : table of products
+# .js-multi-actions : container for buttons used with a set of products
+# .js-product-actions : container for buttons used with a single product
+# th.sortable : headers for columns by which products can be sorted
+#
+# CUSTOM EVENTS:
+# --------------
+# sorted.amber.list : fires when the list has been sorted by selecting a table
+#       header. (updates the fixed table header to match)
+
+$(document).ready ->
+  search_timeout = ''
+  # matches a url with '/products' in it, unless immediately followed by digits
+  # (i.e. a product detail page)
+  cache_url = new RegExp /\/products(?!\/\d+)/
+  window.fetching_products = false
+
+  getExpireDate = () ->
+    # set expiration to two hours from now
+    date = new Date()
+    hours = (date.getHours() + 2) % 24
+    date.setHours hours
+
+    return date
+
+  newProductModal = (e) ->
+    e.preventDefault()
+    url = $(e.currentTarget).attr 'href'
+    data = collection: $(e.currentTarget).data 'collection'
+
+    $.ajax url,
+      type: 'GET'
+      data: data
+      success: (result) ->
+        cm.loadModal result
+
+  newProductSave = (e) ->
+    e.preventDefault()
+    e.stopPropagation()
+    full_size_url = $('input#full_size').val()
+    rotation_angle = $('input#rotation_angle').val()
+    if rotation_angle > 0
+      data = JSON.stringify
+        'full_size': full_size_url,
+        'rotation_angle': rotation_angle
+
+      $.ajax
+        url: '/products/image/process'
+        type: 'POST',
+        contentType: 'application/json',
+        data: data,
+        beforeSend: () ->
+          $(e.currentTarget).addClass 'btn-loader disabled'
+        success: (result) ->
+          if result.success
+            $('input#full_size').val result.image_url
+            $('#rotation_angle').val 0
+            urls = _.map [150, 300, 640], (size) ->
+              sections = result.image_url.split '.'
+              sections[3] = sections[3] + "_#{size}"
+              return sections.join '.'
+            $('input#thumbnail').val urls[0]
+            $('input#medium').val urls[1]
+            $('input#large').val urls[2]
+            $(e.currentTarget.form).submit()
+    else
+      $(e.currentTarget.form).submit()
+
+  formSubmit = (e) ->
+    $('input:submit', e.currentTarget).addClass 'disabled'
+    e.preventDefault()
+
+    raw_data = $(@).serializeArray()
+    form_data = {}
+
+    _.map raw_data, (key_value) ->
+      form_data[key_value.name] = key_value.value
+
+    url = $(@).attr 'action'
+    type = $(@).attr 'method'
+
+    $.ajax url,
+      type: type,
+      contentType: 'application/json',
+      data: JSON.stringify(form_data),
+      success: (result) ->
+        if result.success
+          window.location.assign result.url
+        else if result
+          $('.modal').html $(result).find '.modal-dialog'
+
+  deleteProducts = (e) ->
+    e.preventDefault()
+
+    product_list = prod.selected_products
+
+    url = '/products/delete'
+    data = JSON.stringify
+      product_ids: product_list
+
+    $.ajax url,
+      type: 'POST'
+      contentType: 'application/json'
+      cache: false
+      data: data
+      success: (result) ->
+        if result.success is true
+          data = JSON.stringify
+            name: whichList()
+            data: []
+          saveSession data, _.bind window.location.reload, window.location
+      complete: () ->
+        window.location.reload true
+
+  # handle toggle events fired from select_toggle.coffee
+  actionToggle = (e) ->
+    if e.type is 'selected'
+      $('.js-multi-actions').show()
+
+    else if e.type is 'unselected'
+      $('.js-multi-actions').hide()
+
+  # "resets" the search and filters by...reloading the page
+  reset = (e) ->
+    e.preventDefault()
+    Cookies.remove 'prodlist-category'
+    Cookies.remove 'prodlist-search'
+    Cookies.remove 'prodlist-key'
+    Cookies.remove 'prodlist-direction'
+    window.location.reload true
+
+  # show/hide fixed header depending on page position
+  collapseHeader = (e) ->
+    if window.pageYOffset > 225
+      $('#header_reference').width $('#product_list').width()
+      $('#header_reference').fadeIn 100
+    else
+      $('#header_reference').fadeOut 100
+
+  # have the fixed header match the standard one when a column is sorted
+  updateHeader = (e) ->
+    header = $('.sortable.sorted')
+    table_cell = header.data 'sort'
+
+    $("th[data-sort=\"#{table_cell}\"]").addClass 'sorted'
+
+  # update header size on window resize
+  resizeHeader = (e) ->
+      $('#header_reference').width $('#product_list').width()
+
+  addOptionSets = (e) ->
+    e.preventDefault()
+
+    url = $(@).attr 'href'
+
+    product_list = prod.selected_products
+
+    pathname = window.location.pathname
+    regex = new RegExp "\/products\/\\d"
+
+    if regex.test pathname
+      last_part = pathname.split("/")[2]
+      product_list = [last_part]
+
+    option_sets = _.pluck $('.optionset-list :checked'), 'value'
+
+    data = JSON.stringify
+      product_list: product_list
+      option_sets: option_sets
+
+    $.ajax url,
+      type: 'POST'
+      data: data
+      contentType: 'application/json'
+      success: (result) ->
+        if result.success
+          window.location.reload()
+        else
+          $('.optionset-help-text').fadeIn()
+
+  # initialize our product cache object
+  prod = new ProductCache "#{window.location.pathname}/list", '/products/rows'
+  if window.location.pathname.search('collection') > 0
+    prod.no_products_url = '/products/collection/none'
+  else
+    prod.no_products_url = '/products/none'
+  prod.no_results_url = '/products/no-results'
+  prod.setUI
+    table: '#product_list tbody'
+
+  prod.addFilter '.js-product-search', 'terms'
+  prod.addFilter '.js-category-select', 'category'
+
+  options = {}
+
+  # see where page is, load next page of products if needed
+  where = (e) ->
+    if window.pageYOffset == $(document).height() - $(window).height()
+      if not window.fetching_products
+        window.fetching_products = true
+        prod.showNext()
+
+  # SEARCH / FILTER
+  # Updates 'x' button UI, searches the cache.
+  productSearch = (e) ->
+    if $(e.currentTarget).hasClass 'js-category-select'
+      Cookies.set 'prodlist-category', $(e.currentTarget).val()
+    if $(e.currentTarget).hasClass 'js-product-search'
+      Cookies.set 'prodlist-search', $(e.currentTarget).val()
+
+    if search_timeout > 0
+      clearTimeout search_timeout
+      search_timeout = 0
+
+    search_timeout = setTimeout _.bind(prod.searchFilter, prod), 150
+
+  # clear search field and reset products
+  clearSearch = (e) ->
+    e.preventDefault()
+    $('.js-product-search').val ''
+    productSearch e
+
+  # update the "X of Y products shown" message
+  updateShown = () ->
+    if $('.js-product-search').val().length > 0
+      $('.js-clear-search').fadeIn()
+    else
+      $('.js-clear-search').fadeOut 100
+
+    $('.products-visible').hide()
+
+    active = prod.count 'active'
+    total = prod.count()
+
+    if active < total
+      $('.js-visible-count').html active
+      $('.products-visible').show()
+
+  # SORT PRODUCTS
+
+  # sort product by the selected header
+  sortCache = (e) ->
+    $header = $(e.currentTarget)
+    key = $header.data 'sort'
+    direction = $header.data 'direction'
+
+    # if resorting selected header
+    if $header.hasClass 'sorted'
+      if direction is 'asc'
+        direction = 'desc'
+      else
+        direction = 'asc'
+    else
+      direction = 'asc'
+
+    $('.sorted').removeClass 'sorted'
+    $header.addClass 'sorted'
+
+    $header.data 'direction', direction
+    $header.attr 'data-direction', direction
+
+    prod.sortBy key, direction
+
+    Cookies.set 'prodlist-key', key
+    Cookies.set 'prodlist-direction', direction
+
+    $(document).trigger 'sorted.amber.list'
+
+  # MULTI-SELECT
+
+  # toggles an individual item (UI)
+  selectToggle = (e) ->
+    e.preventDefault()
+    e.stopImmediatePropagation()
+
+    $(@).toggleClass 'selected'
+
+    id = $(@).data 'id'
+    if $(@).hasClass 'selected'
+      if not _.contains prod.selected_products, id
+        prod.select id
+    else
+      prod.unselect id
+    $(prod.ui.selected_count).html prod.selected_products.length
+
+    prod.drawMaster()
+
+    if prod.selected_products.length
+      $('.js-multi-actions').show()
+    else
+      $('.js-multi-actions').hide()
+
+  # Save data to the session. Callback logic is not very robust, sorry.
+  saveSession = (data, callback=null) ->
+    $.ajax '/session',
+      type: 'POST'
+      contentType: 'application/json'
+      data: data
+      success: (result) ->
+        if result.success
+          if callback?
+            callback()
+
+  # Get data from session. Result data is fed to the callback.
+  getSession = (variable, callback=null) ->
+    $.ajax "/session/#{variable}",
+      type: 'GET'
+      success: (result) ->
+        if result.success
+          if callback?
+            callback result.data
+
+  # add selected products to the chosen collection
+  addProducts = (e) ->
+    $(e.currentTarget).addClass 'disabled'
+    e.preventDefault()
+
+    collection_id = $('.js-collection-select').val()
+    new_collection = $('.js-new-collection-form #name').val()
+    mfr_id = $('.js-new-collection-form #manufacturer_id').val()
+
+    if not collection_id and not new_collection
+      $('.modal#collectionEdit .modal-footer span.text-danger').removeClass 'hidden'
+      $(e.currentTarget).removeClass 'disabled'
+      return
+    else
+      $('.modal#collectionEdit .modal-footer span.text-danger').addClass 'hidden'
+
+    if new_collection
+      $.ajax '/products/collection/form',
+        type: 'POST'
+        contentType: 'application/json'
+        data: JSON.stringify({name: new_collection, manufacturer_id: mfr_id})
+        success: (result) ->
+          if result.success
+            addProductRequest(result.collection.id)
+    else
+      addProductRequest(collection_id)
+
+  # moved from collections.coffee to use the cache's selected products list
+  addProductRequest = (collection_id) ->
+    product_list = prod.selected_products
+
+    url = "/products/collection/#{collection_id}/add-product"
+    data = JSON.stringify
+      product_ids: product_list
+
+    $.ajax url,
+      type: 'PUT'
+      contentType: 'application/json'
+      data: data
+      success: (result) ->
+        window.location.reload()
+
+  removeProducts = ->
+    collection_id = $('.collection-name').data 'id'
+    product_list = prod.selected_products
+    url = "/products/collection/#{collection_id}/remove-products"
+    data = JSON.stringify
+      product_ids: product_list
+
+    $.ajax url,
+      type: 'POST'
+      contentType: 'application/json'
+      data: data
+      success: (result) ->
+        data = JSON.stringify
+          name: whichList()
+          data: []
+        saveSession data, _.bind window.location.reload, window.location
+
+  cancelQueue = (e) ->
+    if search_timeout > 0
+      clearTimeout search_timeout
+      search_timeout = 0
+
+  # get the selected products list based on url. The main list is
+  # 'prodlist_selected', and the collection lists are 'prodlist_<collection_id>'
+  whichList = () ->
+    path = window.location.pathname
+    collection_id = new RegExp /\/collection\/(\d+)/
+    if path is '/products'
+      return 'prodlist_selected'
+    if collection_id.test path
+      id = collection_id.exec(path)[1]
+      return "prodlist_#{id}"
+
+  bindFilters = () ->
+    $('.js-product-search').on 'keyup', productSearch #filter
+    $('.js-product-search').on 'keydown', cancelQueue
+    $('.js-category-select').on 'change', productSearch #filter
+    $('.js-clear-search').on 'click', clearSearch #filter
+
+  # check for saved cookies and load them
+  cookieCheck = (e) ->
+    search = {
+      terms: ''
+      offset: 0
+      category: ''
+      sort_key: ''
+      sort_direction: ''
+    }
+
+    selected_list = whichList()
+    getSession selected_list, _.bind prod.setSelected, prod
+
+    if Cookies.get 'prodlist-category'
+      $('.js-category-select').val Cookies.get 'prodlist-category'
+    if Cookies.get 'prodlist-search'
+      $('.js-product-search').val Cookies.get 'prodlist-search'
+    if Cookies.get 'prodlist-key'
+      search.sort_key = Cookies.get 'prodlist-key'
+      search.sort_direction = Cookies.get 'prodlist-direction'
+
+      sortWrapper = () ->
+        $header = $("th[data-sort=\"#{search.sort_key}\"]")
+        $header.addClass 'sorted'
+        $header.data 'direction', search.sort_direction
+        $header.attr 'data-direction', search.sort_direction
+
+      options.callback = sortWrapper
+
+    _.extend prod.search, search
+    prod.get options
+
+  multiEdit = (e) ->
+    e.preventDefault()
+    list = prod.selected_products
+    prod_string = list.join ','
+    url = $(e.currentTarget).attr 'href'
+    new_url = "#{url}?selected=[#{prod_string}]"
+    window.location.assign new_url
+
+  $('body').on 'click', '.js-multi-edit', multiEdit
+
+  $('body').on 'click', '.js-new-product-modal', newProductModal
+  $('body').on 'submit', '#newProductForm', formSubmit
+
+  $('.js-delete-select-modal').on 'click', cm.getModal
+  $('body').on 'click', '.js-product-delete-multiple', deleteProducts
+
+  $('.js-add-options').on 'click', cm.getModal
+  $('body').on 'click', '.js-add-multi-optionsets', addOptionSets
+
+  $('body').on 'click', '.js-collection-add-product', addProducts
+  $('body').on 'click', '.js-remove-product-from-collection', removeProducts
+
+  $('body').on 'click', '.js-save-product', newProductSave
+
+  $('.js-show-all').on 'click', reset
+
+  $(document).on 'scroll', collapseHeader
+  $(document).on 'sorted.amber.list', updateHeader
+  $(window).on 'resize', resizeHeader
+
+  bindFilters()
+  #$(document).on 'loaded.cache.list', bindFilters
+  $(document).on 'search.cache.list', updateShown
+
+
+  $('body').on 'click', '.js-select-toggle', selectToggle #select
+  $('body').on 'click', '.js-master-select', prod.setMaster.bind prod #select
+  $(document).on 'selected.amber.toggle unselected.amber.toggle', actionToggle
+
+  $('body').on 'click', 'th.sortable', sortCache #sort
+
+  if cache_url.test window.location.pathname
+    cookieCheck()
+    $(document).on 'scroll', where

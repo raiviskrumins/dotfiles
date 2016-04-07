@@ -1,0 +1,16 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20160203114058(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE ordering_information_component ADD COLUMN warranty character varying;")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160203114058(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE ordering_information_component DROP COLUMN warranty;")
+
+}

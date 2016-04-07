@@ -1,0 +1,18 @@
+Rlite = require 'rlite-router'
+nAJAX = require 'nanoajax'
+divvy = require '../js/divvy.js'
+
+routes = new Rlite()
+
+routes.add '', ->
+  nAJAX.ajax "#{ divvy.paths.html }/login.html", (code, res) ->
+    console.log $('body')[0].innerHTML = res
+    console.log res
+
+
+processHash = ->
+  hash = location.hash || '#'
+  routes.run hash.slice 1
+
+window.addEventListener 'hashchange', processHash
+processHash()

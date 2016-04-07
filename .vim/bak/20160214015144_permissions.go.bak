@@ -1,0 +1,65 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20160214015144(txn *sql.Tx) {
+	txn.Exec(`ALTER TABLE api_key ADD COLUMN role_name character varying;`)
+	txn.Exec(`UPDATE api_key SET role_name='ChannelManagerAdmin'
+	FROM (
+		SELECT api_key_id FROM roles LEFT JOIN role ON role.id = roles.role_id
+		WHERE role.role_name = 'channel_manager_admin'
+	) AS r
+	WHERE api_key.id = r.api_key_id;`)
+	txn.Exec(`UPDATE api_key SET role_name='APIClient'
+	FROM (
+		SELECT api_key_id FROM roles LEFT JOIN role ON role.id = roles.role_id
+		WHERE role.role_name = 'api_client'
+	) AS r
+	WHERE api_key.id = r.api_key_id;`)
+	txn.Exec(`UPDATE api_key SET role_name='SalesChannel'
+	FROM (
+		SELECT api_key_id FROM roles LEFT JOIN role ON role.id = roles.role_id
+		WHERE role.role_name = 'sales_channel'
+	) AS r
+	WHERE api_key.id = r.api_key_id;`)
+	txn.Exec(`UPDATE api_key SET role_name='DiscoverAdmin'
+	FROM (
+		SELECT api_key_id FROM roles LEFT JOIN role ON role.id = roles.role_id
+		WHERE role.role_name = 'discover_admin'
+	) AS r
+	WHERE api_key.id = r.api_key_id;`)
+	txn.Exec(`UPDATE api_key SET role_name='ManufacturerUser'
+	FROM (
+		SELECT api_key_id FROM roles LEFT JOIN role ON role.id = roles.role_id
+		WHERE role.role_name = 'mfr_admin'
+	) AS r
+	WHERE api_key.id = r.api_key_id;`)
+	txn.Exec(`UPDATE api_key SET role_name='ManufacturerUser'
+	FROM (
+		SELECT api_key_id FROM roles LEFT JOIN role ON role.id = roles.role_id
+		WHERE role.role_name = 'mfr_employee'
+	) AS r
+	WHERE api_key.id = r.api_key_id;`)
+	txn.Exec(`UPDATE api_key SET role_name='SalesChannelUser'
+	FROM (
+		SELECT api_key_id FROM roles LEFT JOIN role ON role.id = roles.role_id
+		WHERE role.role_name = 'sales_channel_admin'
+	) AS r
+	WHERE api_key.id = r.api_key_id;`)
+	txn.Exec(`UPDATE api_key SET role_name='SalesChannelUser'
+	FROM (
+		SELECT api_key_id FROM roles LEFT JOIN role ON role.id = roles.role_id
+		WHERE role.role_name = 'sales_channel_employee'
+	) AS r
+	WHERE api_key.id = r.api_key_id;`)
+	txn.Exec(`UPDATE visibility_component SET active = FALSE WHERE active IS NULL`)
+	txn.Exec(`ALTER TABLE visibility_component ALTER COLUMN active SET DEFAULT FALSE;`)
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160214015144(txn *sql.Tx) {
+	txn.Exec(`ALTER TABLE api_key DROP COLUMN role_name;`)
+}

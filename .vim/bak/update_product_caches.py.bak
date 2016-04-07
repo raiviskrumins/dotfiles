@@ -1,0 +1,26 @@
+from sqlalchemy import sql
+
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from amber_api import app
+from amber_api.models import db
+from amber_api.lib.assemblage import update_product_cache
+
+
+def chunks(l, n):
+    """ Yield successive n-sized chunks from l.
+    """
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
+
+if __name__ == '__main__':
+    with app.app_context():
+        product_ids = db.session.execute(
+            'select id from product_entity'
+        ).fetchall()
+        product_ids = [pid[0] for pid in product_ids]
+        prod_chunks = chunks(product_ids, 5000)
+        for chunk in prod_chunks:
+            update_product_cache(chunk)

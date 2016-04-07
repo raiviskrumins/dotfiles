@@ -1,0 +1,110 @@
+{
+    "instance": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "manufacturer_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "name": {
+            "type": "string",
+            "nullable": true
+        },
+        "description": {
+            "type": "string",
+            "nullable": true
+        },
+        "designed_by": {
+            "type": "string",
+            "nullable": true
+        }
+    },
+    "collection": {
+        "total": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "count": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "_embedded": {
+            "type": "object",
+            "object": {
+                "collections": {
+                    "type": "list",
+                    "element": {
+                        "type": "object",
+                        "template": "collection.json:instance"
+                    }
+                }
+            }
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        }
+    },
+    "retrieve-collection": [
+        {
+            "id": 3,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "collection.json:instance"
+            }
+        },
+        {
+            "id": -1,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "list-collections": [
+        {
+            "limit": 4,
+            "offset": 2,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661",
+                "data": {}
+            },
+            "response": {
+                "type": "object",
+                "template": "collection.json:collection"
+            }
+        },
+        {
+            "limit": 0,
+            "offset": 0,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661",
+                "data": {}
+            },
+            "response": {
+                "type": "object",
+                "template": "collection.json:collection"
+            }
+        }
+    ]
+}

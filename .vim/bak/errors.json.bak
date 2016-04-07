@@ -1,0 +1,87 @@
+{
+    "400": {
+        "status": {
+            "type": "int",
+            "value": 400
+        },
+        "code": {
+            "type": "string",
+            "value": "825644f"
+        },
+        "title": {
+            "type": "string",
+            "value": "Bad Request"
+        },
+        "message": {
+            "type": "string"
+        }
+    },
+    "401": {
+        "status": {
+            "type": "int",
+            "value": 401
+        },
+        "code": {
+            "type": "string",
+            "value": "67d64f6"
+        },
+        "title": {
+            "type": "string",
+            "value": "Not Authorized"
+        },
+        "message": {
+            "type": "string"
+        }
+    },
+    "404": {
+        "status": {
+            "type": "int",
+            "value": 404
+        },
+        "code": {
+            "type": "string",
+            "value": "9d1ead7"
+        },
+        "title": {
+            "type": "string",
+            "value": "Not Found"
+        },
+        "message": {
+            "type": "string"
+        }
+    },
+    "406": {
+        "status": {
+            "type": "int",
+            "value": 406
+        },
+        "code": {
+            "type": "string",
+            "value": "9d1ead7"
+        },
+        "title": {
+            "type": "string",
+            "value": "Not Accepted"
+        },
+        "message": {
+            "type": "string"
+        }
+    },
+    "500": {
+        "status": {
+            "type": "int",
+            "value": 500
+        },
+        "code": {
+            "type": "string",
+            "value": "dc94151"
+        },
+        "title": {
+            "type": "string",
+            "value": "Internal Server Error"
+        },
+        "message": {
+            "type": "string"
+        }
+    }
+}

@@ -1,0 +1,9 @@
+import json
+
+def encoder(object):
+    json_data = {
+        "class": object.__class__.__name__,
+        "module": object.__module__,
+        "data": object.__dict__
+    }
+    return d

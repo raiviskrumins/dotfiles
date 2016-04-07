@@ -1,0 +1,143 @@
+{% extends "base.jinja2" %}
+
+{% block content %}
+<div class="container_12">
+  <div class="wrapper indent-bottom4">
+    <div class="grid_6">
+      <div class="bg-color1 maxheight">
+        <div class="indents">
+          <h3 class="icon-1 p1">Hello!</h3>
+          Sunny Meadows Child Care’s goal is to provide a safe 
+          and happy place for children to learn and grow 
+          physically, emotionally, intellectually, and socially at 
+          their own pace.<br><br>
+          Our staff meet all applicable Michigan's State Regulations, and are
+          trained in Blood borne Pathogen CPR, First Aide Infant, Child and Adult.
+        </div>
+      </div>
+    </div>
+    <div class="grid_6 last-col">
+      <div class="bg-color3 maxheight">
+        <div class="indents">
+          <h3 class="icon-2 p1">Mission Statement</h3>
+          The mission of Sunny Meadows Child Care is to 
+          provide quality childcare for all families.  This service is 
+          given in a safe, healthy, and developmentally 
+          appropriate environment where trained and loving 
+          teachers provide educational opportunities for the well-rounded
+          growth and development of each child.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="wrapper indent-bottom4">
+    <div class="grid_4">
+      <figure>
+      <img src="static/img/page1-img1.jpg" alt="">
+      </figure>
+      <div class="bg-color2">
+        <div class="indents1">
+          <h3 class="p3">Program Philosophy</h3>
+          <p class="p2">
+                      We believe children learn through play and benefit 
+            from a structured, yet flexible schedule.  Activities that 
+            stimulate sensory motor development, language 
+            development, and social interaction are offered and the 
+            development of strong self-esteem is also a major goal.  
+            Children will be taught to respect each other, adults, and 
+            property.
+          </p>
+          <p class="p2">
+                      We respect parents as the primary and most 
+            important provider of care and nurturing, and believe 
+            parents and teachers are partners in a child’s care and 
+            education.
+            </p>
+        </div>
+      </div>
+      <a href="about" class="button bg-color1">More about us</a>
+    </div>
+    <div class="grid_4">
+      <h3 class="box-title bg-color4">Programs</h3>
+      <ul class="list-1">
+        <li>
+        <a href="programs#infant_toddler_program" class="bg-color5">
+          <div class="num">1</div>
+          <strong><u>Infants & Toddlers</u><strong><br><br>
+              By using defined practices of Toddler
+              development, caregivers develop close, supportive 
+              relationships with the children in their care and families.
+            </a>
+            </li>
+            <li>
+            <a href="programs#preshool_program" class="bg-color0">
+              <div class="num">2</div>
+              <strong><u>Preschoolers</u></strong><br><br>
+              Children start learning numbers, the alphabet, 
+              colors, shapes, eye-hand coordination, music melodies and
+              more! We use activities to foster the growth and development. 
+            </a>
+            </li>
+            <li>
+            <a href="programs#before_after_program" class="bg-color1">
+              <div class="num">3</div>
+              <strong><u>Before & After School</u></strong><br><br>
+              We provide indoor and outdoor activities, we offer arts 
+              and crafts, reading time we also have game time (game 
+              time is limited per day). School-age children can alsowork 
+              on homework after school before parents pick them up.  )
+            </a>
+            </li>
+          </ul>
+          <a href="programs" class="button bg-color3">View our programs</a>
+        </div>
+        <div class="grid_4 last-col">
+          <h3 class="box-title bg-color5">News</h3>
+          <ul class="list-2">
+            <li>
+            <figure class="img-indent">
+            <img src="static/img/page1-img2.jpg" alt="">
+            </figure>
+            <div class="extra-wrap">
+              <time datetime="2012-01-01" class="date1 bg-color1"><span>15</span>Sep</time>
+              <a href="#" class="bg-color6">Lorem ipsum dolor sit amet conse ctetur ad&shy;ipisicing</a>
+            </div>
+            </li>
+            <li>
+            <figure class="img-indent">
+            <img src="static/img/page1-img3.jpg" alt="">
+            </figure>
+            <div class="extra-wrap">
+              <time datetime="2012-01-01" class="date1 bg-color1"><span>11</span>Sep</time>
+              <a href="#" class="bg-color6">Ipsum dolor sit amet conse ctetur <br class="hide-tp">adipisicing</a>
+            </div>
+            </li>
+            <li>
+            <figure class="img-indent">
+            <img src="static/img/page1-img4.jpg" alt="">
+            </figure>
+            <div class="extra-wrap">
+              <time datetime="2012-01-01" class="date1 bg-color1"><span>09</span>Sep</time>
+              <a href="#" class="bg-color6">Dolor sit amet conse ctetur ad&shy;ipisicing</a>
+            </div>
+            </li>
+          </ul>
+          <a href="#" class="button bg-color4">See all</a>
+        </div>
+      </div>
+      <div class="wrapper">
+        <div class="grid_12">
+          <!--===================== subscribe form ====================-->
+          <form id="subs-form">
+            <fieldset>
+              <h3>Newsletter</h3>
+              <label class="email">
+                <input type="text">
+              </label>
+              <a onClick="document.getElementById('subs-form').submit()" class="button bg-color2">Go!</a>
+            </fieldset>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endblock %}

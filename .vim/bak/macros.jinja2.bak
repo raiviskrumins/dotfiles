@@ -1,0 +1,243 @@
+<!-- please use this one instead -->
+{% macro basic_field(field) %}
+<div class="form-group{% if field.errors %} has-error{% endif %}">
+    {% if kwargs.hide_label %}
+    <label class="empty-label"></label>
+    {% else %}
+        {% if kwargs.label %}
+        <label for="{{field._name}}">{{kwargs.label}}</label>
+        {% else %}
+        {{ field.label }}
+        {% endif %}
+    {% endif %}
+    {{ field(class_="form-control", **kwargs) }}
+    {% if field.errors %}
+    <span class="help-block">
+      {% for error in field.errors %}
+        {% if loop.last %}
+          {{ error }}
+        {% else %}
+          {{ error }}<br/>
+        {% endif %}
+      {% endfor %}
+    </span>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro multi_value_field(field, label) %}
+<div class="form-group{% if field.errors %} has-error{% endif %}">
+    {% if kwargs.hide_label %}
+    <label class="empty-label"></label>
+    {% else %}
+        {% if kwargs.label %}
+        <label for="{{field._name}}">{{kwargs.label}}</label>
+        {% else %}
+        {{ label }}
+        {% endif %}
+    {% endif %}
+    {{ field(class_="form-control", **kwargs) }}
+    {% if field.errors %}
+    <span class="help-block">
+      {% for error in field.errors %}
+        {% if loop.last %}
+          {{ error }}
+        {% else %}
+          {{ error }}<br/>
+        {% endif %}
+      {% endfor %}
+    </span>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro checkbox_field(field) %}
+<div class="checkbox{% if field.errors %} has-error{% endif %}">
+    <label>
+        {{field(**kwargs)}}
+        {% if kwargs.label %}
+        {{kwargs.label}}
+        {% else %}
+        {{field.label.text}}
+        {% endif %}
+    </label>
+    {% if field.errors %}
+    <span class="help-block">{% for error in field.errors %}{{error}} {% endfor %}</span>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro radio_field(field) %}
+<div class="{% if field.errors %} has-error{% endif %}">
+    <label for="{{ field.name }}">
+        {% if kwargs.label %}
+        {{kwargs.label}}
+        {% else %}
+        {{field.label.text}}
+        {% endif %}
+    </label>
+    {% for option in field %}
+    <div class="radio">
+        <label>
+            {{option(**kwargs)}}
+            {{option.label.text}}
+        </label>
+    </div>
+    {% endfor %}
+    {% if field.errors %}
+    <span class="help-block">{% for error in field.errors %}{{error}} {% endfor %}</span>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro append_field(field, append) %}
+<div class="form-group{% if field.errors %} has-error{% endif %}">
+    {% if kwargs.label %}
+    <label for="{{field._name}}">{{kwargs.label}}</label>
+    {% else %}
+    {{field.label}}
+    {% endif %}
+    <div class="input-group">
+        {{field(class_="form-control", **kwargs)}}
+        <span class="input-group-addon">{{append}}</span>
+    </div>
+    {% if field.errors %}
+    <span class="help-block">{% for error in field.errors %}{{error}} {% endfor %}</span>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro prepend_field(field, prepend) %}
+<div class="form-group{% if field.errors %} has-error{% endif %}">
+    {% if kwargs.label %}
+    <label for="{{field._name}}">{{kwargs.label}}</label>
+    {% else %}
+    {{field.label}}
+    {% endif %}
+    <div class="input-group">
+        <span class="input-group-addon">{{prepend}}</span>
+        {{field(class_="form-control", **kwargs)}}
+    </div>
+    {% if field.errors %}
+    <span class="help-block">{% for error in field.errors %}{{error}} {% endfor %}</span>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro expiration_field(month_field, year_field, label) %}
+{% set errors = month_field.errors + year_field.errors %}
+<div class="expiration-field{% if errors %} has-error{% endif %}">
+    <div class="form-inline">
+        <label>{{ label }}</label><br>
+        {% if kwargs.tabindex %}
+          {{ month_field(class_="form-control", maxlength="2", tabindex=kwargs.tabindex) }}
+        {% else %}
+          {{ month_field(class_="form-control", maxlength="2") }}
+        {% endif %}
+        <span>/</span>
+        {% if kwargs.tabindex %}
+          {{ year_field(class_="form-control", maxlength="4", tabindex=((kwargs.tabindex|int)+1)|string) }}
+        {% else %}
+          {{ year_field(class_="form-control", maxlength="4") }}
+        {% endif %}
+    </div>
+    {% if errors %}
+        <span class="help-block">{% for error in errors %}{{error}} {% endfor %}</span>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro hidden_field(field) %}
+<input type="hidden" name="{{ field.name }}" id="{{ field.id}}" value="{{ field.data or '' }}">
+{% endmacro %}
+
+
+{% macro nav_link(path, name) %}
+{% set current_path = request.path %}
+<a href="{{path}}" {% if current_path|starts_with(path) %}class="active"{% endif %}>{{name}}</a>
+{% endmacro %}
+
+{% macro collection_link(collection) %}
+{% set current_path = request.path %}
+{% set id = collection.id|string %}
+<a href="/products/collection/{{collection.id}}" {% if current_path|ends_with(id) %}class="active"{% endif %}>{{ collection.name }}</a>
+{% endmacro %}
+
+{% macro attribute_count(list) %}
+{% for arg in kwargs %}
+    {{ list|selectattr(arg, kwargs[arg]) }}
+{% endfor %}
+{{list|length}}
+{% endmacro %}
+
+{% macro collection_name(id) %}
+{% for collection in g.collections %}
+    {% if collection.id == id %}
+    {{collection.name}}
+    {% endif %}
+{% endfor %}
+{% endmacro %}
+
+{% macro image_upload(field) %}
+<button class="upload-btn btn btn-info text-center{% if kwargs.class %} {{kwargs.class}}{% endif %}">
+    {% if field.data %}
+        Update Image
+    {% else %}
+        Upload Image
+    {% endif %}
+</button>
+<div class="image-upload-wrapper pull-left{% if field.errors %} has-error{% endif %}{% if kwargs.class %} {{kwargs.class}}{% endif %}">
+    <div class="modal-image-holder text-center">
+        <span class="loading"><img src="/static/img/loading.gif"></span>
+        {% if field.data %}
+        <div class="placeholder-image has-image" style="background-image:url('{{field.data}}')"></div>
+        {% else %}
+        <div class="placeholder-image"></div>
+        {% endif %}
+    </div>
+    {% if field.errors %}
+    <span class="help-block">{% for error in field.errors %}{{error}} {% endfor %}</span>
+    {% endif %}
+</div>
+<input type="file" name="image_files" id="image_files" data-target="#{{field.name}}" data-path="{{kwargs.url}}" accept="image/jpg, image/jpeg, image/png">
+{{field}}
+{% endmacro %}
+
+{% macro next_product(prod_id, id_list) %}
+{% for id in id_list %}
+    {% if id == prod_id %}
+        {% if id_list[loop.index] %}
+        {{id_list[loop.index]}}
+        {% else %}
+        {{0}}
+        {% endif %}
+    {% endif %}
+{% endfor %}
+{% endmacro %}
+
+{% macro current_year() %}{{ ''|current_year }}{% endmacro %}
+
+{% macro export_progress(items, active) %}
+{% set size = 100 / items|count %}
+<ol class="breadcrumb">
+    {% for item in items %}
+    <li style="width:{{size}}%"{% if loop.index0 == active %} class="active"{% endif %}>{{item}}</li>
+    {% endfor %}
+</ol>
+{% endmacro %}
+
+{% macro fix_pluralization(component_name) -%}
+    {% if component_name == 'shelves' -%}
+        shelf
+    {% elif component_name == 'table_leaves' -%}
+        table leaf
+    {% elif component_name == 'glass' -%}
+        glass
+    {% elif component_name == 'keyword' -%}
+        keywords
+    {% elif component_name[-1] == 's' -%}
+        {{ component_name[:-1] }}
+    {% else -%}
+        {{ component_name }}
+    {% endif %}
+{%- endmacro %}

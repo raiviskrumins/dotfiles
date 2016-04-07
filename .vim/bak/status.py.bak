@@ -1,0 +1,32 @@
+from github import GitHub
+
+
+def _set_status(owner, repo, token, pr_sha, status):
+    if status not in ["pending", "success", "error", "failure"]:
+        status = "error"
+
+    desc = {
+        "pending": "Checking PR rebase status",
+        "success": "PR is rebased",
+        "error": "Something went wrong",
+        "failure": "PR is not rebased"
+    }.get(status)
+    GitHub(
+        access_token=token
+    ).repos(owner)(repo).statuses(pr_sha).post(
+        state=status,
+        description="",
+        context="rebase.space"
+    )
+
+
+def error(owner, repo, token, pr_sha):
+    _set_status(owner, repo, token, pr_sha, "error")
+
+
+def pending(owner, repo, token, pr_sha):
+    _set_status(owner, repo, token, pr_sha, "pending")
+
+
+def success(owner, repo, token, pr_sha):
+    _set_status(owner, repo, token, pr_sha, "success")

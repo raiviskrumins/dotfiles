@@ -1,0 +1,711 @@
+from flask import current_app
+from elasticsearch import Elasticsearch
+import datetime
+import itertools
+
+from amber_api.lib.manufacturer import get_manufacturer_category
+
+name_boost = '8'
+name_synonym_boost = '5'
+name_stemming_boost = '3'
+
+
+def create_es_connection():
+    return Elasticsearch(
+        [current_app.config.get('ELASTICSEARCH_URI', '127.0.0.1:9200')]
+    )
+
+
+class ManufacturerSearchDocument(object):
+    def __init__(
+        self,
+        id=None,
+        name=None,
+        date_added=None,
+        date_updated=None,
+        active=None,
+        featured=None,
+        logo_url=None,
+        url=None
+    ):
+        self.id = id
+        self.name = name
+        self.date_added = date_added
+        self.date_updated = date_updated
+        self.active = active
+        self.featured = featured
+        self.logo_url = logo_url
+        self.url = url
+
+        self._es = create_es_connection()
+        self._index = 'manufacturer-index'
+        self._doc_type = 'manufacturer'
+
+    def map_manufacturer(self, manufacturer):
+        """ Conforms a manufacturer dictionary to ManufacturerSearchDocument
+        """
+        self.id = manufacturer['id']
+        self.name = manufacturer['name']
+        self.date_added = strip_microseconds(manufacturer['date_added'])
+        self.date_updated = strip_microseconds(manufacturer['date_updated'])
+        self.active = manufacturer['active']
+        self.logo_url = manufacturer['logo_url']
+        self.url = manufacturer['url']
+
+    def create_manufacturer_document(self):
+        """ Creates a manufacturer document using elasticsearch api
+        """
+        self._es.create(
+            index=self._index,
+            doc_type=self._doc_type,
+            id=self.id,
+            body=self.to_dict()
+        )
+
+    def update_manufacturer_document(self):
+        """ Updates a manufacturer document using elasticsearch api
+        """
+        self._es.update(
+            index=self._index,
+            doc_type=self._doc_type,
+            id=self.id,
+            body={'doc': self.to_dict()}
+        )
+
+    def delete_manufacturer_index(self, manufacturer_id):
+        """ Deletes a manufacturer document using elasticsearch api
+        """
+        self._es.delete(
+            index=self._index,
+            doc_type=self._doc_type,
+            id=manufacturer_id
+        )
+
+    def to_dict(self):
+        """ Removes private variables and returns dictionary
+        of class variables
+        """
+        manufacturer_dict = {
+            name: value
+            for name, value
+            in self.__dict__.iteritems()
+            if not name.startswith('_')
+        }
+
+        return manufacturer_dict
+
+
+class SearchManufacturer(object):
+    def __init__(
+        self,
+        terms=None,
+        sort_key=None,
+        sort_direction=None,
+        offset=None,
+        limit=None,
+        filter_ids=None,
+        manufacturer_preview=None,
+        suggest_terms=None
+    ):
+        self.id = id
+        self.terms = terms
+        self.sort_key = sort_key
+        self.sort_direction = sort_direction
+        self.offset = offset
+        self.limit = limit
+        self.filter_ids = filter_ids
+        self.manufacturer_preview = manufacturer_preview
+        self.suggest_terms = suggest_terms
+
+        self._es = create_es_connection()
+        self._index = 'manufacturer-index'
+        self._search_body = self.build_search_body()
+
+    def build_search_body(self):
+        """ Assemble search body for manufacturer search
+        """
+        body = {}
+        query = {}
+        must = []
+
+        if self.offset:
+            body['from'] = self.offset
+        if self.limit:
+            body['size'] = self.limit
+        if self.sort_key:
+            if self.sort_key == 'name':
+                body['sort'] = {'name.raw': {'order': self.sort_direction}}
+            else:
+                body['sort'] = {'date_updated': {'order': self.sort_direction}}
+        if not self.manufacturer_preview:
+            must.append({'term': {'active': True}})
+        if self.filter_ids:
+            must.append({'ids': {'values': self.filter_ids}})
+        if self.suggest_terms:
+            # Used for trying to get results from a suggester
+            query = {'match_phrase': {'name': self.suggest_terms}}
+        elif self.terms:
+            query = {
+                'bool': {
+                    'should': [
+                        {'match': {'name': self.terms}},
+                        {'match_phrase_prefix': {'name': self.terms}}
+                    ]
+                }
+            }
+            body['suggest'] = {
+                'manufacturer-suggest': {
+                    'text': self.terms,
+                    'term': {
+                        'field': 'name',
+                        'size': '3'
+                    }
+                }
+            }
+        else:
+            query = {'match_all': {}}
+
+        body['query'] = {
+            'filtered': {
+                'query': query,
+                'filter': {
+                    'bool': {
+                        'must': must
+                    }
+                }
+            }
+        }
+
+        return body
+
+    def get_search_results(self):
+        """ Restructures elastic search results
+        """
+        result = {}
+
+        search_result = self._es.search(
+            index=self._index,
+            body=self._search_body
+        )
+
+        hits = search_result['hits']['hits']
+
+        if hits:
+            result['manufacturers'] = [
+                h['_source'] for h in hits
+            ]
+            for manufacturer in result['manufacturers']:
+                manufacturer['categories'] = [
+                    c[0] for c in get_manufacturer_category(manufacturer['id'])
+                ]
+                manufacturer['date_added'] = elastic_to_datetime(
+                    manufacturer['date_added']
+                )
+                manufacturer['date_updated'] = elastic_to_datetime(
+                    manufacturer['date_updated']
+                )
+            result['count'] = search_result['hits']['total']
+
+        if 'suggest' in search_result:
+            result['suggest'] = search_result['suggest']
+            result['phrases'] = build_phrases(
+                search_result['suggest']['manufacturer-suggest']
+            )
+
+        return result
+
+    def to_dict(self):
+        """ Removes private variables and returns dictionary
+        of class variables
+        """
+        search_dict = {
+            name: value
+            for name, value
+            in self.__dict__.iteritems()
+            if not name.startswith('_')
+        }
+
+        return search_dict
+
+
+class ProductSearchDocument(object):
+    def __init__(
+        self,
+        id=None,
+        name=None,
+        manufacturer_name=None,
+        manufacturer_id=None,
+        manufacturer_active=None,
+        manufacturer_sku=None,
+        description=None,
+        active=None,
+        meets_posting_requirements=None,
+        date_added=None,
+        date_updated=None,
+        category=None,
+        full_size_image=None,
+        thumbnail_image=None
+    ):
+        self.id = id
+        self.name = name
+        self.manufacturer_name = manufacturer_name
+        self.manufacturer_id = manufacturer_id
+        self.manufacturer_active = manufacturer_active
+        self.manufacturer_sku = manufacturer_sku
+        self.description = description
+        self.active = active
+        self.meets_posting_requirements = meets_posting_requirements
+        self.date_added = date_added
+        self.date_updated = date_updated
+        self.category = category
+        self.full_size_image = full_size_image
+        self.thumbnail_image = thumbnail_image
+
+        self._es = create_es_connection()
+        self._index = 'product-index'
+        self._doc_type = 'product'
+
+    def map_product(self, product):
+        """ Conforms a product dictionary to ProductSearchDocument
+        """
+        self.id = product['id']
+        self.name = product['identity']['name']
+        if 'manufacturer' in product['manufacturer']:
+            self.manufacturer_id = \
+                product['manufacturer']['manufacturer_id']
+            self.manufacturer_name = \
+                product['manufacturer']['manufacturer']['name']
+            self.manufacturer_active = \
+                product['manufacturer']['manufacturer']['active']
+        self.manufacturer_sku = \
+            product['identity']['manufacturer_sku']
+        self.description = product['description']['description']
+        self.active = product['visibility']['active']
+        self.meets_posting_requirements = \
+            product['visibility']['meets_posting_requirements']
+        self.date_added = strip_microseconds(product['audit']['date_added'])
+        self.date_updated = strip_microseconds(
+            product['audit']['date_updated']
+        )
+        self.category = product['category']['category']
+
+        if 'images' in product['image']:
+            for image in product['image']['images']:
+                if image['default']:
+                    self.full_size_image = image['full_size']
+                    self.thumbnail_image = image['thumbnail']
+
+    def create_product_index(self):
+        """ Creates a product document using elasticsearch api
+        """
+        self._es.create(
+            index=self._index,
+            doc_type=self._doc_type,
+            id=self.id,
+            body=self.to_dict()
+        )
+
+    def update_product_index(self):
+        """ Updates a product document using elasticsearch api
+        """
+        self._es.update(
+            index=self._index,
+            doc_type=self._doc_type,
+            id=self.id,
+            body={'doc': self.to_dict()}
+        )
+
+    def delete_product_index(self, product_id):
+        """ Deletes a product document using elasticsearch api
+        """
+        self._es.delete(
+            index=self._index,
+            doc_type=self._doc_type,
+            id=product_id
+        )
+
+    def update_image_fields(self, product_id, full_size=None, thumbnail=None):
+        """ Updates just the image fields in a
+        product document using elasticsearch api
+        """
+        self._es.update(
+            index=self._index,
+            doc_type=self._doc_type,
+            id=product_id,
+            body={
+                'doc': {
+                    'full_size_image': full_size,
+                    'thumbnail_image': thumbnail
+                }
+            }
+        )
+
+    def update_manufacturer_fields(
+        self,
+        product_id,
+        manufacturer_name=None,
+        manufacturer_active=None
+    ):
+        """ Updates just the manufacturer fields in a
+        product document using elasticsearch api
+        """
+        self._es.update(
+            index=self._index,
+            doc_type=self._doc_type,
+            id=product_id,
+            body={
+                'doc': {
+                    'manufacturer_name': manufacturer_name,
+                    'manufacturer_active': manufacturer_active
+                }
+            }
+        )
+
+    def to_dict(self):
+        """ Removes private variables and returns dictionary
+        of class variables
+        """
+        product_dict = {
+            name: value
+            for name, value
+            in self.__dict__.iteritems()
+            if not name.startswith('_')
+        }
+
+        return product_dict
+
+
+class SearchProduct(object):
+    def __init__(
+        self,
+        terms=None,
+        suggest_terms=None,
+        sort_key=None,
+        sort_direction=None,
+        date_limit=None,
+        date_comparator=None,
+        offset=None,
+        limit=None,
+        manufacturer_id=None,
+        manufacturer_preview=None,
+        product_filter_ids=None,
+        category=None
+    ):
+        self.terms = terms
+        self.suggest_terms = suggest_terms
+        self.sort_key = sort_key
+        self.sort_direction = sort_direction
+        self.date_limit = date_limit
+        self.date_comparator = date_comparator
+        self.offset = offset
+        self.limit = limit
+        self.manufacturer_id = manufacturer_id
+        self.manufacturer_preview = manufacturer_preview
+        self.product_filter_ids = product_filter_ids
+        self.category = category
+
+        self._es = create_es_connection()
+        self._index = 'product-index'
+        self._search_body = self.build_search_body()
+
+    def build_search_body(self):
+        """ Assembles a search body for product search
+        """
+        body = {}
+        query = {}
+        must = []
+
+        if self.offset:
+            body['from'] = self.offset
+        if self.limit:
+            body['size'] = self.limit
+        if self.sort_key:
+            if self.sort_key == 'name':
+                body['sort'] = {'name.raw': {'order': self.sort_direction}}
+            else:
+                body['sort'] = {'date_updated': {'order': self.sort_direction}}
+        if self.manufacturer_id:
+            must.append({'term': {'manufacturer_id': self.manufacturer_id}})
+        if not self.manufacturer_preview:
+            must.extend([
+                {'term': {'active': True}},
+                {'term': {'meets_posting_requirements': True}},
+                {'term': {'manufacturer_active': True}}
+            ])
+        if self.category:
+            must.append({'term': {'category': self.category}})
+        if self.date_limit and self.date_comparator:
+            must.append({
+                'range': {
+                    'date_added': {
+                        self.date_comparator: self.date_limit.replace(' ', 'T')
+                    }
+                }
+            })
+        if self.product_filter_ids:
+            must.append({'ids': {'values': self.product_filter_ids}})
+        if self.suggest_terms:
+            # Used for trying to get results from a suggester
+            query = {
+                'bool': {
+                    'should': [
+                        {'match_phrase': {'name': self.suggest_terms}},
+                        {'match_phrase': {'description': self.suggest_terms}},
+                        {
+                            'match_phrase': {
+                                'manufacturer_name': self.suggest_terms
+                            }
+                        }
+                    ]
+                }
+            }
+        elif self.terms:
+            # Using a nested bool query in order to keep name and
+            # cross_fields at a higher priority
+            query = {
+                'bool': {
+                    'should': [
+                        {'match': {'name.stemming': self.terms}},
+                        {'match': {'name.synonym': self.terms}},
+                        {'match': {'name': self.terms}},
+                        {'multi_match': {
+                            'query': self.terms,
+                            'type': 'cross_fields',
+                            'operator': 'and',
+                            'fields': [
+                                '^'.join(['name', name_boost]),
+                                '^'.join(['name.synonym', name_synonym_boost]),
+                                '^'.join(
+                                    ['name.stemming', name_stemming_boost]
+                                ),
+                                'description',
+                                'description.stemming',
+                                'description.synonym',
+                                'manufacturer_name',
+                                'manufacturer_sku',
+                            ]
+                        }},
+                        {'bool': {
+                            'should': [
+                                {
+                                    'match_phrase_prefix': {
+                                        'name': self.terms
+                                    }
+                                },
+                                {
+                                    'match_phrase_prefix': {
+                                        'name.synonym': self.terms
+                                    }
+                                },
+                                {
+                                    'match_phrase_prefix': {
+                                        'name.stemming': self.terms
+                                    }
+                                },
+                                {'match': {'manufacturer_name': self.terms}},
+                                {
+                                    'match_phrase_prefix': {
+                                        'manufacturer_name': self.terms
+                                    }
+                                },
+                                {'match': {'manufacturer_sku': self.terms}},
+                                {
+                                    'match_phrase_prefix': {
+                                        'manufacturer_sku': self.terms
+                                    }
+                                },
+                                {'match': {'description': self.terms}},
+                                {
+                                    'match_phrase_prefix': {
+                                        'description': self.terms
+                                    }
+                                },
+                                {'match': {'description.synonym': self.terms}},
+                                {
+                                    'match': {
+                                        'description.stemming': self.terms
+                                    }
+                                },
+                                {
+                                    'match_phrase_prefix': {
+                                        'description.stemming': self.terms
+                                    }
+                                },
+                                {
+                                    'match_phrase_prefix': {
+                                        'description.synonym': self.terms
+                                    }
+                                },
+                            ]
+                        }}
+                    ]
+                }
+            }
+            body['suggest'] = {
+                'text': self.terms,
+                'name-suggest': {
+                    'term': {
+                        'field': 'name',
+                        'size': '3'
+                    }
+                },
+                'manufacturer-name-suggest': {
+                    'term': {
+                        'field': 'manufacturer_name',
+                        'size': '3'
+                    }
+                },
+                'description-suggest': {
+                    'term': {
+                        'field': 'description',
+                        'size': '3'
+                    }
+                }
+            }
+        else:
+            query = {'match_all': {}}
+
+        body['query'] = {
+            'filtered': {
+                'query': query,
+                'filter': {
+                    'bool': {
+                        'must': must
+                    }
+                }
+            }
+        }
+
+        return body
+
+    def get_search_results(self):
+        """ Restructures elastic search results
+        """
+        result = {}
+
+        search_result = self._es.search(
+            index=self._index,
+            body=self._search_body
+        )
+
+        hits = search_result['hits']['hits']
+
+        if hits:
+            result['products'] = [
+                h['_source'] for h in hits
+            ]
+            for product in result['products']:
+                product['date_added'] = elastic_to_datetime(
+                    product['date_added']
+                )
+                product['date_updated'] = elastic_to_datetime(
+                    product['date_updated']
+                )
+            result['count'] = search_result['hits']['total']
+
+        if 'suggest' in search_result:
+            result['phrases'] = []
+            for k, v in search_result['suggest'].iteritems():
+                result['phrases'].extend(build_phrases(v))
+
+        return result
+
+    def get_manufacturer_product_list(self):
+        """ Returns a list of manufacturers and their ids for a product's
+        search result
+        """
+        result = {}
+       
+        curr_mfg_id = self.manufacturer_id = self.manufacturer_id
+        self.manufacturer_id = None
+
+        search_result = self._es.search(
+            index=self._index,
+            body=self.build_search_body()
+        )
+
+        self.manufacturer_id = curr_mfg_id
+
+        logf = open("/Users/curtislagraff/log.txt", "w")
+        import pprint
+        logf.write(pprint.pformat(self.build_search_body(), indent=4))
+        logf.close()
+
+        hits = search_result['hits']['hits']
+
+        if hits:
+            manufacturers = [
+                {
+                    'name': h['_source']['manufacturer_name'],
+                    'id': h['_source']['manufacturer_id']
+                } for h in hits
+            ]
+
+            # Creating a unique list
+            result['manufacturers'] = {
+                m['name']: m for m in manufacturers
+            }.values()
+
+        return result
+
+    def to_dict(self):
+        """ Removes private variables and returns dictionary
+        of class variables
+        """
+        search_dict = {
+            name: value
+            for name, value
+            in self.__dict__.iteritems()
+            if not name.startswith('_')
+        }
+
+        return search_dict
+
+
+def elastic_to_datetime(date):
+    """ Converts elasticsearch's time format to datetime
+    """
+    updated_date = datetime.datetime.strptime(
+        date,
+        "%Y-%m-%dT%H:%M:%S"
+    )
+
+    return updated_date
+
+
+def strip_microseconds(date):
+    """ Checks if date is a string and strips microseconds accordingly
+    """
+    s_date = None
+
+    if isinstance(date, basestring):
+        try:
+            s_date = datetime.datetime.strptime(
+                date,
+                "%Y-%m-%d %H:%M:%S.%f"
+            ).replace(microsecond=0)
+        except:
+            s_date = datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+    else:
+        s_date = date.replace(microsecond=0)
+
+    return s_date
+
+
+def build_phrases(suggestions):
+    """ Append terms to create a phrase
+    """
+    terms = []
+    phrases = []
+    for s in suggestions:
+        options = []
+        if s['options']:
+            for o in s['options']:
+                options.append(o['text'])
+        else:
+            options.append(s['text'])
+        terms.append(options)
+    for t in list(itertools.product(*terms)):
+        phrases.append(' '.join(t))
+
+    return phrases

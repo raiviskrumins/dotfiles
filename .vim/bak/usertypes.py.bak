@@ -1,0 +1,38 @@
+import sqlalchemy.types as types
+
+
+class PhoneType(types.TypeDecorator):
+    ''' A type representing a phone number and extension number,
+    retreived as a dict, but stored in the phone DB field as a 
+    single (possibly) delimited string.
+    '''
+
+    impl = types.String
+
+    def process_bind_param(self, value, dialect):
+        ''' Take the dictionary "value" parameter {phone, extension} and 
+        return a string containing the phone number, and a delimiter and 
+        extension number if it is provided.
+        '''
+
+        phone_number = value.get("phone")
+        extension = value.get("extension")
+
+        if len(extension) > 0:
+            phone_number += '#' + extension
+
+        return phone_number
+
+    def process_result_value(self, value, dialect):
+        ''' Take the string "value" parameter and return a dictionary
+        containing a phone number and (if possible) the extension number.
+        '''
+
+        phone_parts = value.split('#')
+        phone_number = value[0]
+        extension = ''
+
+        if len(phone_parts) == 2:
+            extension = value[1]
+
+        return {'phone': phone_number, 'extension': extension}

@@ -1,0 +1,157 @@
+package main
+
+import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/clagraff/argparse"
+)
+
+func main() {
+	p := argparse.NewParser("Construct and execute arguments from Stdin").Version("0.0.0")
+	p.AddHelp().AddVersion().Prog("exc") // Enable `--help` & `-h` to display usage text to the user.
+
+	pattern := argparse.NewArg("p pattern", "pattern", "Stdin regex grouping pattern").Default(".*")
+	split := argparse.NewArg("s split", "split", "Delimiting regex for Stdin").Default("\n")
+	nonEmpty := argparse.NewOption("e empty", "empty", "Allow empty text")
+	keepNewline := argparse.NewFlag("k keep-newline", "keep-newline", "Allow trailing newline from Stdin").Default("false")
+	command := argparse.NewOption("x exec", "exec", "Pasrable command string").Nargs("r").Action(argparse.Store)
+	replacementChar := argparse.NewArg("c char", "char", "Replacement string for argument parsing").Default("%")
+	dryRun := argparse.NewFlag("n dry-run", "dry", "Output commands instead of executing")
+	ignoreErrors := argparse.NewFlag("f force", "force", "Force continue command execution upon errored commands")
+
+	p.AddOptions(pattern, split, nonEmpty, command, replacementChar, dryRun, ignoreErrors, keepNewline)
+
+	ns, _, err := p.Parse(os.Args[1:]...)
+	switch err.(type) {
+	case argparse.ShowHelpErr:
+		return
+	case error:
+		fmt.Println(err, "\n")
+		p.ShowHelp()
+		return
+	}
+
+	var config struct {
+		AllowEmpty      bool
+		Command         string
+		DryRun          bool
+		IgnoreErrors    bool
+		KeepNewline     bool
+		ReplacementChar string
+		SplitPattern    string
+		TextPattern     string
+	}
+
+	config.TextPattern = ns.String("pattern")
+	config.SplitPattern = ns.String("split")
+	config.Command = strings.Join(ns.Slice("exec"), " ")
+	config.ReplacementChar = ns.String("char")
+
+	k := ns.String("keep-newline")
+	if k == "true" {
+		config.KeepNewline = true
+	}
+
+	e := ns.String("empty")
+	if e == "true" {
+		config.AllowEmpty = true
+	}
+
+	d := ns.String("dry")
+	if d == "true" {
+		config.DryRun = true
+	}
+
+	f := ns.String("force")
+	if f == "true" {
+		config.IgnoreErrors = true
+	}
+
+	// Began doing things
+	var stdInput string
+
+	fileInfo, err := os.Stdin.Stat()
+	if err != nil {
+		panic(err)
+	}
+
+	// If text has been piped to the program via Stdin...
+	if (fileInfo.Mode() & os.ModeCharDevice) == 0 {
+		bites, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			panic(err)
+		}
+
+		stdInput = string(bites)
+	}
+
+	if config.KeepNewline == false {
+		if len(stdInput) > 0 && stdInput[len(stdInput)-1] == '\n' {
+			if len(stdInput) > 1 {
+				stdInput = stdInput[0 : len(stdInput)-1]
+			} else {
+				stdInput = ""
+			}
+		}
+	}
+
+	splitRegex, err := regexp.Compile(config.SplitPattern)
+	if err != nil {
+		panic(err)
+	}
+
+	textRegex, err := regexp.Compile(config.TextPattern)
+	if err != nil {
+		panic(err)
+	}
+
+	var capturedText []string
+	matches := splitRegex.Split(stdInput, -1)
+	for _, v := range matches {
+		capturedText = append(capturedText, v)
+	}
+
+	var commands []string
+	for _, text := range capturedText {
+		matches := textRegex.FindAllStringSubmatch(text, -1)
+		for _, m := range matches {
+			if config.AllowEmpty == false && len(strings.Join(m, "")) == 0 {
+				continue
+			}
+			cmd := config.Command
+			for k, v := range m {
+				replacement := config.ReplacementChar + strconv.Itoa(k)
+				cmd = strings.Replace(cmd, replacement, v, -1)
+			}
+			if len(cmd) > 0 {
+				commands = append(commands, cmd)
+			}
+		}
+	}
+
+	for _, cmd := range commands {
+		if config.DryRun == true {
+			fmt.Println(cmd)
+		} else {
+			slice := strings.Split(cmd, " ")
+			prog := slice[0]
+
+			var args []string
+			if len(slice) > 1 {
+				args = slice[1:len(slice)]
+			}
+			out, err := exec.Command(prog, args...).Output()
+			if err != nil && config.IgnoreErrors == false {
+				panic(err)
+			}
+			print(string(out))
+		}
+	}
+
+}

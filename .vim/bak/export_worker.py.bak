@@ -1,0 +1,158 @@
+from cStringIO import StringIO
+import pika
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from datetime import datetime
+
+from amber_lib import client
+from amber_lib import connection as lib_conn
+from amber_portal.lib.utils import (
+    partial_product
+)
+from amber_portal.lib.spreadsheet_generator import SpreadsheetGenerator
+from amber_portal.lib.s3 import upload_xls_from_stream
+from amber_portal.models import db
+from amber_portal.models.export import Export, ExportMapping
+from amber_portal.models.user import CMUser
+from amber_portal import app, postman
+
+db.app = app
+
+
+def __amber_api_connection():
+    ctx = __amber_api_ctx()
+    return connection.Connection(ctx)
+
+
+def __amber_api_ctx():
+    return client.Context(
+        public=app.config['AMBER_API_PUBLIC'],
+        private=app.config['AMBER_API_PRIVATE'],
+        host='http://127.0.0.1',
+        port='8080'
+    )
+
+
+def flatten_option_set(product):
+    api_conn = __amber_api_connection()
+    option_set_data = {'options': []}
+    for option_set in product['option']['option_sets']:
+        product_option_sets = api_conn.OptionSet.retrieve(
+            option_set['option_set_id']
+        )
+        for option in product_option_sets.option_listing:
+            base = {
+                'manufacturer_id': product_option_sets.manufacturer_id,
+                'id': product_option_sets.id,
+                'set_name': product_option_sets.name,
+                'set_type': product_option_sets.type,
+            }
+            base.update(option)
+            option_set_data['options'].append(base)
+    return option_set_data
+
+
+
+
+def export_products(channel, method, properties, body):
+    """Worker that asynchronously processes requests to export product data
+    :param channel:
+    :param method:
+    :param body: (String) json containing the product data being exported
+    """
+    data = json.loads(body)
+    export = Export.query.get(data.get('export_id'))
+    export = Export.query.filter(Export.id == export.id).first()
+    db.session.add(export)
+    if export.status == 'running' or export.status == 'complete':
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+        return
+    export.status = 'running'
+    db.session.commit()
+    try:
+        product_ids = data.get('product_ids')
+        export_type_id = data.get('export_type')
+        export.mapping_id = export_type_id
+        db.session.commit()
+        export_type = ExportMapping.query.get(export_type_id)
+        api_conn = __amber_api_connection()
+
+        if not product_ids:
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+            return
+        stream = StringIO()
+        xlsx = True
+        #products = [amber_client.get_product(prod) for prod in product_ids]
+        products = [api_conn.Product.retrieve(id_) for id_ in product_ids]
+
+        if export_type.retailer == 'AmberEngine':
+            export_name = 'amberengine'
+        else:
+            export_name = export_type.name
+        generator = SpreadsheetGenerator(
+            export_name,
+            products,
+            export_name
+        )
+        workbook = generator.generate_spreadsheet()
+        workbook.save(stream)
+
+        stream.seek(0)
+        access = app.config['S3_ACCESS']
+        secret = app.config['S3_SECRET']
+        s3_bucket = app.config['S3_BUCKET']
+        filename = upload_xls_from_stream(
+            stream, access, secret, s3_bucket, is_xlsx=xlsx)
+
+        user = CMUser.query.filter_by(
+            manufacturer_id=export.user_manufacturer_id
+        ).first()
+
+        postman.deliver(
+            to=export.user_email,
+            subject='Your file is ready for download!',
+            template_name='export-complete',
+            template_vars={
+                'name': user.name,
+                'url': data.get('url'),
+            }
+        )
+
+        export.url = filename
+        export.date_exported = datetime.utcnow()
+        partial_data = [partial_product(p) for p in products]
+        export.partial_product_data = json.dumps(partial_data)
+        export.status = 'complete'
+        db.session.commit()
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+    except Exception as error:
+        export.message = str(error)
+        export.status = 'failed'
+        db.session.commit()
+        if data.get('url') is not None and 'amberengine.com' in data.get('url'):
+            postman.deliver(
+                to='error@amberengine.com',
+                subject='Export Worker Failure Notification',
+                template_name='export-error',
+                template_vars={
+                    'email': export.user_email,
+                    'export_id': export.id,
+                    'timestamp': datetime.utcnow(),
+                    'error': str(error),
+                    'url': data.get('url')
+                }
+            )
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+
+connection = pika.BlockingConnection(
+    pika.ConnectionParameters(
+        host='localhost'
+    )
+)
+channel = connection.channel()
+channel.queue_declare(queue='export_queue', durable=True)
+channel.basic_consume(export_products, queue='export_queue')
+channel.start_consuming()

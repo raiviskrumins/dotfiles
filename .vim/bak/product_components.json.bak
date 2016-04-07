@@ -1,0 +1,2215 @@
+{
+    "embedded": {
+        "kind": {
+            "type": "string",
+            "range": {
+                "min": 1
+            }
+        },
+        "self": {
+            "type": "string",
+            "range": {
+                "min": 1
+            }
+        }
+    },
+    "arm": {
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "style": {
+            "type": "string",
+            "nullable": true
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        }
+    },
+    "assemblage": {
+        "assemblage_element_list": {
+            "type": "list",
+            "element": {
+                "type": "object",
+                "object": {
+                    "child_component": {
+                        "type": "object",
+                        "template": "product_components.json:assemblage.assemblage_element_list.element.object",
+                        "nullable": true
+                    },
+                    "class_name": {
+                        "type": "string",
+                        "regex": ".+"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "id": {
+                        "type": "int",
+                        "range": {
+                            "min": 1
+                        }
+                    },
+                    "name": {
+                        "type": "string",
+                        "regex": ".+"
+                    },
+                    "parent_name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "table_name": {
+                        "type": "string",
+                        "regex": ".+"
+                    }
+                }
+            }
+        },
+        "description": {
+            "type": "string",
+            "regex": ".+"
+        },
+        "id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "name": {
+            "type": "string",
+            "regex": ".+"
+        }
+    },
+    "audit": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "date_added": {
+            "type": "string",
+            "regex": ".+"
+        },
+        "date_updated": {
+            "type": "string",
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "updated_by_api_key": {
+            "type": "string",
+            "regex": "[a-zA-Z0-9]{64}"
+        }
+    },
+    "base": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "diameter": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "depth": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "bulb": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "bulb_type": {
+            "type": "string",
+            "nullable": true
+        },
+        "base": {
+            "type": "string",
+            "nullable": true
+        },
+        "quantity": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "wattage": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "category": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "regex": ".+",
+            "nullable": true
+        },
+        "primary": {
+            "type": "string",
+            "regex": ".+"
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "secondary": {
+            "type": "string",
+            "regex": ".+",
+            "nullable": true
+        },
+        "tertiary": {
+            "type": "string",
+            "regex": ".+",
+            "nullable": true
+        }
+    },
+    "collection": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "collection_id": {
+            "type": "int",
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "collection": {
+            "type": "object",
+            "nullable": true,
+            "object": {
+                "_links": {
+                    "type": "object",
+                    "template": "hal.json:_links"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "designed_by": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "int",
+                    "range": {
+                        "min": 1
+                    }
+                },
+                "manufacturer_id": {
+                    "type": "int",
+                    "range": {
+                        "min": 1
+                    },
+                    "nullable": true
+                },
+                "name": {
+                    "type": "string",
+                    "regex": ".+"
+                }
+            }
+        }
+    },
+    "construction_information": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "joinery_type": {
+            "type": "string",
+            "nullable": true
+        },
+        "material": {
+            "type": "string",
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "regex": ".+",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        }
+    },
+    "cushions": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "cushion_list": {
+            "type": "list",
+            "element": {
+                "type": "object",
+                "template": "product_sub_components.json:cushion"
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "regex": ".+",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "quantity": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "description": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "alternate": {
+            "type": "string",
+            "nullable": true
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "designer": {
+            "type": "string",
+            "nullable": true
+        },
+        "features": {
+            "type": "string",
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "primary": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "retail": {
+            "type": "string",
+            "nullable": true
+        }
+    },
+    "doors": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "door_list": {
+            "type": "list",
+            "element": {
+                "type": "object",
+                "template": "product_sub_components.json:door"
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "quantity": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "drawers": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "drawer_list": {
+            "type": "list",
+            "element": {
+                "type": "object",
+                "template": "product_sub_components.json:drawer"
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "quantity": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "durability": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "flammability": {
+            "type": "string",
+            "nullable": true
+        },
+        "martindale": {
+            "type": "string",
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "wyzenbeek": {
+            "type": "string",
+            "nullable": true
+        }
+    },
+    "electrical": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "switch_type": {
+            "type": "string",
+            "nullable": true
+        },
+        "voltage": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "exterior_use": {
+            "type": "bool",
+            "nullable": true
+        }
+    },
+    "fiber": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "pile": {
+            "type": "string",
+            "nullable": true
+        },
+        "construction": {
+            "type": "string",
+            "regex": ".+"
+        }
+    },
+    "flame": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "fuel_type": {
+            "type": "string",
+            "nullable": true
+        },
+        "burner_capacity": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "burning_time": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "heat_output": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "minimum_room_size": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "footboard": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "depth": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "floor_clearance": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "footrest": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "frame": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "back_rail_height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "glass": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "glass_type": {
+            "type": "string",
+            "nullable": true
+        }
+    },
+    "headboard": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "depth": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "floor_clearance": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "identity": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "alternate_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "manufacturer_sku": {
+            "type": "string",
+            "nullable": true
+        },
+        "name": {
+            "type": "string",
+            "regex": ".+"
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "source_url": {
+            "type": "string",
+            "regex": "^http",
+            "nullable": true
+        }
+    },
+    "images": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "image_list": {
+            "type": "list",
+            "element": {
+                "type": "object",
+                "template": "product_sub_components.json:image"
+            }
+        }
+    },
+    "instruction": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "cleaning_directions": {
+            "type": "string",
+            "nullable": true
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "installation_directions": {
+            "type": "string",
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        }
+    },
+    "interior_dimension": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "depth": {
+            "type": "float",
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "leather": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "leather_type": {
+            "type": "string",
+            "nullable": true
+        },
+        "pattern_number": {
+            "type": "string",
+            "nullable": true
+        },
+        "hide_size": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "finish": {
+            "type": "string",
+            "nullable": true
+        },
+        "col_requirement": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "manufacturer": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "manufacturer": {
+            "type": "object",
+            "template": "manufacturer.json:instance"
+        },
+        "manufacturer_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        }
+    },
+    "option_sets": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "option_set_list": {
+            "type": "list",
+            "element": {
+                "type": "object",
+                "template": "product_sub_components.json:option_set"
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        }
+    },
+    "ordering_information": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "discontinued": {
+            "type": "bool",
+            "nullable": true
+        },
+        "lead_time": {
+            "type": "string",
+            "nullable": true
+        },
+        "minimum_quantity": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "quick_ship": {
+            "type": "string",
+            "nullable": true
+        },
+        "stock": {
+            "type": "int",
+            "nullable": true
+        },
+        "unit": {
+            "type": "string",
+            "nullable": true
+        }
+    },
+    "overall_dimension": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "depth": {
+            "type": "float",
+            "nullable": true
+        },
+        "diameter": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "pattern": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "color": {
+            "type": "string",
+            "nullable": true
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "design_type": {
+            "type": "string",
+            "nullable": true
+        },
+        "direction": {
+            "type": "string",
+            "nullable": true
+        },
+        "horizontal_repeat": {
+            "type": "float",
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "pattern_number": {
+            "type": "string",
+            "nullable": true
+        },
+        "scale": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "vertical_repeat": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "pedestal": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "depth": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "diameter": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "pillows": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "pillow_list": {
+            "type": "list",
+            "element": {
+                "template": "product_sub_components.json:pillow",
+                "type": "object"
+            },
+            "nullable": true
+        },
+        "quantity": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        }
+    },
+    "pricing": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "dealer_price": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "minimum_internet_price": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "msrp": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "trade_price": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "wholesale": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "promotional_tag": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "best_seller": {
+            "type": "bool",
+            "nullable": true
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "discontinued": {
+            "type": "bool",
+            "nullable": true
+        },
+        "limited_stock": {
+            "type": "bool",
+            "nullable": true
+        },
+        "new_product": {
+            "type": "bool",
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        }
+    },
+    "seat": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "construction": {
+            "type": "string",
+            "nullable": true
+        },
+        "depth": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "shelves": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "quantity": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "shelf_list": {
+            "type": "list",
+            "element": {
+                "type": "object",
+                "template": "product_sub_components.json:shelf"
+            },
+            "nullable": true
+        }
+    },
+    "shade": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "type": {
+            "type": "string",
+            "nullable": true
+        },
+        "height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "depth": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "diameter": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "material": {
+            "type": "string",
+            "nullable": true
+        },
+        "quantity": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "shipping_information": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "box_list": {
+            "type": "list",
+            "element": {
+                "type": "object",
+                "template": "product_sub_components.json:box"
+            },
+            "nullable": true
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "drop_ship": {
+            "type": "string",
+            "nullable": true
+        },
+        "freight": {
+            "type": "string",
+            "nullable": true
+        },
+        "notes": {
+            "type": "string",
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "ships_from": {
+            "type": "string",
+            "nullable": true
+        },
+        "standard": {
+            "type": "bool",
+            "nullable": true
+        },
+        "volume": {
+            "type": "float",
+            "nullable": true
+        },
+        "white_glove": {
+            "type": "string",
+            "nullable": true
+        }
+    },
+    "side_rail": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "length": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "floor_clearance": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "suspension_point": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "support_type": {
+            "type": "string",
+            "nullable": true
+        },
+        "canopy_diameter": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "minimum_hanging_length": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "maximum_hanging_length": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "chain_length": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "canopy_depth": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "canopy_width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "canopy_height": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "wire_length": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "table_leaves": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "quantity": {
+            "type": "int",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "table_leaf_list": {
+            "type": "object",
+            "template": "product_sub_components.json:table_leaf",
+            "nullable": true
+        }
+    },
+    "textile": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "com_requirement": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "content": {
+            "type": "string",
+            "nullable": true
+        },
+        "grade": {
+            "type": "string",
+            "nullable": true
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "treatment": {
+            "type": "string",
+            "nullable": true
+        },
+        "usage": {
+            "type": "string",
+            "nullable": true
+        },
+        "weave_type": {
+            "type": "string",
+            "nullable": true
+        },
+        "width": {
+            "type": "float",
+            "range": {
+                "min": 0
+            },
+            "nullable": true
+        }
+    },
+    "visibility": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "active": {
+            "type": "bool"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "meets_posting_requirements": {
+            "type": "bool"
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        }
+    },
+    "weight": {
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        },
+        "component_data_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "parent_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "parent_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "product_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "weight": {
+            "type": "float",
+            "nullable": true
+        }
+    }
+}

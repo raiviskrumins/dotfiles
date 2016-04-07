@@ -1,0 +1,15 @@
+Welcome To Channel Manager, {{first_name}}
+
+The most advanced home furnishings product database is on its way, and we are pleased to share this early release with you. From this portal you can add, edit, and delete your product data; choose which channels can access your product information; setup data feeds and create data exports. We are thrilled to give you early access, and cannot wait to tell you more about the robust network we’re building. Ready to manage product data more efficiently and give your brand the marketplace visibility it deserves? So are we.
+
+Here is your login information. You’ll want to save this for your records:
+
+Email address:    {{email}}
+
+Thank you for choosing Amber Engine to be your technology partner.
+
+We look forward to working with you,
+
+The Amber Engine Team
+
+Go to your portal: http://channel-manager.amberengine.com/login

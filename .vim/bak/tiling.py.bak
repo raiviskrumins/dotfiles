@@ -1,0 +1,92 @@
+import os
+
+import pygame
+import pygame.freetype
+
+import game.containers as containers
+import game.jsonify as jsonify
+import game.settings as settings
+
+
+class Tile(jsonify.Storage.Specified):
+    def __init__(
+            self, 
+            character=" ", 
+            background=(255, 255, 255),
+            foreground=(0, 0, 0),
+            position=(0, 0)
+    ):
+        jsonify.Storage.Specified.__init__(
+            self,
+            "character",
+            "background",
+            "foreground",
+            "position"
+        )
+        
+        self.character = character
+        self.background = background
+        self.foreground = foreground
+        self.position = containers.GridPos(position)
+
+        self.surface = pygame.Surface(
+            (settings.TILE_SIZE, settings.TILE_SIZE),
+            pygame.SRCALPHA
+        )
+
+        self.ttf = pygame.freetype.Font(settings.DEFAULT_FONT, settings.TILE_SIZE)
+        self.dirty = True
+
+    def render(self):
+        self.surface = self.ttf.render(
+                self.character,
+                self.foreground,
+                self.background
+        )[0]
+        self.size = self.surface.get_rect().size
+
+
+def from_string(text_map, object_reference):
+    map_data = []
+    object_data = []
+
+    lines = text_map.split("\n")
+    for row, line in enumerate(lines):
+        for column, character in enumerate(line):
+            object_ = object_reference[character]()
+            object_.position.move(row, column)
+            
+            object_data.append(object_)
+            map_data.append(object_.view)
+    
+    return (object_data, map_data)
+
+
+class TileMap(jsonify.Storage.Specified):
+    def __init__(self, size):
+        jsonify.Storage.Specified.__init__(self, "tiles")
+        self.surface = pygame.Surface(size, pygame.SRCALPHA)
+        self.tiles = []
+
+    def render(self):
+        self.surface.fill((255, 255, 255))
+        print("Rect size: ", self.surface.get_size())
+        for tile in self.tiles:
+            tile.render()
+    
+            # Generate position translation from grid-coordinates,
+            # and calculate font-centering offset spacing.
+            (x, y) = tile.position.get()
+            x *= settings.TILE_SIZE
+            y *= settings.TILE_SIZE
+
+            (width, height) = tile.size
+
+            x += (settings.TILE_SIZE / 2) - (width / 2)
+            y += (settings.TILE_SIZE / 2) - (height / 2)
+
+            self.surface.blit(
+                tile.surface, 
+                (x, y)
+            )        
+

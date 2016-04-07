@@ -1,0 +1,459 @@
+import unittest
+import unittest.mock as mock
+
+from flask.ext.testing import TestCase as FlaskTestCase
+
+
+from amber_portal import app
+from amber_portal.forms import user as user_form
+from amber_portal.views import auth, user as user_view
+from amber_portal.models import db
+
+from flask.ext import login
+
+from flask import g
+
+
+class AuthenticatedUser(login.UserMixin):
+    admin = False
+    called = False
+    manufacturer_id = 42
+
+    def set_admin(self, can_admin):
+        self.admin = can_admin
+
+    def is_authenticated(self):
+        return True
+
+    def is_active(self):
+        return True
+
+    def is_anonymous(self):
+        return False
+
+    def get_id(self):
+        return "Test User"
+
+    def has_role(self, unused_role):
+        return True
+
+
+class UserViewTests(FlaskTestCase):
+
+    def create_app(self):
+        app.config.from_object('config.TestingConfig')
+        return app
+
+    def setUp(self):
+        self.client = self.app.test_client()
+        self._ctx = self.app.test_request_context()
+        self._ctx.push()
+        db.create_all()
+
+    def tearDown(self):
+        db.session.remove()
+        db.drop_all()
+
+    @mock.patch('amber_portal.views.user_test.user_view.CMUserRole.query')
+    @mock.patch('amber_portal.views.user_test.user_view.render_template')
+    @mock.patch('amber_portal.views.user_test.user_view.NewUserForm')
+    @mock.patch('amber_portal.views.user_test.user_view.get_current_user')
+    @mock.patch('amber_portal.views.user_test.user_view.manufacturer_list')
+    @mock.patch('amber_portal.views.user_test.auth.get_current_user')
+    def testAddUser(
+        self,
+        auth_curr_user,
+        mock_mfr_list,
+        mock_get_user,
+        mock_user_form,
+        mock_render,
+        mock_role_query
+    ):
+        """ Test add_user route.
+        """
+        mock_user = AuthenticatedUser()
+        mock_get_user.return_value = mock_user
+        auth_curr_user.return_value = mock_user
+        g.user = mock_user
+        mock_mfr_list.return_value = [('1337', 'Mock Mfr')]
+
+        mock_form = mock.Mock()
+        mock_user_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = False
+
+        mock_role_query.all.return_value = []
+
+        user_view.add_user()
+        self.assertIn(
+            mock.call('admin/new_user.jinja2', form=mock_form),
+            mock_render.call_args_list,
+            'The proper render_template() call was not made.'
+        )
+
+    @mock.patch('amber_portal.views.user_test.user_view.CMUserRole.query')
+    @mock.patch('amber_portal.views.user_test.user_view.redirect')
+    @mock.patch('amber_portal.views.user_test.user_view.NewUserForm')
+    @mock.patch('amber_portal.views.user_test.user_view.get_current_user')
+    @mock.patch('amber_portal.views.user_test.user_view.manufacturer_list')
+    @mock.patch('amber_portal.views.user_test.auth.get_current_user')
+    @mock.patch('amber_portal.views.user_test.user_view.amber_api_connection')
+    @mock.patch('amber_portal.views.user_test.user_view.db')
+    @mock.patch('amber_portal.views.user_test.user_view.CMUser')
+    def testAddUserValidOnSubmit(
+            self,
+            mock_user,
+            mock_db,
+            mock_api,
+            auth_curr_user,
+            mock_mfr_list,
+            mock_get_user,
+            mock_user_form,
+            mock_redirect,
+            mock_role_query
+    ):
+        """ Test add_user route which validates properly.
+        """
+        mock_user.return_value = mock_user
+        mock_user.id = 1337
+
+        mock_session = mock.Mock()
+        mock_db.session = mock_session
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_client.add_manufacturer = mock.Mock()
+        mock_client.add_manufacturer.return_value = mock.MagicMock()
+        mock_client.add_user_key = mock.Mock()
+        mock_client.add_user_key.return_value = {
+            'public': 'pubkey',
+            'private': 'privkey'
+        }
+
+        mock_form = mock.Mock(user_form.NewUserForm())
+        mock_user_form.return_value = mock_form
+
+        mock_role_query.all.return_value = []
+
+        mock_user = AuthenticatedUser()
+        mock_get_user.return_value = mock_user
+        auth_curr_user.return_value = mock_user
+        g.user = mock_user
+
+        mock_mfr_list.return_value = [('1337', 'Mock Mfr')]
+
+        mock_form.validate_on_submit = mock.Mock()
+        mock_form.validate_on_submit.return_value = True
+        mock_form.data = mock.MagicMock()
+
+        user_view.add_user()
+
+        self.assertIn(
+            mock.call(
+                'admin/users/1337'
+            ),
+            mock_redirect.call_args_list,
+            'The proper redirect was not called.'
+        )
+
+    @mock.patch('amber_portal.views.user_test.user_view.render_template')
+    @mock.patch('amber_portal.views.user_test.user_view.amber_api_connection')
+    @mock.patch('amber_portal.views.user_test.user_view.CMUser.query')
+    @mock.patch('amber_portal.views.user_test.user_view.get_current_user')
+    @mock.patch('amber_portal.views.user_test.auth.get_current_user')
+    def testUserGet(
+            self,
+            auth_curr_user,
+            mock_curr_user,
+            mock_query,
+            mock_api,
+            mock_render
+    ):
+        """ Test user_get route.
+        """
+        mock_user = AuthenticatedUser()
+        mock_curr_user.return_value = mock_user
+        auth_curr_user.return_value = mock_user
+        g.user = mock_user
+
+        mock_cm_user = mock.Mock()
+        mock_query.get.return_value = mock_cm_user
+        mock_user.set_admin(True)
+        mock_cm_user.roles = mock.MagicMock()
+        mock_cm_user.id = 42
+        mock_cm_user.manufacturer_id = 1337
+        mock_cm_user.public = 100
+        mock_cm_user.stripe_customer = None
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_client.get_logs = mock.Mock()
+        mock_client.get_logs.return_value = []
+        mock_mfr = mock.Mock()
+        mock_client.Manufacturer.retrieve.return_value = mock_mfr
+        mock_mfr.id = 1337
+
+        user_view.user_get(1234)
+
+        mock_render.assert_called_once_with(
+            'admin/user.jinja2',
+            customer=None,
+            invoices=[],
+            manufacturer=mock_mfr,
+            user=mock_cm_user
+        )
+
+        mock_query.get.assert_called_once_with(1234)
+        mock_client.Manufacturer.retrieve.assert_called_once_with(1337)
+
+    @mock.patch('amber_portal.views.user_test.user_view.redirect')
+    @mock.patch('amber_portal.views.user_test.user_view.db')
+    @mock.patch('amber_portal.views.user_test.user_view.CMUserRole.query')
+    @mock.patch('amber_portal.views.user_test.user_view.manufacturer_list')
+    @mock.patch('amber_portal.views.user_test.user_view.NewUserForm')
+    @mock.patch('amber_portal.views.user_test.user_view.query.Predicate')
+    @mock.patch('amber_portal.views.user_test.user_view.amber_api_connection')
+    @mock.patch('amber_portal.views.user_test.user_view.CMUser.query')
+    @mock.patch('amber_portal.views.user_test.user_view.get_current_user')
+    @mock.patch('amber_portal.views.user_test.auth.get_current_user')
+    def testUserEditGetValidOnSubmit(
+            self,
+            auth_curr_user,
+            mock_curr_user,
+            mock_query,
+            mock_api,
+            mock_query_predicate,
+            mock_user_form,
+            mock_mfr_list,
+            mock_role_query,
+            mock_db,
+            mock_redirect
+    ):
+        """ Test user_edit_get route which validates properly.
+        """
+        mock_user = AuthenticatedUser()
+        mock_curr_user.return_value = mock_user
+        auth_curr_user.return_value = mock_user
+        g.user = mock_user
+
+        mock_cm_user = mock.Mock()
+        mock_query.filter_by.return_value = mock.Mock()
+        mock_query.filter_by.return_value.first.return_value = mock_cm_user
+        mock_user.set_admin(True)
+        mock_cm_user.id = 1234
+        mock_cm_user.name = 'testuser'
+        mock_cm_user.email = 'testuser@test.test'
+        mock_cm_user.public = 'pubkey'
+
+        mock_form = mock.Mock()
+        mock_user_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = True
+        mock_form.data = {}
+        mock_form.data['name'] = 'testuser'
+        mock_form.data['email'] = 'testuser@test.test'
+        mock_form.data['roles'] = [13]
+        mock_form.data['manufacturers'] = 1337
+        mock_form.data['password'] = 'testsecret'
+
+        mock_mfr_list.return_value = [('1337', 'Mock Mfr')]
+        mock_role = mock.Mock()
+        mock_cm_user.roles = [mock_role]
+        mock_role_query.all.return_value = [mock_role]
+        mock_role_query.filter_by.return_value.first.return_value = mock_role
+        mock_role.id = 13
+        mock_role.name = mock.Mock()
+        mock_role.name.title.return_value = 'TestRole'
+
+        api_key_data = {
+            'name': 'testuser@test.test',
+            'manufacturer_id': 1337
+        }
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_key = mock.Mock()
+        mock_client.APIKey.query.return_value = [mock_key]
+
+        user_view.user_edit_get(1234)
+
+        self.assertIn(
+            mock.call('/admin/users/1234'),
+            mock_redirect.call_args_list,
+            'The proper redirect was not returned.'
+        )
+
+        mock_client.APIKey.query.assert_called_once_with(
+            filtering=mock_query_predicate.return_value
+        )
+
+        mock_key.update.assert_called_once_with(api_key_data)
+
+        self.assertIn(
+            mock.call.set_password('testsecret'), mock_cm_user.method_calls,
+            'The CMUser object\'s password was not properly updated'
+        )
+
+    @mock.patch('amber_portal.views.user_test.user_view.render_template')
+    @mock.patch('amber_portal.views.user_test.user_view.CMUserRole.query')
+    @mock.patch('amber_portal.views.user_test.user_view.manufacturer_list')
+    @mock.patch('amber_portal.views.user_test.user_view.NewUserForm')
+    @mock.patch('amber_portal.views.user_test.user_view.amber_api_connection')
+    @mock.patch('amber_portal.views.user_test.user_view.CMUser.query')
+    @mock.patch('amber_portal.views.user_test.user_view.get_current_user')
+    @mock.patch('amber_portal.views.user_test.auth.get_current_user')
+    def testUserEditGetInvalidOnSubmit(
+            self,
+            auth_curr_user,
+            mock_curr_user,
+            mock_query,
+            mock_api,
+            mock_user_form,
+            mock_mfr_list,
+            mock_role_query,
+            mock_render
+    ):
+        """ Test user_edit_get route where form doesn't validate.
+        """
+        mock_user = AuthenticatedUser()
+        mock_curr_user.return_value = mock_user
+        auth_curr_user.return_value = mock_user
+        g.user = mock_user
+
+        mock_cm_user = mock.Mock()
+        mock_query.filter_by.return_value = mock.Mock()
+        mock_query.filter_by.return_value.first.return_value = mock_cm_user
+        mock_user.set_admin(True)
+        mock_cm_user.id = 1234
+        mock_cm_user.name = 'testuser'
+        mock_cm_user.email = 'testuser@test.test'
+        mock_cm_user.public = 'pubkey'
+
+        mock_form = mock.Mock()
+        mock_user_form.return_value = mock_form
+        mock_form.validate_on_submit.return_value = False
+        mock_form.errors = []
+        mock_form.name.errors = []
+        mock_form.email.errors = []
+        mock_form.password.errors = []
+        mock_form.roles = mock.MagicMock()
+        mock_form.roles.errors = []
+        mock_form.manufacturers.errors = []
+
+        mock_mfr_list.return_value = [('1337', 'Mock Mfr')]
+        mock_role = mock.Mock()
+        mock_cm_user.roles = [mock_role]
+        mock_role_query.all.return_value = [mock_role]
+        mock_role_query.filter_by.return_value.first.return_value = mock_role
+        mock_role.id = 13
+        mock_role.name = mock.Mock()
+        mock_role.name.title.return_value = 'TestRole'
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_key = {}
+        mock_client.get_user_key_by_public_key.return_value = mock_key
+        mock_key['id'] = 1234
+
+        mock_render.return_value = u'unicode response'
+
+        user_view.user_edit_get(1234)
+
+        self.assertIn(
+            mock.call(
+                'admin/new_user.jinja2',
+                form=mock_form,
+                user=mock_cm_user
+            ),
+            mock_render.call_args_list,
+            'render_template() was called with the improper arguments.'
+        )
+        self.assertIn(
+            mock.call.validate_on_submit(),
+            mock_form.method_calls,
+            'validate_on_submit() was not called for the NewProductForm()'
+        )
+
+    @mock.patch('amber_portal.views.user_test.user_view.redirect')
+    @mock.patch('amber_portal.views.user_test.user_view.db')
+    @mock.patch('amber_portal.views.user_test.user_view.CMUser.query')
+    @mock.patch('amber_portal.views.user_test.user_view.query.Predicate')
+    @mock.patch('amber_portal.views.user_test.user_view.amber_api_connection')
+    @mock.patch('amber_portal.views.user_test.user_view.get_current_user')
+    @mock.patch('amber_portal.views.user_test.auth.get_current_user')
+    def testUserDeleteGet(
+        self,
+        auth_curr_user,
+        mock_curr_user,
+        mock_api,
+        mock_query_predicate,
+        mock_query,
+        mock_db,
+        mock_redirect
+    ):
+        """ Test user_delete_get route.
+        """
+        mock_user = AuthenticatedUser()
+        mock_curr_user.return_value = mock_user
+        auth_curr_user.return_value = mock_user
+        g.user = mock_user
+
+        mock_client = mock.Mock()
+        mock_api.return_value = mock_client
+        mock_client.APIKey.query.return_value = mock.MagicMock()
+
+        mock_cm_user = mock.Mock()
+        mock_query.filter_by.return_value = mock.Mock()
+        mock_query.filter_by.return_value.first.return_value = mock_cm_user
+        mock_user.set_admin(True)
+
+        user_view.user_delete_get(1234)
+
+        self.assertIn(
+            mock.call('/admin/users'),
+            mock_redirect.call_args_list,
+            'The proper redirect was not made.'
+        )
+
+        mock_client.APIKey.query.assert_called_once_with(
+            filtering=mock_query_predicate.return_value
+        )
+        mock_client.APIKey.query.return_value.delete.assert_called_once_with()
+
+        self.assertIn(
+            mock.call.session.add(mock_cm_user),
+            mock_db.method_calls,
+            'DB changes may not have been properly executed.'
+        )
+
+    @mock.patch('amber_portal.views.user_test.user_view.render_template')
+    @mock.patch('amber_portal.views.user_test.user_view.CMUser.query')
+    @mock.patch('amber_portal.views.user_test.user_view.get_current_user')
+    @mock.patch('amber_portal.views.user_test.auth.get_current_user')
+    def testUsersGet(
+        self,
+        auth_curr_user,
+        mock_curr_user,
+        mock_query,
+        mock_render
+    ):
+        """ Test users_get route.
+        """
+        mock_user = AuthenticatedUser()
+        mock_curr_user.return_value = mock_user
+        auth_curr_user.return_value = mock_user
+        g.user = mock_user
+
+        mock_employee = mock.Mock()
+        mock_query.all.return_value = [mock_employee]
+        mock_user.set_admin(True)
+
+        user_view.users_get()
+
+        self.assertIn(
+            mock.call('admin/users.jinja2', users=[mock_employee]),
+            mock_render.call_args_list,
+            'The page was not properly rendered.'
+        )
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -1,0 +1,29 @@
+import sqlalchemy.types as types
+
+class PhoneType(types.TypeDecorator):
+    '''Handles phone number and extension
+    number values which are stored as a single
+    String field within the DB.
+    '''
+
+    impl = types.String
+
+
+    def process_result_value(self, value, dialect):
+        result = value['number']
+        if value['extension']:
+            result += u'#' + value['extension']
+
+        return result
+
+    def process_result_value(self, value, dialect):
+        phone_dict = {'number': u'', 'extension': u''}
+
+        unpacked = value.split("#")
+        phone_dict['number'] = unpacked[0]
+        
+        if len(unpacked) == 2:
+            phone_dict['extension'] = unpacked[1]
+
+        return phone_dict
+

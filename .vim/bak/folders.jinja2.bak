@@ -1,0 +1,115 @@
+{% extends "index.jinja2" %}
+
+{% block javascript %}
+  {{ super() }}
+  <script type="text/javascript" src="{{ url_for('static', filename='js/min/folder.min.js') }}"></script>
+{% endblock %}
+
+{% block content_main %}
+<div class="row">
+  <div class="col-md-12">
+    <span class="alert-section">
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-success alert-dismissable" role="alert">
+      <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+      <span aria-hidden="true" class="icon-x"></span></button>{{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+    </span>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-12">
+    <h1>Folders ({{ folders|length }})</h1>
+  </div>
+</div>
+<div class="row toolbar">
+  <form action="/products" method="POST" id="queryForm">
+  <div class="col-md-4">
+    <div class="form-group">
+        <input class="form-control" hide_label id="folder-search" name="search" placeholder="Search Product Folders" type="text" data-toggle="hideseek" data-list=".folders" value="">
+    </div>
+    <a href="#" class="js-clear-search clear-search"><span class="icon-x"></span></a>
+
+  </div>
+  <div class="col-md-8 add-folder-container">
+    <button class="btn btn-primary js-create-folder-modal" data-ref="/folders/add">Add New Folder</button>
+  </div>
+  </form>
+</div><!-- end of row -->
+
+<div class="row">
+  <div class="col-md-12">
+    <hr class="folders-hr" />
+  </div>
+</div>
+
+<div class="folders">
+  {% for folder in folders %}
+    <div class="row folder-row">
+      <div class="col-sm-4">
+        <a href="{{ url_for('folder_view.folder_product_list', folder_id=folder.id) }}">
+          <img src="{{ folder.cover_image or url_for('static', filename='img/gui/noimage.svg') }}" class="folder-list-image"/>
+        </a>
+      </div><!-- end folder-logo -->
+
+      <div class="col-sm-8">
+<<<<<<< HEAD
+        <div class="folder-description row">
+          <div class="folder-buttons visible-lg-block hidden-sm hidden-xs">
+=======
+        <div class="folder-description">
+          <div class="folder-buttons visible-lg-block">
+>>>>>>> 40dc6e9fb81ac7d0d8a239a9695a13d1e82e58fa
+            <button class="js-show-edit-folder btn btn-info edit-folder-btn" data-folder-id="{{ folder.id }}" data-action-url="{{ url_for('folder_view.folder_edit', id=folder.id) }}" data-ref="/folder/edit">Edit Folder</button>
+          </div>
+          <h2 class="folder-name col-sm-12 col-md-10">
+            <a href="{{ url_for('folder_view.folder_product_list', folder_id=folder.id) }}">{{ folder.name }}</a>
+          </h2>
+
+          <div class="folder-categories col-sm-12">
+            <p><strong>Created:</strong> {{ folder.date_created|string_date_format(format='%B %d, %Y') }}</p>
+            {%- if folder.categories|length > 0 -%}
+            <p><strong>Categories: </strong>
+              {{ folder.categories|join(', ') }}
+            </p>
+            {%- endif-%}
+            <p class="folder-products-number">
+              {{ folder.products|length }}
+              {% if folder.products|length == 1 -%}
+                Product
+              {%- else -%}
+                Products
+              {%- endif -%}
+            </p>
+            <p class="hidden-lg"><a href="#" class="js-show-edit-folder" data-folder-id="{{ folder.id }}" data-action-url="{{ url_for('folder_view.folder_edit', id=folder.id) }}" data-ref="/folder/edit">Edit Folder</a></p>
+          </div>
+
+          <!-- <p class="product-count pull-left">Products</p>
+          left in for future use
+          -->
+        </div><!-- end manufacturer decription -->
+      </div>
+      <div class="col-sm-12">
+        <div class="folder-bottom-border"></div>
+      </div>
+    </div><!-- end manufacturer row -->
+  {% else %}
+    <div class="row">
+      <div class="col-md-12">
+        <div id="no-folders">
+          <img src="/static/img/gui/folders_empty.svg" class="empty-folder" />
+          <h3>You haven't added any folders yet.</h3>
+          <p>Add a folder by clicking on the "Add New Folder" button.</p>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div><!-- end manufacturers -->
+
+{% endblock content_main %}

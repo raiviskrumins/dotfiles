@@ -1,0 +1,53 @@
+{
+    "_links": {
+        "self": {
+            "type": "object",
+            "object": {
+                "href": {
+                    "type": "string",
+                    "regex": ".+"
+                }
+            }
+        },
+        "first": {
+            "type": "object",
+            "object": {
+                "href": {
+                    "type": "string",
+                    "regex": ".+"
+                }
+            },
+            "required": false
+        },
+        "last": {
+            "type": "object",
+            "object": {
+                "href": {
+                    "type": "string",
+                    "regex": ".+"
+                }
+            },
+            "required": false
+        },
+        "next": {
+            "type": "object",
+            "object": {
+                "href": {
+                    "type": "string",
+                    "regex": ".+"
+                }
+            },
+            "required": false
+        },
+        "prev": {
+            "type": "object",
+            "object": {
+                "href": {
+                    "type": "string",
+                    "regex": ".+"
+                }
+            },
+            "required": false
+        }
+    }
+}

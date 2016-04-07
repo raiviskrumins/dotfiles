@@ -1,0 +1,744 @@
+package lib
+
+import (
+	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/oops"
+	"github.com/lib/pq"
+)
+
+// PARSING ARRAYS
+// SEE http://www.postgresql.org/docs/9.1/static/arrays.html#ARRAYS-IO
+// Arrays are output within {} and a delimiter, which is a comma for most
+// postgres types (; for box)
+//
+// Individual values are surrounded by quotes:
+// The array output routine will put double quotes around element values if
+// they are empty strings, contain curly braces, delimiter characters,
+// double quotes, backslashes, or white space, or match the word NULL.
+// Double quotes and backslashes embedded in element values will be
+// backslash-escaped. For numeric data types it is safe to assume that double
+// quotes will never appear, but for textual data types one should be prepared
+// to cope with either the presence or absence of quotes.
+
+// construct a regexp to extract values:
+var (
+	// unquoted array values must not contain: (" , \ { } whitespace NULL)
+	// and must be at least one char
+	unquotedChar  = `[^",\\{}\s(NULL)]`
+	unquotedValue = fmt.Sprintf("(%s)+", unquotedChar)
+
+	// quoted array values are surrounded by double quotes, can be any
+	// character except " or \, which must be backslash escaped:
+	quotedChar  = `[^"\\]|\\"|\\\\`
+	quotedValue = fmt.Sprintf("\"(%s)*\"", quotedChar)
+
+	// an array value may be either quoted or unquoted:
+	arrayValue = fmt.Sprintf("(?P<value>(%s|%s))", unquotedValue, quotedValue)
+
+	// Array values are separated with a comma IF there is more than one value:
+	arrayExp = regexp.MustCompile(fmt.Sprintf("((%s)(,)?)", arrayValue))
+
+	valueIndex int
+)
+
+// Find the index of the 'value' named expression
+func init() {
+	for i, subexp := range arrayExp.SubexpNames() {
+		if subexp == "value" {
+			valueIndex = i
+			break
+		}
+	}
+}
+
+// Parse the output string from the array type.
+// Regex used: (((?P<value>(([^",\\{}\s(NULL)])+|"([^"\\]|\\"|\\\\)*")))(,)?)
+func parseArray(array string) []string {
+	results := make([]string, 0)
+	matches := arrayExp.FindAllStringSubmatch(array, -1)
+	for _, match := range matches {
+		s := match[valueIndex]
+		// the string _might_ be wrapped in quotes, so trim them:
+		s = strings.TrimPrefix(s, "\"")
+		s = strings.TrimSuffix(s, "\"")
+		results = append(results, s)
+	}
+	return results
+}
+
+type Field interface {
+	Value() (driver.Value, error)
+	Set(input interface{}) oops.Error
+}
+
+type BoolField struct {
+	sql.NullBool
+}
+
+func (b BoolField) MarshalJSON() ([]byte, error) {
+	if !b.Valid {
+		return []byte("null"), nil
+	}
+	slice, err := json.Marshal(b.Bool)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal JSON for BoolField.")
+	}
+
+	return slice, nil
+}
+
+func (b *BoolField) UnmarshalJSON(input []byte) error {
+	if input != nil && string(input) != "null" {
+		b.Valid = true
+		err := json.Unmarshal(input, &b.Bool)
+		return oops.Handle(err, oops.ServerError, "", "Could not UnmarshalJSON for BoolField.", string(input))
+	}
+	b.Valid = false
+	var defaultBool bool
+	b.Bool = defaultBool
+	return nil
+}
+
+func (b *BoolField) Set(input interface{}) oops.Error {
+	var err error
+
+	switch inputType := input.(type) {
+	case bool:
+		err = b.NullBool.Scan(inputType)
+	case BoolField:
+		err = b.NullBool.Scan(inputType.Bool)
+	}
+
+	return oops.Handle(err, oops.ServerError, "", "Could not set a BoolField.", input)
+}
+
+type FloatField struct {
+	sql.NullFloat64
+}
+
+func (f FloatField) MarshalJSON() ([]byte, error) {
+	if !f.Valid {
+		return []byte("null"), nil
+	}
+
+	bites, err := json.Marshal(f.Float64)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal FloatField.", f.Float64)
+	}
+	return bites, nil
+}
+
+func (f *FloatField) UnmarshalJSON(input []byte) error {
+	if input != nil && string(input) != "null" {
+		f.Valid = true
+		err := json.Unmarshal(input, &f.Float64)
+		return oops.Handle(err, oops.ServerError, "", "Could not unmarshal json for FloatField.", string(input))
+	}
+	f.Valid = false
+	var defaultFloat float64
+	f.Float64 = defaultFloat
+	return nil
+}
+
+func (f *FloatField) Set(input interface{}) oops.Error {
+	var err error
+	switch inputType := input.(type) {
+	case float64:
+		err = f.NullFloat64.Scan(inputType)
+	case FloatField:
+		err = f.NullFloat64.Scan(inputType.Float64)
+	}
+	if err != nil {
+		return oops.ServerError("", "Could not scan input to inputType.", err, input)
+	}
+	return nil
+}
+
+type IntField struct {
+	sql.NullInt64
+}
+
+func (i IntField) MarshalJSON() ([]byte, error) {
+	if !i.Valid {
+		return []byte("null"), nil
+	}
+	slice, err := json.Marshal(i.Int64)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal JSON for IntField.", i)
+	}
+
+	return slice, nil
+}
+
+func (i *IntField) UnmarshalJSON(input []byte) error {
+	if input != nil && string(input) != "null" {
+		i.Valid = true
+		err := json.Unmarshal(input, &i.Int64)
+		return oops.Handle(err, oops.ServerError, "", "Could not unmarshal input for IntField.", string(input))
+	}
+	i.Valid = false
+	var defaultInt64 int64
+	i.Int64 = defaultInt64
+
+	return nil
+}
+
+func (i *IntField) Set(input interface{}) oops.Error {
+	var err error
+
+	switch inputType := input.(type) {
+	case int:
+		err = i.NullInt64.Scan(inputType)
+	case int64:
+		err = i.NullInt64.Scan(inputType)
+	case IntField:
+		err = i.NullInt64.Scan(inputType.Int64)
+	}
+
+	return oops.Handle(err, oops.ServerError, "", "Could not scan input into IntField.", input)
+}
+
+// MultiValue
+type MultiValue struct {
+	ID        IntField    `json:"id"`
+	ValueType StringField `json:"value_type"`
+	Label     StringField `db:"label" json:"value"`
+	Component StringField `json:"component"`
+}
+
+func (mv *MultiValue) Scan(value MultiValue, acceptedValues []MultiValue) oops.Error {
+	err := mv.Set(value, acceptedValues)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (mv *MultiValue) Set(value MultiValue, acceptedValues []MultiValue) oops.Error {
+	if len(acceptedValues) == 0 {
+		return oops.NotAcceptable("", "acceptedValues must have at least one item.")
+	}
+	for _, av := range acceptedValues {
+		if value == av {
+			*mv = value
+			return nil
+		}
+	}
+	av, err := json.Marshal(acceptedValues)
+	if err != nil {
+		return oops.ServerError("", "Unable to marshal acceptedValues")
+	}
+	return oops.NotAcceptable(Join(" ", "Invalid Value:", value.Label.String, " must be one of the following: ", string(av)))
+}
+
+func (mv MultiValue) Value() (driver.Value, error) {
+	return mv.ID, nil
+}
+
+type MultiValueField struct {
+	MultiValues    []int64 `json:"multi_values"`
+	Valid          bool
+	AcceptedValues []MultiValue `json:"accepted_values"`
+}
+
+func (c MultiValueField) FormSchema() *form.Schema {
+	var ids, labels []string
+	for _, val := range c.AcceptedValues {
+		ids = append(ids, strconv.Itoa(int(val.ID.Int64)))
+		labels = append(labels, val.Label.String)
+	}
+	return form.NewSchema(
+		form.NewField("multi_values", form.ClassInt, form.Render("MultiValues", form.ElementSelect, form.MultiSelect(), form.SelectChoices(ids, labels))),
+	)
+}
+
+func (mv MultiValueField) MarshalJSON() ([]byte, error) {
+	if !mv.Valid {
+		b, err := json.Marshal([]MultiValue{})
+		if err != nil {
+			return nil, oops.ServerError("", "Could not marshal MultiValues.", err)
+		}
+		return b, nil
+	}
+
+	var aux struct {
+		MultiValues    []int64      `json:"multi_values"`
+		AcceptedValues []MultiValue `json:"accepted_values"`
+	}
+	aux.MultiValues = mv.MultiValues
+	aux.AcceptedValues = mv.AcceptedValues
+
+	bites, err := json.Marshal(aux)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal MultiValues.", err)
+	}
+	return bites, nil
+}
+
+func (mv *MultiValueField) UnmarshalJSON(input []byte) error {
+	var aux struct {
+		MultiValues []int64 `json:"multi_values"`
+	}
+
+	err := json.Unmarshal(input, &aux)
+	if err != nil {
+		return err
+	}
+
+	mv.MultiValues = []int64{}
+	mv.Valid = true
+	for _, amv := range aux.MultiValues {
+		found := false
+		for _, accVal := range mv.AcceptedValues {
+			if accVal.ID.Int64 == amv {
+				mv.MultiValues = append(mv.MultiValues, amv)
+				found = true
+				break
+			}
+		}
+		if !found {
+			mv.Valid = false
+			return oops.BadRequest("Value not allowed for this field: ", amv)
+		}
+	}
+
+	if len(mv.MultiValues) <= 0 {
+		mv.Valid = false
+	}
+
+	return nil
+}
+
+// Scan implements the Scanner interface.
+func (mv *MultiValueField) Scan(value interface{}) oops.Error {
+	if value == nil {
+		mv.MultiValues, mv.Valid = []int64{}, false
+		return nil
+	}
+	mv.Valid = true
+	mv.MultiValues = []int64{}
+	for _, mVal := range value.([]MultiValue) {
+		var i IntField
+		err := i.Scan(mVal.ID.Int64)
+		if err != nil {
+			mv.Valid = false
+			return oops.ServerError("", "Non integer value cannot be scanned.", err)
+		}
+
+		accepted := false
+		for _, accVal := range mv.AcceptedValues {
+			if accVal.ID == i {
+				accepted = true
+				break
+			}
+		}
+		if !accepted {
+			return oops.BadRequest("Value not allowed for this field: ", i)
+		}
+		mv.MultiValues = append(mv.MultiValues, i.Int64)
+	}
+
+	return nil
+}
+
+// Value implements the driver Valuer interface.
+func (mv MultiValueField) Value() (driver.Value, error) {
+	if !mv.Valid {
+		return nil, nil
+	}
+	var values []int64
+	for _, val := range mv.MultiValues {
+		values = append(values, val)
+	}
+	return values, nil
+}
+
+func (mv *MultiValueField) Set(input interface{}) oops.Error {
+	switch inputType := input.(type) {
+	case []MultiValue:
+		return mv.Scan(inputType)
+	case MultiValueField:
+		return mv.Scan(inputType.MultiValues)
+	}
+
+	return oops.BadRequest("", "Don't do this")
+}
+
+type StringSlice []string
+
+func (s *StringSlice) Scan(src interface{}) error {
+	asBytes, ok := src.([]byte)
+	if !ok {
+		return error(errors.New("Scan source was not []bytes"))
+	}
+
+	asString := string(asBytes)
+	parsed := parseArray(asString)
+	(*s) = StringSlice(parsed)
+
+	return nil
+}
+
+func (s StringSlice) Value() (driver.Value, error) {
+	var tempSlice []string
+	for _, str := range s {
+		tempSlice = append(tempSlice, Join("", `"`, str, `"`))
+	}
+	valStr := Join(",", tempSlice...)
+	valStr = Join("", "{", valStr, "}")
+	return valStr, nil
+}
+
+type NullStringSlice struct {
+	Slice StringSlice
+	Valid bool // Valid is true if StringSlice is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullStringSlice) Scan(value interface{}) error {
+	if value == nil {
+		ns.Slice, ns.Valid = []string{}, false
+		return nil
+	}
+	ns.Valid = true
+	err := ns.Slice.Scan(value)
+	if err != nil {
+		ns.Valid = false
+		return err
+	}
+	return nil
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullStringSlice) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return ns.Slice, nil
+}
+
+func (ns *NullStringSlice) Set(input interface{}) oops.Error {
+	switch inputType := input.(type) {
+	case []string:
+		ns.Valid = true
+		ns.Slice = StringSlice(inputType)
+		return nil
+	}
+
+	return oops.BadRequest("", "Invalid value for string array")
+}
+
+type StringSliceField struct {
+	NullStringSlice
+}
+
+func (s StringSliceField) MarshalJSON() ([]byte, error) {
+	if !s.Valid {
+		return []byte("null"), nil
+	}
+
+	slice, err := json.Marshal(s.Slice)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal JSON for StringField.", s)
+	}
+
+	return slice, nil
+}
+
+func (s *StringSliceField) UnmarshalJSON(input []byte) error {
+	if input != nil && string(input) != "null" {
+		s.Valid = true
+		err := json.Unmarshal(input, &s.Slice)
+		return oops.Handle(err, oops.ServerError, "", "Could not UnmarshalJSON for StringField.")
+	}
+	s.Valid = false
+	var defaultStringSlice []string
+	s.Slice = defaultStringSlice
+	return nil
+}
+
+func (s *StringSliceField) Set(input interface{}) oops.Error {
+	var err error
+	switch inputType := input.(type) {
+	case []string:
+		err = s.NullStringSlice.Set(inputType)
+	}
+
+	return oops.Handle(err, oops.ServerError, "", "Could not scan input into StringField.", input)
+}
+
+// Value implements the driver Valuer interface.
+func (s StringSliceField) Value() (driver.Value, error) {
+	if !s.Valid {
+		return nil, nil
+	}
+	value, err := s.Slice.Value()
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+type StringEnumField struct {
+	StringEnum    StringEnumType
+	Valid         bool
+	AcceptedTerms []string
+}
+
+func (se StringEnumField) MarshalJSON() ([]byte, error) {
+	if !se.Valid {
+		return []byte("null"), nil
+	}
+	bites, err := json.Marshal(se.StringEnum)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal StringENUM.", err)
+	}
+	return bites, nil
+}
+
+func (se *StringEnumField) UnmarshalJSON(input []byte) error {
+	var auxString string
+
+	err := json.Unmarshal(input, &auxString)
+	if err != nil {
+		return oops.ServerError("", "Could not unmarshal StringEnumField.", err, string(input))
+	}
+
+	e := se.StringEnum.Set(auxString, se.AcceptedTerms)
+	if e == nil && input != nil && string(input) != "null" {
+		se.Valid = true
+		return nil
+	}
+
+	se.Valid = false
+	se.StringEnum = ""
+
+	return nil
+}
+
+// Scan implements the Scanner interface.
+func (se *StringEnumField) Scan(value interface{}) error {
+	if value == nil {
+		se.StringEnum, se.Valid = "", false
+		return nil
+	}
+	se.Valid = true
+	err := se.StringEnum.Scan(value, se.AcceptedTerms)
+
+	return err
+}
+
+// Value implements the driver Valuer interface.
+func (se StringEnumField) Value() (driver.Value, error) {
+	if !se.Valid {
+		return nil, nil
+	}
+	value, err := se.StringEnum.Value()
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+func (se StringEnumField) Get() string {
+	if !se.Valid {
+		return ""
+	}
+	value, err := se.StringEnum.Value()
+	if err != nil {
+		return ""
+	}
+	return string(value.([]uint8))
+}
+
+func (se *StringEnumField) Set(input interface{}) oops.Error {
+	switch inputType := input.(type) {
+	case StringEnumType:
+		return se.StringEnum.Scan(inputType, se.AcceptedTerms)
+	case StringEnumField:
+		return se.StringEnum.Scan(inputType.StringEnum, se.AcceptedTerms)
+	case string:
+		return se.StringEnum.Scan([]byte(inputType), se.AcceptedTerms)
+	}
+
+	return nil
+}
+
+type StringEnumType string
+
+func (se *StringEnumType) Scan(value interface{}, termList []string) oops.Error {
+	err := se.Set(string(value.([]byte)[:]), termList)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (se *StringEnumType) Set(value interface{}, termList []string) oops.Error {
+	*se = StringEnumType(value.(string))
+	if value == nil {
+		return nil
+	}
+	if len(termList) == 0 {
+		return oops.NotAcceptable("", "termList must have at least one item.")
+	}
+	for _, word := range termList {
+		if string(*se) == word {
+			return nil
+		}
+	}
+	return oops.NotAcceptable(Join(" ", "Invalid Term:", string(*se), " must be one of the following:", Join(", ", termList...)))
+}
+
+func (se StringEnumType) Value() (driver.Value, error) {
+	return []byte(se), nil
+}
+
+type NullableStringField struct {
+	sql.NullString
+}
+
+func (s NullableStringField) MarshalJSON() ([]byte, error) {
+	if !s.Valid {
+		return []byte("null"), nil
+	}
+
+	slice, err := json.Marshal(s.String)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal JSON for StringField.", s)
+	}
+
+	return slice, nil
+}
+
+func (s *NullableStringField) UnmarshalJSON(input []byte) error {
+	if input != nil && string(input) != "null" && string(input) != `""` && len(string(input)) > 0 {
+		s.Valid = true
+		err := json.Unmarshal(input, &s.String)
+		return oops.Handle(err, oops.ServerError, "", "Could not UnmarshalJSON for StringField.")
+	}
+	s.Valid = false
+	var defaultString string
+	s.String = defaultString
+	return nil
+}
+
+func (s *NullableStringField) Set(input interface{}) oops.Error {
+	var err error
+	switch inputType := input.(type) {
+	case string:
+		err = s.NullString.Scan(inputType)
+	case StringField:
+		err = s.NullString.Scan(inputType.String)
+	}
+
+	if len(s.String) == 0 {
+		s.Valid = false
+	}
+
+	return oops.Handle(err, oops.ServerError, "", "Could not scan input into StringField.", input)
+}
+
+type StringField struct {
+	sql.NullString
+}
+
+func (s StringField) MarshalJSON() ([]byte, error) {
+	if !s.Valid {
+		return []byte("null"), nil
+	}
+
+	slice, err := json.Marshal(s.String)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal JSON for StringField.", s)
+	}
+
+	return slice, nil
+}
+
+func (s *StringField) UnmarshalJSON(input []byte) error {
+	if input != nil && string(input) != "null" {
+		s.Valid = true
+		err := json.Unmarshal(input, &s.String)
+		return oops.Handle(err, oops.ServerError, "", "Could not UnmarshalJSON for StringField.")
+	}
+	s.Valid = false
+	var defaultString string
+	s.String = defaultString
+	return nil
+}
+
+func (s *StringField) Set(input interface{}) oops.Error {
+	var err error
+	switch inputType := input.(type) {
+	case string:
+		err = s.NullString.Scan(inputType)
+	case StringField:
+		err = s.NullString.Scan(inputType.String)
+	}
+
+	return oops.Handle(err, oops.ServerError, "", "Could not scan input into StringField.", input)
+}
+
+type TimeField struct {
+	pq.NullTime
+}
+
+func (t TimeField) MarshalJSON() ([]byte, error) {
+	if !t.Valid {
+		return []byte("null"), nil
+	}
+	slice, err := json.Marshal(t.Time)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal JSON for TimeField.", t)
+	}
+
+	return slice, nil
+}
+
+func (t *TimeField) UnmarshalJSON(input []byte) error {
+	if input != nil && string(input) != "null" {
+		t.Valid = true
+		err := json.Unmarshal(input, &t.Time)
+		return oops.Handle(err, oops.ServerError, "", "Could not unmarshal input into TimeField.", string(input))
+	}
+	t.Valid = false
+	var defaultTime time.Time
+	t.Time = defaultTime
+	return nil
+}
+
+func (t *TimeField) Set(input interface{}) oops.Error {
+	var err error
+
+	switch inputType := input.(type) {
+	case time.Time:
+		err = t.NullTime.Scan(inputType)
+	case TimeField:
+		err = t.NullTime.Scan(inputType.Time)
+	}
+
+	return oops.Handle(err, oops.ServerError, "", "Could not scan input into TimeField.", input)
+}
+
+func SetFields(target interface{}, newValues interface{}) {
+	newValItr := newValues.(Iterable).NewIterator()
+	newValItr.Next()
+	for iter := target.(Iterable).NewIterator(); iter.Next(); {
+		val := iter.Item()
+		newVal := newValItr.Item()
+		val.Set(newVal.Value())
+		newValItr.Next()
+	}
+
+}

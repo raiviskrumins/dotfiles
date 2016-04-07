@@ -1,0 +1,509 @@
+package models
+
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+)
+
+type ElasticProduct struct {
+	Terms                    string
+	SuggestTerms             string
+	SortKey                  string
+	SortDirection            string
+	Offset                   int
+	Limit                    int
+	ManufacturerID           int
+	Category                 string
+	Active                   bool
+	MeetsPostingRequirements bool
+}
+
+type SearchProduct struct {
+	ID                       string    `json:"id"`
+	Name                     string    `json:"name"`
+	Description              string    `json:"description"`
+	ManufacturerSKU          string    `json:"manufacturer_sku"`
+	Active                   string    `json:"active"`
+	MeetsPostingRequirements string    `json:"meets_posting_requirements"`
+	ManufacturerName         string    `json:"manufacturer_name"`
+	ManufacturerID           string    `json:"manufacturer_id"`
+	ManufacturerActive       string    `json:"manufacturer_active"`
+	DateUpdated              time.Time `json:"date_updated"`
+	Category                 string    `json:"category"`
+}
+
+type ElasticManufacturer struct {
+	Terms               string
+	SuggestTerms        string
+	Category            string
+	SortKey             string
+	SortDirection       string
+	Offset              int
+	Limit               int
+	ManufacturerPreview string
+}
+
+type SearchManufacturer struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	DateAdded   time.Time `json:"date_added"`
+	DateUpdated time.Time `json:"date_updated"`
+	Active      string    `json:"active"`
+	Featured    string    `json:"featured"`
+	LogoURL     string    `json:"logo_url"`
+	URL         string    `json:"url"`
+	FeaturedURL string    `json:"featured_url"`
+}
+
+type msi map[string]interface{}
+
+// SearchProducts performs a search of all products in Elastic Search and returns a slice of their IDs.
+func SearchProducts(ctx *app.Context, ep *ElasticProduct, apiKey *APIKey) ([]int, int, oops.Error) {
+	var filterIDs []int
+	var query msi
+
+	// Get a filtered slice of product IDs based on sales channel
+	if apiKey.SalesChannelID.Int64 > 0 {
+		queryString := lib.Join(" ",
+			"SELECT",
+			"DISTINCT(sales_channel_product.product_id)",
+			"FROM",
+			"sales_channel_product",
+			"WHERE",
+			"sales_channel_id =",
+			strconv.FormatInt(apiKey.SalesChannelID.Int64, 10))
+		rows, err := ctx.DBConn.Query(queryString)
+		if err != nil {
+			return nil, 0, oops.ServerError("", "Database query failed.", err, queryString)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var id int
+			err := rows.Scan(&id)
+			if err != nil {
+				return nil, 0, oops.ServerError("", "Failed to scan ID from row.", err)
+			}
+
+			filterIDs = append(filterIDs, id)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, 0, oops.ServerError("", "Rows has an internal error.", err)
+		}
+	}
+
+	source := msi{
+		"size": ep.Limit,
+	}
+	if ep.Offset > 0 {
+		source["from"] = ep.Offset
+	}
+
+	must := []interface{}{
+		msi{"term": msi{"manufacturer_active": true}},
+	}
+	if ep.Active {
+		must = append(must, msi{"term": msi{"active": true}})
+	}
+	if ep.MeetsPostingRequirements {
+		must = append(must, msi{"term": msi{"meets_posting_requirements": true}})
+	}
+
+	if ep.SortKey != "" {
+		if ep.SortKey == "product_name" {
+			source["sort"] = msi{
+				"name.raw": msi{
+					"order": ep.SortDirection,
+				},
+			}
+		} else if ep.SortKey == "date_updated" {
+			source["sort"] = msi{
+				"date_updated": msi{
+					"order": ep.SortDirection,
+				},
+			}
+		} else if ep.SortKey == "sku" {
+			source["sort"] = msi{
+				"manufacturer_sku.raw": msi{
+					"order": ep.SortDirection,
+				},
+			}
+		} else if ep.SortKey == "active" {
+			source["sort"] = msi{
+				"active": msi{
+					"order": ep.SortDirection,
+				},
+			}
+		}
+	}
+	if ep.ManufacturerID != 0 {
+		must = append(must, msi{
+			"term": msi{
+				"manufacturer_id": ep.ManufacturerID,
+			},
+		})
+	}
+	if ep.Category != "" {
+		must = append(must, msi{
+			"term": msi{
+				"category": ep.Category,
+			},
+		})
+	}
+	if len(filterIDs) != 0 {
+		must = append(must, msi{
+			"ids": msi{
+				"values": filterIDs,
+			},
+		})
+	}
+	if ep.SuggestTerms != "" {
+		query = msi{
+			"bool": msi{
+				"should": []interface{}{
+					msi{"match_phrase": msi{"name": ep.SuggestTerms}},
+					msi{"match_phrase": msi{"description": ep.SuggestTerms}},
+					msi{"match_phrase": msi{"manufacturer_name": ep.SuggestTerms}},
+				},
+			},
+		}
+	} else if ep.Terms != "" {
+		query = msi{
+			"bool": msi{
+				"should": []interface{}{
+					msi{"multi_match": msi{
+						"query":    ep.Terms,
+						"type":     "cross_fields",
+						"operator": "and",
+						"fields": []interface{}{
+							"name",
+							"name.synonym",
+							"name.stemming",
+							"manufacturer_sku",
+						},
+					}},
+					msi{"match_phrase_prefix": msi{"manufacturer_sku": ep.Terms}},
+					msi{"match_phrase_prefix": msi{"name": ep.Terms}},
+					msi{"match_phrase_prefix": msi{"name.synonym": ep.Terms}},
+					msi{"match_phrase_prefix": msi{"name.stemming": ep.Terms}},
+				},
+			},
+		}
+		source["suggest"] = msi{
+			"text": ep.Terms,
+			"name-suggest": msi{
+				"term": msi{
+					"field": "name",
+					"size":  "3",
+				},
+			},
+			"manufacturer-name-suggest": msi{
+				"term": msi{
+					"field": "manufacturer_name",
+					"size":  "3",
+				},
+			},
+			"description-suggest": msi{
+				"term": msi{
+					"field": "description",
+					"size":  "3",
+				},
+			},
+		}
+	} else {
+		query = msi{"match_all": msi{}}
+	}
+
+	source["query"] = msi{
+		"filtered": msi{
+			"query": query,
+			"filter": msi{
+				"bool": msi{
+					"must": must,
+				},
+			},
+		},
+	}
+
+	client, e := ctx.Elastic.Client()
+	if e != nil {
+		return nil, 0, e
+	}
+
+	result, err := client.Search().
+		Index(ctx.Elastic.ProductIndexName).
+		Source(source).
+		Do()
+	if err != nil {
+		return nil, 0, oops.ServerError("Failed to search in Elastic.", "An error was returned when searching Elastic.", err)
+	}
+
+	var resultIDs []int
+	if result.Hits != nil {
+		fmt.Printf(
+			"Hits: %d Took: %d millisecond(s) \n\n",
+			result.Hits.TotalHits,
+			result.TookInMillis,
+		)
+
+		for _, hit := range result.Hits.Hits {
+			var sp SearchProduct
+			err := json.Unmarshal(*hit.Source, &sp)
+			if err != nil {
+				return nil, 0, oops.ServerError("", "Cound not unmarshal source into SearchProduct.", err, *hit)
+			}
+
+			spID, err := strconv.Atoi(sp.ID)
+			if err != nil {
+				return nil, 0, oops.ServerError("", "Cound not convert string to int.", err)
+			}
+			resultIDs = append(resultIDs, spID)
+		}
+	}
+	return resultIDs, int(result.Hits.TotalHits), nil
+}
+
+// SearchManufacturers performs a search of all manufacturers in Elastic Search and returns a slice of ElasticManufacturer.
+func SearchManufacturers(ctx *app.Context, em *ElasticManufacturer, apiKey *APIKey) ([]SearchManufacturer, int, oops.Error) {
+	var filterIDs []int
+	var salesChannelIDs []int
+	var categoryIDs []int
+	var query msi
+
+	// Get a filtered slice of manufacturer IDs based on sales channel
+	if apiKey.SalesChannelID.Int64 > 0 {
+		var ManufacturerSCPrefIDs []int
+		var ManufacturerSCProdIDs []int
+		prefQueryString := lib.Join(" ",
+			"SELECT",
+			"DISTINCT(manufacturer_id)",
+			"FROM",
+			"sales_channel_preference",
+			"WHERE",
+			"active = true",
+			"AND",
+			"sales_channel_id =",
+			strconv.FormatInt(apiKey.SalesChannelID.Int64, 10),
+		)
+		prefRows, err := ctx.DBConn.Query(prefQueryString)
+		if err != nil {
+			return nil, 0, oops.ServerError("", "Database query failed.", err, prefQueryString)
+		}
+		defer prefRows.Close()
+
+		for prefRows.Next() {
+			var id int
+			err := prefRows.Scan(&id)
+			if err != nil {
+				return nil, 0, oops.ServerError("", "Failed to scan ID from row.", err)
+			}
+
+			ManufacturerSCPrefIDs = append(ManufacturerSCPrefIDs, id)
+		}
+		if err := prefRows.Err(); err != nil {
+			return nil, 0, oops.ServerError("", "Rows has an internal error.", err)
+		}
+
+		prodQueryString := lib.Join(" ",
+			"SELECT",
+			"DISTINCT(manufacturer_id)",
+			"FROM",
+			"manufacturer_component",
+			"WHERE",
+			"product_id",
+			"IN",
+			"(",
+			"SELECT",
+			"product_id",
+			"FROM",
+			"sales_channel_product",
+			"WHERE",
+			"sales_channel_id =",
+			strconv.FormatInt(apiKey.SalesChannelID.Int64, 10),
+			")",
+		)
+		prodRows, err := ctx.DBConn.Query(prodQueryString)
+		if err != nil {
+			return nil, 0, oops.ServerError("", "Database query failed.", err, prodQueryString)
+		}
+		defer prodRows.Close()
+
+		for prodRows.Next() {
+			var id int
+			err := prodRows.Scan(&id)
+			if err != nil {
+				return nil, 0, oops.ServerError("", "Failed to scan ID from row.", err)
+			}
+
+			ManufacturerSCProdIDs = append(ManufacturerSCProdIDs, id)
+		}
+		if err := prodRows.Err(); err != nil {
+			return nil, 0, oops.ServerError("", "Rows has an internal error.", err)
+		}
+
+		if len(ManufacturerSCPrefIDs) > 0 && len(ManufacturerSCProdIDs) > 0 {
+			salesChannelIDs = lib.Intersection(ManufacturerSCPrefIDs, ManufacturerSCProdIDs)
+		} else if len(ManufacturerSCPrefIDs) > 0 && len(ManufacturerSCProdIDs) <= 0 {
+			salesChannelIDs = ManufacturerSCPrefIDs
+		} else {
+			salesChannelIDs = ManufacturerSCProdIDs
+		}
+	}
+
+	// Get a filtered slice of manufacturer IDs based on said manufacturer's product category
+	if len(em.Category) > 0 {
+		queryString := lib.Join(" ",
+			"SELECT",
+			"DISTINCT(m.manufacturer_id)",
+			"FROM",
+			"category_component AS c",
+			"LEFT JOIN",
+			"manufacturer_component AS m",
+			"ON m.product_id",
+			"WHERE",
+			"c.category=",
+			em.Category,
+			"ORDER BY",
+			"m.manufacturer_id",
+		)
+		rows, err := ctx.DBConn.Query(queryString)
+		if err != nil {
+			return nil, 0, oops.ServerError("", "Database query failed.", err, queryString)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var id int
+			err := rows.Scan(&id)
+			if err != nil {
+				return nil, 0, oops.ServerError("", "Failed to scan ID from row.", err)
+			}
+
+			categoryIDs = append(categoryIDs, id)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, 0, oops.ServerError("", "Rows has an internal error.", err)
+		}
+	}
+
+	if len(salesChannelIDs) > 0 && len(categoryIDs) > 0 {
+		filterIDs = lib.Intersection(salesChannelIDs, categoryIDs)
+	} else if len(salesChannelIDs) > 0 && len(categoryIDs) <= 0 {
+		filterIDs = salesChannelIDs
+	} else {
+		filterIDs = categoryIDs
+	}
+
+	source := msi{
+		"from": em.Offset,
+		"size": em.Limit,
+	}
+
+	var must []interface{}
+
+	if em.SortKey != "" {
+		if em.SortKey == "name" {
+			source["sort"] = msi{
+				"name.raw": msi{
+					"order": em.SortDirection,
+				},
+			}
+		} else {
+			source["sort"] = msi{
+				"date_updated": msi{
+					"order": em.SortDirection,
+				},
+			}
+		}
+	}
+	if len(em.ManufacturerPreview) <= 0 {
+		must = append(must, msi{
+			"term": msi{
+				"active": true,
+			},
+		})
+	}
+	if len(filterIDs) != 0 {
+		must = append(must, msi{
+			"ids": msi{
+				"values": filterIDs,
+			},
+		})
+	}
+	if em.SuggestTerms != "" {
+		query = msi{
+			"match_phrase": msi{
+				"name": em.SuggestTerms,
+			},
+		}
+	} else if em.Terms != "" {
+		query = msi{
+			"bool": msi{
+				"should": []interface{}{
+					msi{"match": msi{"name": em.Terms}},
+					msi{"match_phrase_prefix": msi{"name": em.Terms}},
+				},
+			},
+		}
+		source["suggest"] = msi{
+			"manufacturer_suggest": msi{
+				"text": em.Terms,
+				"term": msi{
+					"field": "name",
+					"size":  "3",
+				},
+			},
+		}
+	} else {
+		query = msi{"match_all": msi{}}
+	}
+
+	source["query"] = msi{
+		"filtered": msi{
+			"query": query,
+			"filter": msi{
+				"bool": msi{
+					"must": must,
+				},
+			},
+		},
+	}
+
+	client, e := ctx.Elastic.Client()
+	if e != nil {
+		return nil, 0, e
+	}
+
+	result, err := client.Search().
+		Index(ctx.Elastic.ManufacturerIndexName).
+		Source(source).
+		Do()
+	if err != nil {
+		return nil, 0, oops.ServerError("Failed to search in Elastic.", "An error was returned when searching Elastic.", err)
+	}
+
+	var searchResult []SearchManufacturer
+	if result.Hits != nil {
+		fmt.Printf(
+			"Hits: %d Took: %d millisecond(s) \n\n",
+			result.Hits.TotalHits,
+			result.TookInMillis,
+		)
+		for _, hit := range result.Hits.Hits {
+			var sm SearchManufacturer
+			err := json.Unmarshal(*hit.Source, &sm)
+			if err != nil {
+				return nil, 0, oops.ServerError("", "Cound not unmarshal source into SearchManufacturer.", err, *hit)
+			}
+			searchResult = append(searchResult, sm)
+		}
+	}
+
+	return searchResult, int(result.Hits.TotalHits), nil
+}

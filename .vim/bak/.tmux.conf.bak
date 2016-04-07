@@ -1,0 +1,8 @@
+# Launch Fish on a new session
+#set -g default-command /usr/local/bin/fish
+
+bind | split-window -h
+bind \ split-window -h
+bind - split-window -v
+
+set -g default-terminal "screen-256color"

@@ -1,0 +1,137 @@
+package form
+
+import (
+	"encoding/json"
+	"errors"
+
+	"github.com/AmberEngine/api/oops"
+)
+
+type Schema map[string]*FieldSchema
+
+func (s Schema) MarshalJSON() ([]byte, error) {
+	jsonMap := make(map[string]interface{})
+	for k, v := range s {
+		if v.Classification == "form" {
+			embedded := v.Embedded
+			if embedded == nil {
+				return nil, errors.New("Cannot provide nil pointer to form schema")
+			}
+			bites, err := json.Marshal(embedded)
+			if err != nil {
+				return nil, err
+			}
+			var msg map[string]interface{}
+			err = json.Unmarshal(bites, &msg)
+			if err != nil {
+				return nil, err
+			}
+			jsonMap[k] = msg
+		} else {
+			jsonMap[k] = v
+		}
+	}
+
+	slice, err := json.Marshal(jsonMap)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal JSON for jsonMap.", jsonMap)
+	}
+
+	return slice, nil
+}
+
+func NewSchema(fields ...*FieldSchema) *Schema {
+	s := make(Schema)
+	for _, field := range fields {
+		s[field.Name] = field
+	}
+
+	return &s
+}
+
+type FieldSchema struct {
+	Classification string     `json:"classification"`
+	Name           string     `json:"name"`
+	Render         RenderData `json:"render"`
+	Required       bool       `json:"required"`
+	Units          string     `json:"units"`
+	Embedded       *Schema    `json:"embedded"`
+}
+
+func NewField(name, class string, render RenderData, fns ...func(*FieldSchema)) *FieldSchema {
+	m := FieldSchema{Name: name, Classification: class, Render: render}
+
+	for _, fn := range fns {
+		fn(&m)
+	}
+	return &m
+}
+
+func Required() func(*FieldSchema) {
+	return func(m *FieldSchema) {
+		m.Required = true
+	}
+}
+
+func Units(units string) func(*FieldSchema) {
+	return func(m *FieldSchema) {
+		m.Units = units
+	}
+}
+
+func Embed(schema *Schema) func(*FieldSchema) {
+	return func(m *FieldSchema) {
+		m.Embedded = schema
+	}
+}
+
+type RenderData struct {
+	Label       string   `json:"label"`
+	Element     string   `json:"element"`
+	Choices     []Choice `json:"choices"`
+	MultiSelect bool     `json:"multi_select"`
+}
+
+func Render(label, element string, fns ...func(*RenderData)) RenderData {
+	r := RenderData{Label: label, Element: element}
+
+	if fns != nil {
+		for _, fn := range fns {
+			fn(&r)
+		}
+	}
+
+	return r
+}
+
+func MultiSelect() func(*RenderData) {
+	return func(r *RenderData) {
+		r.MultiSelect = true
+	}
+}
+
+func SelectChoices(keys, values []string) func(*RenderData) {
+	return func(r *RenderData) {
+		for i, v := range values {
+			r.Choices = append(r.Choices, Choice{keys[i], v})
+		}
+	}
+}
+
+type Choice struct {
+	Key   string
+	Label string
+}
+
+func (c Choice) MarshalJSON() ([]byte, error) {
+	slice := []string{c.Key, c.Label}
+	sliceBytes, err := json.Marshal(slice)
+	if err != nil {
+		return nil, err
+	}
+	return sliceBytes, nil
+}
+
+func MakeChoice(key, value string) Choice {
+	return Choice{key, value}
+}

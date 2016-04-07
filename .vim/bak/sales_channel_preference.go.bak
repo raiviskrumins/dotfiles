@@ -1,0 +1,290 @@
+package models
+
+import (
+	"io"
+	"reflect"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+)
+
+// SalesChannelPreference contains the properties necessary to represent a
+// SalesChannelPreference in the database, as well as various CRUD methods.
+type SalesChannelPreference struct {
+	ID                          lib.IntField        `json:"id" primary:"true"`
+	ManufacturerID              lib.IntField        `json:"manufacturer_id"`
+	SalesChannelID              lib.IntField        `json:"sales_channel_id"`
+	Active                      lib.BoolField       `json:"active"`
+	DescriptionDescription      lib.StringEnumField `json:"description_description"` // TODO: Tod, fix this shit. It should be something else.
+	IdentityName                lib.StringEnumField `json:"identity_name"`
+	PricingDealerPrice          lib.BoolField       `json:"pricing_dealer_price"`
+	PricingMinimumInternetPrice lib.BoolField       `json:"pricing_minimum_internet_price"`
+	PricingMSRP                 lib.BoolField       `json:"pricing_msrp"`
+	PricingTradePrice           lib.BoolField       `json:"pricing_trade_price"`
+	PricingWholesale            lib.BoolField       `json:"pricing_wholesale"`
+}
+
+func (scp SalesChannelPreference) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("active", form.ClassBool, form.Render("Active", form.ElementCheckbox)),
+		form.NewField(
+			"description_description",
+			form.ClassStr,
+			form.Render(
+				"Description",
+				form.ElementSelect,
+				form.SelectChoices([]string{"description", "alternate_description"}, []string{"Description", "Alternate Description"}),
+			),
+		),
+		form.NewField(
+			"identity_name",
+			form.ClassStr,
+			form.Render(
+				"Name",
+				form.ElementSelect,
+				form.SelectChoices([]string{"name", "alternate_name"}, []string{"Name", "Alternate Name"}),
+			),
+		),
+		form.NewField("pricing_dealer_price", form.ClassCurr, form.Render("Dealer Price", form.ElementText)),
+		form.NewField("pricing_minimum_internet_price", form.ClassCurr, form.Render("Minimum Internet Price", form.ElementText)),
+		form.NewField("pricing_trade_price", form.ClassCurr, form.Render("Trade Price", form.ElementText)),
+		form.NewField("pricing_wholesale", form.ClassCurr, form.Render("Wholesale Pricing", form.ElementText)),
+	)
+}
+
+func (comp *SalesChannelPreference) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(comp).Elem(), DataType: reflect.TypeOf(*comp), Current: -1}
+}
+
+func (comp *SalesChannelPreference) ColumnNames() []string {
+	return lib.ColumnNames(comp.NewIterator())
+}
+
+func (comp *SalesChannelPreference) Map() map[string]lib.IteratorItem {
+	return lib.Map(comp.NewIterator())
+}
+
+func (comp *SalesChannelPreference) SetValue(newComp interface{}) {
+	lib.SetFields(comp, newComp)
+}
+
+func (pref SalesChannelPreference) TableName() string {
+	return "sales_channel_preference"
+}
+
+// NewSalesChannelPreference is a factory for creating a new instance of SalesChannelPreference.
+func NewSalesChannelPreference() (*SalesChannelPreference, oops.Error) {
+	p := new(SalesChannelPreference)
+	validNameTypes := []string{
+		"name",
+		"alternate_name"}
+	p.IdentityName.AcceptedTerms = validNameTypes
+
+	validDescriptionTypes := []string{
+		"description",
+		"alternate_description"}
+
+	p.DescriptionDescription.AcceptedTerms = validDescriptionTypes
+
+	// TODO: refactor this
+	return p, nil
+}
+
+// CreateSalesChannelPreference inserts a new SalesChannelPreference into the
+// database and returns a populated SalesChannelPreference instance.
+func CreateSalesChannelPreference(ctx *app.Context, body io.ReadCloser) (*SalesChannelPreference, oops.Error) {
+	pref, e := NewSalesChannelPreference()
+	if e != nil {
+		return nil, e
+	}
+
+	e = lib.DecodeJSON(body, pref)
+	if e != nil {
+		return nil, e
+	}
+
+	if ctx.Role != nil && ctx.Role["SalesChannelPreference"]&permissions.SalesChannelPreferenceCreateAll == 0 {
+		if pref.ManufacturerID.Int64 != ctx.APIKey.(*APIKey).ManufacturerID.Int64 {
+			return nil, oops.Forbidden("User does not have permissions to create a sales channel preference for this manufacturer.")
+		}
+	}
+	pkID, e := pqdb.InsertQuery(ctx.DBConn, pref, pref.TableName())
+	if e != nil {
+		return nil, e
+	}
+
+	pref.ID.Set(pkID.(int64))
+
+	return pref, nil
+}
+
+// ListSalesChannelPreferences lists all available Sales Channel Preferences which
+// match the provided criteria.
+func ListSalesChannelPreferences(
+	ctx *app.Context,
+	limit int,
+	offset int,
+	filtering map[string]interface{},
+	orderBy pqdb.OrderExpression,
+) ([]SalesChannelPreference, int, oops.Error) {
+
+	ptr, e := Factory("sales_channel_preference")
+	if e != nil {
+		return nil, 0, e
+	}
+	scp := ptr.(*SalesChannelPreference)
+
+	scpTable := pqdb.NewTable(scp.TableName())
+
+	query, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	for _, col := range scp.ColumnNames() {
+		query.AddColumn(scpTable.Column(col))
+	}
+
+	query.AddTable(scpTable)
+
+	joins := make(map[string]pqdb.Table)
+	where, e := unravelNestedFilter(ctx, query, scpTable, joins, filtering)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	if ctx.Role != nil && ctx.Role["SalesChannelPreference"]&permissions.SalesChannelPreferenceRetrieveAll == 0 {
+		mfrTable := pqdb.NewTable((Manufacturer{}).TableName())
+		query.LeftJoin(mfrTable, pqdb.Predicate{mfrTable.Column("id"), "=", scpTable.Column("manufacturer_id")})
+		op := ""
+		if len(where.Items) > 0 || where.Pred != (pqdb.Predicate{}) {
+			op = " AND "
+		}
+		where.Items = append(where.Items, pqdb.NewWhereItem(op, pqdb.Predicate{mfrTable.Column("id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}))
+	}
+
+	query.SetWhere(where)
+
+	idRows, e := query.Run()
+	if e != nil {
+		return nil, 0, e
+	}
+	defer idRows.Close()
+
+	var collection []SalesChannelPreference
+	var ptr2 Model
+
+	for idRows.Next() {
+		ptr2, e = Factory("sales_channel_preference")
+		if e != nil {
+			return nil, 0, e
+		}
+		scp2 := ptr2.(*SalesChannelPreference)
+
+		e = pqdb.Scan(scp2, idRows)
+		if e != nil {
+			return nil, 0, e
+		}
+
+		collection = append(collection, *scp2)
+	}
+
+	return collection, len(collection), nil
+}
+
+// RetrieveSalesChannelPreference returns a SalesChannelPreference instance
+// populated from the database where the entry's primary-key matches the
+// specified ID number.
+func RetrieveSalesChannelPreference(ctx *app.Context, id int) (*SalesChannelPreference, oops.Error) {
+	pref, e := NewSalesChannelPreference()
+	if e != nil {
+		return nil, e
+	}
+
+	columns := pref.ColumnNames()
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"id", "=", id})
+	if e != nil {
+		return nil, e
+	}
+
+	if ctx.Role != nil && ctx.Role["SalesChannelPreference"]&permissions.SalesChannelPreferenceRetrieveAll == 0 {
+		queryParams.Preds = append(queryParams.Preds, pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64})
+	}
+	rows, e := pqdb.SelectQuery(ctx.DBConn, lib.Join(",", columns...), pref.TableName(), queryParams)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+
+	resultCount := 0
+	for rows.Next() {
+		e = pqdb.Scan(pref, rows)
+		if e != nil {
+			return nil, e
+		}
+		resultCount++
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	if resultCount == 0 {
+		return nil, oops.NotFound("Could not retrieve desired Sales Channel Preference", "No results found for the desired Sales Channel Preference.", id)
+	}
+
+	return pref, nil
+}
+
+// UpdateSalesChannelPreference updates the SalesChannelPreference with the
+// provided JSON where the entry matches the primary-key specified.
+func UpdateSalesChannelPreference(ctx *app.Context, id int, body io.ReadCloser) (*SalesChannelPreference, oops.Error) {
+	pref, e := RetrieveSalesChannelPreference(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+
+	e = lib.DecodeJSON(body, pref)
+	if e != nil {
+		return nil, e
+	}
+
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"id", "=", id})
+	if e != nil {
+		return nil, e
+	}
+
+	if ctx.Role != nil && ctx.Role["SalesChannelPreference"]&permissions.SalesChannelPreferenceUpdateAll == 0 {
+		queryParams.Preds = append(queryParams.Preds, pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64})
+	}
+	e = pqdb.UpdateQuery(ctx.DBConn, pref, pref.TableName(), queryParams)
+	return pref, e
+}
+
+// DeleteSalesChannelPreference will delete the specified entry from the
+// database. The SalesChannelPreference is specified by providing its primary-key ID.
+func DeleteSalesChannelPreference(ctx *app.Context, id int) oops.Error {
+	pref, e := NewSalesChannelPreference()
+	if e != nil {
+		return e
+	}
+
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"id", "=", id})
+	if e != nil {
+		return e
+	}
+
+	if ctx.Role != nil && ctx.Role["SalesChannelPreference"]&permissions.SalesChannelPreferenceDeleteAll == 0 {
+		queryParams.Preds = append(queryParams.Preds, pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64})
+	}
+	e = pqdb.DeleteQuery(ctx.DBConn, pref.TableName(), queryParams)
+	if e != nil {
+		return e
+	}
+
+	return nil
+}

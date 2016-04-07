@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Channel Manager</title>
+        <meta charset="UTF-8" />
+        <meta name="google" content="notranslate" />
+        <meta http-equiv="Content-Language" content="en_US" />
+        <link rel="shortcut icon" href="/static/favicon.ico">
+        <link rel="stylesheet" type="text/css" href="/static/vendor/bootstrap/css/bootstrap.min.css" />
+        <link rel="stylesheet" type="text/css" href="/static/css/error.css">
+    </head>
+    <body>
+        <div class="wrapper-center">
+            <header class="clearfix">
+                <a href="/login">
+                    <img class="pull-left landing-logo-image" src="/static/img/channelmanager-gray.svg">
+                </a>
+            </header>
+            <div class="container">
+                <div class="row">
+                    <div class="col-md-12">
+                        <h1 class="xl-text maintenance">Down for maintenance</h1>
+                        <h2 class="maintenance">We're making some quick updates, but we'll be back online soon.</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="push"></div>
+        </div>
+        <footer class="text-center">
+            <p>&copy; 2015-2016 Amber Engine LLC.
+                <span class="separator">|</span> 711 Griswold
+                <span class="separator">|</span> Detroit MI 48266
+                <span class="separator">|</span> (313) 373-7410
+                <span class="separator">|</span> info@amberengine.com
+        </footer>
+    </body>
+</html>

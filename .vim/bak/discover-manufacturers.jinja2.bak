@@ -1,0 +1,65 @@
+{% extends "index.jinja2" %}
+
+{% block title %}Discover | Amber Engine{% endblock %}
+
+{% block classes %} hide-links{% endblock %}
+
+{% block content_main %}
+<span itemscope itemtype="http://schema.org/WebApplication">
+<section class="splash-image" style="background-image: url('{{url_for('static', filename='img/rebrand/discover/header.jpg')}}')">
+    <span class="overlay"></span>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12 text-center sub-header">
+                <h1>Discover</h1>
+                <h4>A Portal for Online Retailers to find and stay <br>up-to-date with manufacturers like you.</h4>
+            </div>
+        </div>
+    </div>
+</section>
+<section class="white text-center">
+    <div class="container">
+        <div class="row" id="productOverview" itemprop="featureList">
+            <h5 class="text-center">What it means to you</h5>
+            <div class="col-md-4 product-overview">
+                <img class="img-circle" src="{{ url_for('static', filename='img/rebrand/discover/visible.svg') }}" alt="magnifying glass in circle icon">
+                <p>Your brand becomes visible to <br>retailers on Discover, giving you another <br>avenue for exposure.</p>
+            </div>
+            <div class="col-md-4 product-overview">
+                <img class="img-circle" src="{{ url_for('static', filename='img/rebrand/discover/connect.svg') }}" alt="rotating arrows in circle icon">
+                <p>Keep sales channels up-to-date. <br>Your updates show instantly <br>in their news feed.</p>
+            </div>
+            <div class="col-md-4 product-overview">
+                <img class="img-circle" src="{{ url_for('static', filename='img/rebrand/discover/folder.svg') }}" alt="parallel arrows in circle icon">
+                <p>Retailers can organize products <br>into folders, making it easier for them <br>to let you know what they need.</p>
+            </div>
+        </div>
+    </div>
+</section>
+<hr>
+<section class="white" id="screenShot">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6">
+                <img src="{{ url_for('static', filename='img/rebrand/discover/discover-cap1.png') }}" alt="discover screenshot">
+            </div>
+            <div class="col-md-6">
+                <h2>Brand Recognition</h2>
+                <p>Turning your visibility on for the Discover portal means your brand and products are searchable by all online retailers using Discover. In this age of technology, increasing your online exposure is critical for optimal sales.</p>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-6">
+                <h2>Instant Updates</h2>
+                <p>When you are ready to publish updates, Discover retailers will be able to see them immediately in their news feed, so you know you’re always marketing the most accurate data possible.</p>
+            </div>
+            <div class="col-md-6">
+                <img src="{{ url_for('static', filename='img/rebrand/discover/discover-cap2.png') }}" alt="discover screenshot">
+            </div>
+        </div>
+    </div>
+</section>
+</span>
+{% endblock content_main %}
+
+{% block footer_color %}grey{% endblock %}

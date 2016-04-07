@@ -1,0 +1,159 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20160203174247(txn *sql.Tx) {
+	var sql []string
+	sql = append(sql, `
+		CREATE TABLE category (
+			id character varying NOT NULL,
+			category_primary character varying NOT NULL,
+			secondary character varying,
+			tertiary character varying
+		);
+	`)
+	sql = append(sql, `CREATE INDEX ix_category_id ON category USING btree (id);`)
+	sql = append(sql, `ALTER TABLE ONLY category ADD CONSTRAINT pk_category PRIMARY KEY (id);`)
+
+	sql = append(sql, `INSERT INTO category VALUES ('accessory', 'accessory', NULL, NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_bedding', 'accessory', 'bedding', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_bookcase', 'accessory', 'bookcase', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_bookends', 'accessory', 'bookends', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_bowl', 'accessory', 'bowl', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_box', 'accessory', 'box', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_candleholder', 'accessory', 'candleholder', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_clock', 'accessory', 'clock', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_coatrack', 'accessory', 'coatrack', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_easel', 'accessory', 'easel', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_fire', 'accessory', 'fire', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_fire_elements', 'accessory', 'fire', 'elements');`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_fire_indoor', 'accessory', 'fire', 'indoor');`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_miscellaneous', 'accessory', 'miscellaneous', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_picture_frame', 'accessory', 'picture frame', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_pillow', 'accessory', 'pillow', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_planter', 'accessory', 'planter', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_screen', 'accessory', 'screen', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_sculpture', 'accessory', 'sculpture', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_slipcover', 'accessory', 'slipcover', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_throw', 'accessory', 'throw', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_trunk', 'accessory', 'trunk', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_tray', 'accessory', 'tray', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_umbrella', 'accessory', 'umbrella', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_vase', 'accessory', 'vase', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_wall', 'accessory', 'wall', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_wall_art', 'accessory', 'wall', 'art');`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_wall_clocks', 'accessory', 'wall', 'clocks');`)
+	sql = append(sql, `INSERT INTO category VALUES ('accessory_wall_mirrors', 'accessory', 'wall', 'mirrors');`)
+
+	sql = append(sql, `INSERT INTO category VALUES ('base_entity', 'base entity', NULL, NULL);`)
+
+	sql = append(sql, `INSERT INTO category VALUES ('casegood', 'casegood', NULL, NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_accent_chest', 'casegood', 'accent chest', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_armoire', 'casegood', 'armoire', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_bed', 'casegood', 'bed', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_bench', 'casegood', 'bench', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_buffet', 'casegood', 'buffet', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_chair', 'casegood', 'chair', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_chair_arm_chair', 'casegood', 'chair', 'arm chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_chair_desk_chair', 'casegood', 'chair', 'desk chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_chair_side_chair', 'casegood', 'chair', 'side chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_chest_drawers', 'casegood', 'chest drawers', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_desk', 'casegood', 'desk', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_dresser', 'casegood', 'dresser', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_etagere', 'casegood', 'etagere', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_headboard', 'casegood', 'headboard', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_media', 'casegood', 'media', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_nightstand', 'casegood', 'nightstand', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_sideboard', 'casegood', 'sideboard', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_stool', 'casegood', 'stool', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_stool_bar', 'casegood', 'stool', 'bar');`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_stool_counter', 'casegood', 'stool', 'counter');`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_stool_other', 'casegood', 'stool', 'other');`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_table', 'casegood', 'table', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_table_cocktail', 'casegood', 'table', 'cocktail');`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_table_dining', 'casegood', 'table', 'dining');`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_table_game', 'casegood', 'table', 'game');`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_table_side', 'casegood', 'table', 'side');`)
+	sql = append(sql, `INSERT INTO category VALUES ('casegood_table_sofa', 'casegood', 'table', 'sofa');`)
+
+	sql = append(sql, `INSERT INTO category VALUES ('lighting', 'lighting', NULL, NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('lighting_ceiling', 'lighting', 'ceiling', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('lighting_ceiling_chandelier', 'lighting', 'ceiling', 'chandelier');`)
+	sql = append(sql, `INSERT INTO category VALUES ('lighting_ceiling_flush_mount', 'lighting', 'ceiling', 'flush mount');`)
+	sql = append(sql, `INSERT INTO category VALUES ('lighting_ceiling_pendant', 'lighting', 'ceiling', 'pendant');`)
+	sql = append(sql, `INSERT INTO category VALUES ('lighting_floor', 'lighting', 'floor', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('lighting_table', 'lighting', 'table', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('lighting_wall', 'lighting', 'wall', NULL);`)
+
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor', 'outdoor', NULL, NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_chair', 'outdoor', 'chair', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_chair_dining_chair', 'outdoor', 'chair', 'dining chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_chair_lounge_chair', 'outdoor', 'chair', 'lounge chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_fire_pit', 'outdoor', 'fire pit', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_loveseat', 'outdoor', 'loveseat', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_sectional', 'outdoor', 'sectional', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_sofa', 'outdoor', 'sofa', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_stool', 'outdoor', 'stool', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_stool_bar', 'outdoor', 'stool', 'bar');`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_stool_counter', 'outdoor', 'stool', 'counter');`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_table', 'outdoor', 'table', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_table_bistro', 'outdoor', 'table', 'bistro');`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_table_cocktail', 'outdoor', 'table', 'cocktail');`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_table_dining', 'outdoor', 'table', 'dining');`)
+	sql = append(sql, `INSERT INTO category VALUES ('outdoor_table_side', 'outdoor', 'table', 'side');`)
+
+	sql = append(sql, `INSERT INTO category VALUES ('textiles', 'textiles', NULL, NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('textiles_fabric', 'textiles', 'fabric', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('textiles_leather', 'textiles', 'leather', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('textiles_rug', 'textiles', 'rug', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('textiles_wall_covering', 'textiles', 'wall covering', NULL);`)
+
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery', 'upholstery', NULL, NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_bench', 'upholstery', 'bench', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_chair', 'upholstery', 'chair', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_chair_arm_chair', 'upholstery', 'chair', 'arm chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_chair_chaise_lounge', 'upholstery', 'chair', 'chaise lounge');`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_chair_desk_chair', 'upholstery', 'chair', 'desk chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_chair_lounge_chair', 'upholstery', 'chair', 'lounge chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_chair_side_chair', 'upholstery', 'chair', 'side chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_chair_wing_chair', 'upholstery', 'chair', 'wing chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_loveseat', 'upholstery', 'loveseat', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_ottoman', 'upholstery', 'ottoman', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_sectional', 'upholstery', 'sectional', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_sofa', 'upholstery', 'sofa', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_upholstered_bed', 'upholstery', 'upholstered bed', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('upholstery_upholstered_headboard', 'upholstery', 'upholstered headboard', NULL);`)
+
+	sql = append(sql, `INSERT INTO category VALUES ('youth', 'youth', NULL, NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_armoire', 'youth', 'armoire', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_bed', 'youth', 'bed', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_bench', 'youth', 'bench', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_chair', 'youth', 'chair', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_chair_arm_chair', 'youth', 'chair', 'arm chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_chair_lounge_chair', 'youth', 'chair', 'lounge chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_chair_side_chair', 'youth', 'chair', 'side chair');`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_changing_table', 'youth', 'changing table', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_chest_drawer', 'youth', 'chest drawer', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_crib', 'youth', 'crib', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_dresser', 'youth', 'dresser', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_linens', 'youth', 'linens', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_nightstand', 'youth', 'nightstand', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_sideboard', 'youth', 'sideboard', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_table', 'youth', 'table', NULL);`)
+	sql = append(sql, `INSERT INTO category VALUES ('youth_table_side_table', 'youth', 'table', 'side table');`)
+
+	sql = append(sql, `ALTER TABLE ONLY assemblage ADD CONSTRAINT fk_category_id FOREIGN KEY (assemblage_name) REFERENCES category(id) ON DELETE CASCADE;`)
+
+	for _, stmt := range sql {
+		txn.Exec(stmt)
+	}
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160203174247(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE ONLY assemblage DROP CONSTRAINT fk_category_id;")
+	txn.Exec("DROP TABLE category;")
+}

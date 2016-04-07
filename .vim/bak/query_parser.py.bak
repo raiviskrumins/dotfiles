@@ -1,0 +1,1060 @@
+from amber_api.models.manufacturer import Manufacturer
+from amber_api.models.collection import Collection
+from amber_api.lib.model_utilities import (
+    get_sales_channel_preferences,
+    filter_fields,
+    make_tokens,
+    make_ngrams,
+    is_manufacturer
+)
+from amber_api.lib.manufacturer import get_manufacturer_category
+from amber_api.lib.assemblage import get_assemblages
+from amber_api.lib.api_key import (
+    get_sales_channel_api_key,
+    get_api_key
+)
+from amber_api.lib.es_util import (
+    SearchProduct,
+    SearchManufacturer,
+    create_es_connection,
+    elastic_to_datetime,
+    build_phrases
+)
+from amber_api.models import db
+
+from flask import abort
+import sqlalchemy
+from sqlalchemy import and_
+from sqlalchemy.sql import text
+import json
+from redis import Redis
+
+
+det``:Q
+``parse_clause(op, clause, model_class):
+    ops = {'or': 'or_', 'and': 'and_', 'not': 'not_', 'in': 'in_'}
+    clauses = []
+    joins = []
+    for c in clause:
+        if len(c.keys()) == 3:
+            key = c['key']
+            comp = c['comparator']
+            value = c['value']
+            column = getattr(model_class, key, None)
+            if not column:
+                parent_column = getattr(
+                    model_class,
+                    key.split('.')[0],
+                    None
+                )
+                joins.append(Manufacturer)
+                child_class = parent_column.property.mapper.class_
+                column = getattr(child_class, key.split('.')[-1], None)
+            try:
+                attr = filter(lambda e: hasattr(column, e % comp),
+                              ['%s', '%s_', '__%s__'])[0] % comp
+            except IndexError:
+                raise abort(400)
+            if value == 'null':
+                value = None
+            if attr == 'in_':
+                clauses.append(text(
+                    ''.join([
+                        'product_entity.id in (',
+                        ', '.join([str(v) for v in value]),
+                        ')'
+                    ])
+                ))
+            else:
+                clauses.append(getattr(column, attr)(value))
+        else:
+            for k, v in c.iteritems():
+                inner_result = parse_clause(k.lower(), v, model_class)
+                clauses.append(inner_result['clauses'])
+                for j in inner_result['joins']:
+                    if j not in joins:
+                        joins.append(j)
+    if op in ops and len(clauses) > 1:
+        op = getattr(sqlalchemy, ops[op], None)
+        return {'clauses': op(*clauses), 'joins': joins}
+    else:
+        return {'clauses': clauses[0], 'joins': joins}
+
+
+def parse_query(model_class, request_data):
+    query_filter = {}
+    for k, v in request_data.iteritems():
+        if k == 'clauses' and v:
+            if len(v.keys()) == 3:
+                query_filter = parse_clause('and', [v], model_class)
+            else:
+                for op, clause in v.iteritems():
+                    if clause:
+                        query_filter = parse_clause(
+                            op.lower(), clause, model_class)
+    if 'clauses' not in query_filter:
+        query_filter['clauses'] = (Manufacturer.active == True)
+    else:
+        query_filter['clauses'] = and_(
+            query_filter['clauses'],
+            Manufacturer.active == True
+        )
+    return query_filter
+
+
+def define_search_functions():
+    name_weight = 10
+    description_weight = 1
+    sku_weight = 3
+    manufacturer_name_weight = 4
+    funcs = ''.join([
+        "CREATE OR REPLACE FUNCTION ",
+        "    each_term(terms_array varchar[], num_products bigint, ",
+        "    prod_id integer) RETURNS SETOF float AS $$",
+        "DECLARE",
+        "  term varchar;",
+        "  score float;",
+        "  term_array_length integer;",
+        "BEGIN",
+        "  score := 0.0;",
+        "  term_array_length := array_length(terms_array, 1);",
+        "  FOREACH term IN ARRAY terms_array",
+        "  LOOP",
+        "    score := score + ",
+        "(@ rank_prods(score, term, num_products, prod_id));",
+        "  END LOOP;",
+        "  RETURN NEXT 0.5 + score / (2 * term_array_length);",
+        "END;",
+        "$$ LANGUAGE plpgsql;",
+        "CREATE OR REPLACE FUNCTION ",
+        "    rank_prods(score float, term varchar, num_products bigint, ",
+        "    prod_id integer) RETURNS float AS $$",
+        "DECLARE",
+        "  term_score float;",
+        "  per_term_prods bigint;",
+        "  name_per_prod_term_counts float;",
+        "  description_per_prod_term_counts float;",
+        "BEGIN",
+        "  per_term_prods := (",
+        "    SELECT product_count FROM n_gram WHERE n_gram.gram = term);",
+        "  name_per_prod_term_counts := (",
+        "    SELECT ngram_count FROM n_gram_per_product ",
+        "    LEFT JOIN n_gram ON n_gram.id = ngram_id ",
+        "    WHERE n_gram.gram = term and product_id = prod_id ",
+        "    AND field_name = 'IdentityComponent.name');",
+        "  description_per_prod_term_counts := (",
+        "    SELECT ngram_count FROM n_gram_per_product ",
+        "    LEFT JOIN n_gram ON n_gram.id = ngram_id ",
+        "    WHERE n_gram.gram = term and product_id = prod_id ",
+        "    AND field_name = 'DescriptionComponent.description');",
+        "  RETURN (",
+        "    COALESCE(name_per_prod_term_counts, 0) * ",
+        str(name_weight),
+        " + ",
+        "    COALESCE(description_per_prod_term_counts, 0) * ",
+        str(description_weight),
+        "  ) * (",
+        "    LOG(",
+        "      (num_products - COALESCE(per_term_prods, 0) + 1.0) / ",
+        "      COALESCE(per_term_prods, 1) / LOG(1.0 + num_products))",
+        "    ) / (",
+        "      (COALESCE(name_per_prod_term_counts, 0) * ",
+        str(name_weight),
+        " + ",
+        "      COALESCE(description_per_prod_term_counts, 0) * ",
+        str(description_weight),
+        "    ) + 1.2",
+        "  );",
+        "END;",
+        "$$ LANGUAGE plpgsql;"
+    ])
+
+    db.session.execute(funcs)
+    db.session.commit()
+
+
+def find_synonyms(blob):
+    if blob is None:
+        return blob
+
+    synonyms = {
+        'couch': 'sofa',
+        'sofa': 'couch',
+        'coffee table': 'cocktail table',
+        'cocktail table': 'coffee table'
+    }
+
+    new_blob = blob
+    for synonym_key in synonyms:
+        if synonym_key in blob:
+            # Add the synonym to the blob
+            new_blob = blob.lower().strip()
+            blob_list = [i for i in new_blob.partition(synonym_key)]
+            blob_list[1] = blob_list[1] + ' ' + synonyms[synonym_key]
+            new_blob = ''.join(blob_list)
+
+            # This would change...
+            # 'some kind of coffee table and chair'
+            # To...
+            # 'some kind of coffee table cocktail table and chair'
+    return new_blob
+
+
+def sales_channel_sub_query(api_key):
+    query = ''.join([
+        'select sales_channel_product.product_id from ',
+        'sales_channel_product where sales_channel_id in (select ',
+        'sales_channel.id from sales_channel left join api_key on ',
+        "api_key.id = sales_channel.api_key_id where api_key.public = '",
+        api_key.public,
+        "')"
+    ])
+    return query
+
+
+def sales_channel_filter_clause(api_key):
+    sales_channel_query = sales_channel_sub_query(api_key)
+    return {
+        'key': 'product_entity.id',
+        'sub_query': sales_channel_query,
+        'comparator': 'in'
+    }
+
+
+class QuerySet(object):
+    def __init__(
+            self,
+            queries=None,
+    ):
+        if queries:
+            if isinstance(queries, list):
+                self.queries = [queries]
+            else:
+                self.queries = [queries]
+        else:
+            self.queries = []
+
+    def run_query(self):
+        return {
+            query.name: query.run(query.statement) for query in self.queries
+        }
+
+
+def build_where_clauses(where_clauses_dict, primary_key):
+    where_clauses = []
+    if where_clauses_dict:
+        where_clauses = [
+            build_clause({k: v}, primary_key)
+            for k, v in where_clauses_dict.iteritems()
+        ]
+    return where_clauses
+
+
+def build_clause(clause, primary_key):
+    query_clause = ''
+    if 'sub_query' in clause.keys():
+        query_clause = Clause(
+            primary_key,
+            sub_query=clause['sub_query']
+        )
+    elif (
+        'value' in clause.keys()
+        and 'comparator' in clause.keys()
+        and 'key' in clause.keys()
+    ):
+        if clause['key'].startswith('category.'):
+            clause['value'] = clause['value'].lower()
+        table, column = clause['key'].split('.', 1)
+        table_name = '_'.join([table, 'component'])
+        query_clause = Clause(
+            primary_key,
+            table,
+            column,
+            table_name,
+            clause['value'],
+            clause['comparator']
+        )
+    elif len(clause.keys()) == 1:
+        op = clause.keys()[0]
+        clauses = [build_clause(v, primary_key) for v in clause[op]]
+        filtered_clauses = []
+        for c in clauses:
+            if not isinstance(c, ClauseSet) or c.clauses:
+                filtered_clauses.append(c)
+
+        query_clause = ClauseSet(
+            op,
+            filtered_clauses
+        )
+
+    return query_clause
+
+
+class Query(object):
+    def __init__(
+        self,
+        name,
+        primary_table,
+        select_clause=None,
+        joins=None,
+        columns=None,
+        with_query=None,
+        where_clauses=None,
+        order_clause=None,
+        group_clauses=None,
+        offset=None,
+        limit=None
+    ):
+        self.name = name
+        self.primary_table = primary_table
+        self.select_clause = select_clause
+        self.joins = joins
+        self.columns = columns
+        self.columns.append('COUNT(*) OVER() AS count')
+        self.with_query = with_query
+        self.where_clauses = where_clauses
+        self.order_clause = order_clause
+        self.group_clauses = group_clauses
+        self.offset = offset
+        self.limit = limit
+
+        self.statement = self.build()
+
+    def get_clauses_with_params(self, where_clauses):
+        clauses = []
+        for wc in where_clauses:
+            if isinstance(wc, ClauseSet):
+                clauses += self.get_clauses_with_params(wc.clauses)
+            elif isinstance(wc, Clause):
+                clauses.append(wc)
+        return clauses
+
+    def run(self, query):
+        clauses = self.get_clauses_with_params(self.where_clauses)
+        if self.with_query:
+            clauses += self.get_clauses_with_params(
+                self.with_query.where_clauses
+            )
+        clause_params = {
+            wc.id: wc.value for wc in clauses if wc.value is not None
+        }
+        result = db.engine.execute(text(query), **clause_params).fetchall()
+        return result
+
+    def build(self, query_type=None):
+        if self.select_clause:
+            select_clause = self.select_clause
+        else:
+            select_clause = 'SELECT ' + ', '.join(self.columns)
+        join_clause = ''
+        if self.joins:
+            join_clause = ' '.join(self.joins)
+        with_clause = ''
+        if self.with_query:
+            with_clause = ''.join([
+                'WITH cte_statement AS (',
+                self.with_query.statement,
+                ') '
+            ])
+        if query_type == 'product_select':
+            join_clause = ''.join([
+                'LEFT JOIN identity_component ON ',
+                'identity_component.product_id = ',
+                'product_entity.id ',
+                'LEFT JOIN audit_component ON ',
+                'audit_component.product_id = product_entity.id'
+            ])
+
+        where_clause = ''
+        if self.where_clauses:
+            where_clause = ''.join([
+                'WHERE ',
+                ' AND '.join([str(wc) for wc in self.where_clauses]),
+            ])
+
+        from_clause = ' '.join([
+            'FROM',
+            self.primary_table,
+            join_clause,
+        ])
+
+        group_clause = ''
+        if self.group_clauses:
+            group_clause = 'GROUP By ' + ', '.join(self.group_clauses)
+
+        offset_clause = ''
+        limit_clause = ''
+        order_clause = ''
+        if self.offset:
+            offset_clause = ' '.join([
+                'OFFSET',
+                str(int(self.offset)),
+            ])
+
+        if self.limit:
+            limit_clause = ' '.join([
+                'LIMIT',
+                str(int(self.limit)),
+            ])
+        if self.order_clause:
+            order_clause = self.order_clause
+
+        query = ' '.join([
+            with_clause,
+            select_clause,
+            from_clause,
+            where_clause,
+            group_clause,
+            order_clause,
+            limit_clause,
+            offset_clause
+        ])
+        return query
+
+
+class ClauseSet(object):
+    def __init__(self, operator, clauses):
+        self.operator = operator
+        self.clauses = [c for c in clauses if c]
+
+    def __str__(self):
+        query_clause = ''
+        if self.operator == 'And':
+            clauses = [c for c in self.clauses if str(c)]
+            if len(clauses) > 1:
+                query_clause = ''.join([
+                    '(',
+                    ' AND '.join([str(c) for c in clauses]),
+                    ')'
+                ])
+            elif len(clauses) == 1:
+                query_clause = str(clauses[0])
+        if self.operator == 'Or':
+            clauses = [c for c in self.clauses if str(c)]
+            if len(clauses) > 1:
+                query_clause = ''.join([
+                    '(',
+                    ' OR '.join([str(c) for c in clauses]),
+                    ')'
+                ])
+            elif len(clauses) == 1:
+                query_clause = str(clauses[0])
+        return query_clause
+
+
+class Clause(object):
+    def __init__(
+            self,
+            primary_key,
+            table=None,
+            column=None,
+            table_name=None,
+            value=None,
+            comparator=None,
+            sub_query=None
+    ):
+        self.primary_key = primary_key
+        self.table = table
+        self.column = column
+        self.table_name = table_name
+        self.value = value
+        self.comparator = comparator
+        self.sub_query = sub_query
+        if table and column:
+            self.id = '_'.join([table, column]).replace('.', '_')
+
+    def __str__(self):
+        if self.sub_query:
+            query_clause = ' '.join([
+                self.primary_key,
+                'in (',
+                self.sub_query,
+                ')'
+            ])
+        else:
+            column = self.column
+            joins = ''
+            if '.' in self.column:
+                sub_table, column = self.column.split('.', 1)
+                joins = ' '.join([
+                    'LEFT JOIN',
+                    sub_table,
+                    'ON',
+                    '.'.join([sub_table, 'id']),
+                    '=',
+                    '.'.join([
+                        self.table_name,
+                        '_'.join([sub_table, 'id'])
+                    ]),
+                ])
+                column = '.'.join([sub_table, column])
+            query_clause = self.primary_key + ' in ('
+            comparator = ''
+            if self.comparator == 'eq':
+                comparator = '='
+            elif self.comparator == 'lt':
+                comparator = '<'
+            elif self.comparator == 'gt':
+                comparator = '>'
+            elif self.comparator == 'le':
+                comparator = '<='
+            elif self.comparator == 'ge':
+                comparator = '>='
+            elif self.comparator == 'ilike':
+                self.value = ''.join(['%', self.value, '%'])
+                comparator = 'ilike'
+            query_clause += ' '.join([
+                'SELECT',
+                self.primary_key,
+                'FROM',
+                self.table_name,
+                joins,
+                'WHERE',
+                column,
+                comparator,
+                ''.join([
+                    ':',
+                    self.id
+                ]),
+            ])
+            query_clause += ')'
+        return query_clause
+
+
+def search_manufacturer_listing(
+    public_key,
+    terms=None,
+    sort_key=None,
+    sort_direction=None,
+    category=None,
+    offset=None,
+    limit=None,
+    manufacturer_preview=None
+):
+    """ Search manufacturer listing
+    """
+    api_key = get_api_key(public_key)
+
+    search_result = {}
+    filter_ids = []
+    sc_ids = []
+    category_ids = []
+
+    if api_key.sales_channel_id:
+        mfr_sc_data = db.session.execute(text(
+            'SELECT DISTINCT(manufacturer_id) '
+            'FROM sales_channel_preference '
+            'WHERE sales_channel_id = :sc_id '
+            'AND active = true'
+        ), {'sc_id': api_key.sales_channel_id})
+        mfr_comp_data = db.session.execute(text(
+            'SELECT DISTINCT(manufacturer_id) FROM '
+            'manufacturer_component WHERE product_id IN '
+            '(SELECT product_id FROM sales_channel_product WHERE '
+            'sales_channel_id = :sc_id) '
+        ), {'sc_id': api_key.sales_channel_id})
+        mfr_sc_data = [m[0] for m in mfr_sc_data if m[0] is not None]
+        mfr_comp_data = [m[0] for m in mfr_comp_data if m[0] is not None]
+
+        sc_ids = list(set(mfr_comp_data).intersection(mfr_sc_data))
+
+    if category:
+        mfr_data = db.session.execute(text(
+            'SELECT DISTINCT(manufacturer_component.manufacturer_id) '
+            'FROM category_component LEFT JOIN manufacturer_component '
+            'ON category_component.product_id = '
+            'manufacturer_component.product_id WHERE '
+            'category_component.category = :category '
+            'ORDER BY manufacturer_component.manufacturer_id'
+        ), {'category': category})
+
+        category_ids = [m[0] for m in mfr_data if m[0] is not None]
+
+    if sc_ids and category_ids:
+        filter_ids = list(set(sc_ids).intersection(category_ids))
+    else:
+        filter_ids = sc_ids
+
+    if filter_ids:
+        search_manufacturer = SearchManufacturer(
+            terms=terms,
+            sort_key=sort_key,
+            sort_direction=sort_direction,
+            offset=offset,
+            limit=limit,
+            filter_ids=filter_ids,
+            manufacturer_preview=manufacturer_preview
+        )
+
+        result = search_manufacturer.get_search_results()
+
+        suggestion = []
+
+        if result.get('suggest'):
+            for phrase in result['phrases']:
+                suggester = SearchManufacturer(
+                    filter_ids=filter_ids,
+                    manufacturer_preview=manufacturer_preview,
+                    suggest_terms=phrase
+                )
+                phrase_result = suggester.get_search_results()
+                if 'manufacturers' in phrase_result:
+                    suggestion.append(phrase)
+
+        search_result = {
+            'manufacturers': result.get('manufacturers', None),
+            'suggestion': suggestion,
+            'count': result.get('count', 0)
+        }
+
+    return search_result
+
+
+def search_product_listing(
+    public_key,
+    terms=None,
+    sort_key=None,
+    sort_direction=None,
+    date_limit=None,
+    date_comparator=None,
+    offset=None,
+    limit=None,
+    manufacturer_preview=None,
+    category=None,
+    collection_id=None,
+    manufacturer_id=None
+):
+    """ Search product listing
+    """
+    api_key = get_api_key(public_key)
+
+    product_filter_ids = []
+    suggestion = []
+    simple_search = False
+
+    if api_key.sales_channel_id:
+        sc_id_data = db.session.execute(text(
+            'SELECT DISTINCT(sales_channel_product.product_id) '
+            'FROM sales_channel_product '
+            'WHERE sales_channel_id = :sc_id'
+        ), {'sc_id': api_key.sales_channel_id})
+
+        product_filter_ids = [p[0] for p in sc_id_data if p[0] is not None]
+
+    if api_key.manufacturer_id:
+        simple_search = True
+
+    search_product = SearchProduct(
+        terms=terms,
+        simple_search=simple_search,
+        sort_key=sort_key,
+        sort_direction=sort_direction,
+        date_limit=date_limit,
+        date_comparator=date_comparator,
+        offset=offset,
+        limit=limit,
+        manufacturer_id=manufacturer_id,
+        manufacturer_preview=manufacturer_preview,
+        product_filter_ids=product_filter_ids,
+        collection_id=collection_id,
+        category=category
+    )
+
+    result = search_product.get_search_results()
+
+    if 'phrases' in result:
+        for phrase in result['phrases']:
+            suggester = SearchProduct(
+                product_filter_ids=product_filter_ids,
+                manufacturer_preview=manufacturer_preview,
+                suggest_terms=phrase,
+                manufacturer_id=manufacturer_id,
+                collection_id=collection_id
+            )
+            phrase_result = suggester.get_search_results()
+            if 'products' in phrase_result:
+                suggestion.append(phrase)
+
+    """ Must include a dict of *all* possible manufacturers so the client can
+    build a list of available manufactuers which can be filtered upon.
+    """
+    manufacturers_search = SearchProduct(
+        terms=terms,
+        sort_key=sort_key,
+        sort_direction=sort_direction,
+        date_limit=date_limit,
+        date_comparator=date_comparator,
+        offset=0,
+        limit=500,
+        manufacturer_id=None,
+        manufacturer_preview=manufacturer_preview,
+        product_filter_ids=product_filter_ids,
+        category=None
+    )
+
+    present_manufacturers = (
+        manufacturers_search.get_manufacturer_product_list()
+    )
+
+    return {
+        'products': result.get('products', None),
+        'count': result.get('count', 0),
+        'suggestion': suggestion,
+        'manufacturer_list': present_manufacturers.get('manufacturers', None)
+    }
+
+
+def list_product_listing(
+    public_key,
+    where_clauses=None,
+    terms=None,
+    sort_key=None,
+    sort_direction=None,
+    offset=None,
+    limit=None,
+    manufacturer_preview=None,
+    manufacturer_preview_id=None,
+):
+    """ Search product listing
+    """
+    api_key = get_api_key(public_key)
+    query_set = QuerySet()
+    if not where_clauses:
+        where_clauses = {'And': []}
+    ngrams = None
+    if terms:
+        tokens = make_tokens(terms)
+        ngrams = make_ngrams(tokens, min_gram=4)
+        if not ngrams:
+            return {
+                'products': [],
+                'product_ids': [],
+                'count': 0,
+                'categories': [],
+                'primary_sub_categories': [],
+                'secondary_sub_categories': [],
+                'manufacturers': [],
+            }
+
+    if api_key.sales_channel_id:
+        api_key = get_sales_channel_api_key(api_key.sales_channel_id)
+        clause = sales_channel_filter_clause(api_key)
+        where_clauses = {
+            'And': [where_clauses, clause]
+        }
+
+    if api_key.manufacturer_id:
+        clause = {
+            'key': 'manufacturer.manufacturer_id',
+            'value': api_key.manufacturer_id,
+            'comparator': 'eq',
+        }
+        where_clauses = {
+            'And': [where_clauses, clause]
+        }
+
+    if manufacturer_preview:
+        if api_key.manufacturer_id:
+            where_clauses['And'].append({
+                'key': 'manufacturer.manufacturer_id',
+                'value': manufacturer_preview_id,
+                'comparator': 'eq'
+            })
+    else:
+        where_clauses['And'].append({
+            'key': 'visibility.active', 'value': True, 'comparator': 'eq'})
+        where_clauses['And'].append({
+            'key': 'visibility.meets_posting_requirements',
+            'value': True,
+            'comparator': 'eq'
+        })
+        where_clauses['And'].append({
+            'key': 'manufacturer.manufacturer.active',
+            'value': True,
+            'comparator': 'eq'
+        })
+
+    if ngrams:
+        clause = {
+            'key': 'n_gram.gram',
+            'value': ngrams,
+            'sub_query': ' '.join([
+                'select n_grams.product_id from n_gram',
+                'left join n_grams on n_gram.id = n_grams.ngram_id where',
+                'n_gram.gram = any(array[',
+                ', '.join([''.join(["'", n, "'"]) for n in ngrams]),
+                '])'
+            ])
+        }
+        where_clauses = {
+            'And': [where_clauses, clause]
+        }
+    built_where_clauses = build_where_clauses(
+        where_clauses, 'product_id'
+    )
+    with_query = Query(
+        'with_query',
+        'product_entity',
+        columns=['product_entity.id'],
+        select_clause='SELECT product_entity.id AS product_id',
+        joins=[''.join([
+            'LEFT JOIN identity_component ON ',
+            'identity_component.product_id = ',
+            'product_entity.id'
+        ])],
+        where_clauses=built_where_clauses
+    )
+
+    clause = {
+        'key': 'product_entity.id',
+        'value': 'product_entity',
+        'sub_query': 'SELECT product_id FROM cte_statement'
+    }
+    where_clauses = {
+        'And': [clause]
+    }
+    built_where_clauses = build_where_clauses(
+        where_clauses, 'product_entity.id'
+    )
+    terms_join = ''
+    if terms and ngrams:
+        terms_join = ''.join([
+            "LEFT JOIN (SELECT each_term as score, product_entity.id AS ",
+            "id FROM product_entity, each_term(array[",
+            ', '.join([''.join(["'", n, "'"]) for n in ngrams]),
+            "], ",
+            "(SELECT count(product_count.id) AS tbl_row_count FROM ",
+            "(SELECT product_entity.id AS id FROM product_entity) AS ",
+            "product_count), product_entity.id) ",
+            ''.join([
+                'WHERE ', ' AND '.join([str(wc) for wc in built_where_clauses])
+            ]),
+            ") AS ",
+            "score ON score.id = product_entity.id",
+        ])
+    order_clause = ''
+    order_keys = []
+    if sort_key == 'name':
+        if sort_direction == 'desc':
+            order_keys.append(
+                ('LOWER(identity_component.name)', 'DESC')
+            )
+        else:
+            order_keys.append(
+                ('LOWER(identity_component.name)', 'ASC')
+            )
+    elif sort_key == 'date_added':
+        if sort_direction == 'desc':
+            order_keys.append(('audit_component.date_updated', 'DESC'))
+        else:
+            order_keys.append(('audit_component.date_updated', 'ASC'))
+    elif sort_key == 'relevance' and terms and ngrams:
+        order_keys.append(('score', 'DESC'))
+        order_keys.append(('audit_component.date_updated', 'DESC'))
+    else:
+        order_keys.append(('audit_component.date_updated', 'DESC'))
+    if order_keys:
+        order_clauses = []
+        for order_key in order_keys:
+            order_clauses.append(
+                ' '.join(list(order_key) + ['NULLS LAST'])
+            )
+        order_clause = ' '.join([
+            'ORDER BY',
+            ', '.join(order_clauses)
+        ])
+    columns = ['product_entity.id', 'json_cache']
+    if terms and ngrams:
+        columns += ['score.score']
+    product_select_query = Query(
+        'product_select',
+        'product_entity',
+        columns=columns,
+        with_query=with_query,
+        joins=[
+            'LEFT JOIN identity_component ON '
+            'identity_component.product_id = product_entity.id',
+            'LEFT JOIN audit_component ON '
+            'audit_component.product_id = product_entity.id',
+            terms_join
+        ],
+        where_clauses=built_where_clauses,
+        order_clause=order_clause,
+        offset=offset,
+        limit=limit
+    )
+    query_set.queries.append(product_select_query)
+    clause = {
+        'key': 'product_id',
+        'value': 'category_component',
+        'sub_query': 'SELECT product_id FROM cte_statement'
+    }
+    where_clauses = {
+        'And': [clause]
+    }
+    built_where_clauses = build_where_clauses(
+        where_clauses, 'product_id'
+    )
+    query = Query(
+        'category_count',
+        'category_component',
+        columns=[
+            'COUNT(category_component.product_id)',
+            'category_component.category',
+            'category_component.primary_sub_category',
+            'category_component.secondary_sub_category',
+        ],
+        with_query=with_query,
+        where_clauses=built_where_clauses,
+        group_clauses=[
+            'category_component.category',
+            'category_component.primary_sub_category',
+            'category_component.secondary_sub_category'
+        ]
+    )
+    query_set.queries.append(query)
+    clause = {
+        'key': 'product_id',
+        'value': 'manufacturer_component',
+        'sub_query': 'SELECT product_id FROM cte_statement'
+    }
+    where_clauses = {
+        'And': [clause]
+    }
+    built_where_clauses = build_where_clauses(
+        where_clauses, 'product_id'
+    )
+    query = Query(
+        'manufacturer_count',
+        'manufacturer_component',
+        columns=[
+            'COUNT(manufacturer_component.product_id)',
+            'manufacturer.name',
+            'manufacturer.id',
+        ],
+        with_query=with_query,
+        joins=[
+            'LEFT JOIN manufacturer ON '
+            'manufacturer.id = manufacturer_component.manufacturer_id'
+        ],
+        where_clauses=built_where_clauses,
+        group_clauses=[
+            'manufacturer.id',
+            'manufacturer.name',
+        ]
+    )
+    query_set.queries.append(query)
+
+    result = query_set.run_query()
+
+    product_ids = with_query.run(with_query.statement)
+    product_ids = [pid[0] for pid in product_ids]
+    products = result['product_select']
+    products = [dict(zip(
+        product_select_query.columns[:-1] + ['count'],
+        p
+    )) for p in products]
+
+    category_count = result['category_count']
+    category_count = [dict(zip([
+        'count',
+        'category',
+        'primary_sub_category',
+        'secondary_sub_category'
+    ], c)) for c in category_count]
+
+    manufacturer_count = result['manufacturer_count']
+    manufacturer_count = [dict(zip([
+        'count',
+        'name',
+        'id'
+    ], m)) for m in manufacturer_count]
+
+    product_count = None
+    prod_ids = [prod.get('product_entity.id') for prod in products]
+    prods = []
+    if prod_ids:
+        product_redis = Redis(db=0)
+        redis_prods = product_redis.mget(prod_ids)
+        for r_prod in redis_prods:
+            if r_prod:
+                prod = json.loads(r_prod)
+                prod_ids.remove(prod['id'])
+                prods.append(prod)
+    if prod_ids:
+        for prod in products:
+            if prod['product_entity.id'] in prod_ids:
+                prod['id'] = prod.pop('product_entity.id')
+                if prod.get('json_cache'):
+                    prods.append(json.loads(prod['json_cache']))
+                    prod_ids.append(prod['id'])
+    for product in products:
+        if product_count is None:
+            product_count = product['count']
+            break
+
+    categories = {}
+    primary_sub_categories = {}
+    secondary_sub_categories = {}
+    for cat_row in category_count:
+        cat = cat_row['category']
+        pri_sub_cat = cat_row['primary_sub_category']
+        sec_sub_cat = cat_row['secondary_sub_category']
+        count = cat_row['count']
+
+        if cat:
+            if cat not in categories:
+                categories[cat] = count
+            else:
+                categories[cat] += count
+
+        if pri_sub_cat:
+            if pri_sub_cat not in primary_sub_categories:
+                primary_sub_categories[pri_sub_cat] = count
+            else:
+                primary_sub_categories[pri_sub_cat] += count
+
+        if sec_sub_cat:
+            if sec_sub_cat not in secondary_sub_categories:
+                secondary_sub_categories[sec_sub_cat] = count
+            else:
+                secondary_sub_categories[sec_sub_cat] += count
+
+    categories = [
+        dict(name=k, count=v) for k, v in categories.iteritems()
+    ]
+    primary_sub_categories = [
+        dict(name=k, count=v)
+        for k, v in primary_sub_categories.iteritems()
+    ]
+    secondary_sub_categories = [
+        dict(name=k, count=v)
+        for k, v in secondary_sub_categories.iteritems()
+    ]
+
+    channel_prefs_per_mfr = {}
+    admin = is_manufacturer(api_key.public)
+    for prod in prods:
+        if 'manufacturer' in prod:
+            if prod['manufacturer']['manufacturer_id']:
+                mfr_id = prod['manufacturer']['manufacturer_id']
+                if not admin:
+                    if mfr_id not in channel_prefs_per_mfr:
+                        # todo refactor to limit number of queries for prefs
+                        channel_prefs = get_sales_channel_preferences(
+                            prod,
+                            api_key.public
+                        )
+                        channel_prefs_per_mfr[mfr_id] = channel_prefs
+                    channel_prefs = channel_prefs_per_mfr[mfr_id]
+                    prod = filter_fields(prod, channel_prefs)
+
+    return {
+        'products': prods,
+        'product_ids': product_ids,
+        'count': product_count,
+        'categories': categories,
+        'primary_sub_categories': primary_sub_categories,
+        'secondary_sub_categories': secondary_sub_categories,
+        'manufacturers': manufacturer_count,
+    }

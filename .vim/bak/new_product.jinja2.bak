@@ -1,0 +1,59 @@
+{% from 'macros.jinja2' import basic_field, radio_field %}
+
+<div class="modal fade" id="productAdd">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title">
+                    Add Product
+                </h4>
+            </div>
+            <form id="newProductForm"
+            {% if manu_id %}
+            action="{{url_for('manufacturer_view.manufacturer_new_product', manu_id=manu_id)}}"
+            {% else %}
+            action="{{url_for('product_view.add_product')}}"
+            {% endif %}
+            method="POST">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p>{{ basic_field(form.manufacturer_sku) }}</p>
+                            <div class="text-center">
+                                <a data-target="#image_file" class="image-upload-wrapper js-file-trigger">
+                                  <div class="modal-image-holder js-image-holder text-center">
+                                    {% if form.full_size.data %}
+                                      <img src="{{ form.full_size.data }}">
+                                    {% else %}
+                                      <span class="loading"><img src="/static/img/loading.gif"></span>
+                                      <div class="placeholder-image"></div>
+                                    {% endif %}
+                                    </div>
+                                    <button class="upload-btn btn btn-info text-center">Upload Image</button>
+                                </a>
+                                <input type="file" id="image_file" name="image_file">
+                                {{ basic_field(form.full_size, hide_label=True) }}
+                                {{ form.thumbnail }}
+                                {{ form.medium }}
+                                {{ form.large }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <p>{{ basic_field(form.name) }}</p>
+                            {{ basic_field(form.caption) }}
+                            {{ radio_field(form.image_type) }}
+                            {% if collection %}
+                                <input type="hidden" value="{{collection}}" name="collection" id="collection">
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <input type="submit" class="btn btn-primary js-save-product" value="Save">
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,44 @@
+import json
+import timeit
+
+import amber_lib
+import amber_lib.connection
+import amber_lib.client as amber_client
+import amber_lib.models.primaries as primary
+import amber_lib.models.product as product
+import amber_lib.models.components as components
+
+import amber_lib
+
+class Context(object):
+    #public = '4dc5aec0bdbac2fe1acdeccd00d8b883532306b1be64b48f7f94000f2ab1fd2f'
+    public = "6da4f366fc131d6338e3f2ab93bc0bc17314fcd9865d6c47eee81d92eda6bf4c"
+    #private = "6c8d1089133a0a1f11922ce9009be0d3198835fc0592671bac1453634f1ab137"
+    private = "e51dff58fffc0d5f42acd54904f0484aa38bb128c5e4ecbfae509e62ec4a2b3c"
+    host = "http://127.0.0.1"
+    port = "8080"
+    request_attempts = 3
+    cache = 'system=redis;host=localhost;port=6379;db=5'
+
+conn = amber_lib.connection.Connection(Context())
+
+
+if __name__ == "__main__":
+    import amber_lib.query as query
+    import pudb; pu.db
+    prod = conn.Product.retrieve(3124)
+
+    prods = conn.Product.query(fields="id")
+    for p in prods:
+        print(p.to_json())
+    ids = [p.pk() for p in prods]
+    print(ids)
+
+    #print([p.to_dict() for p in prods])
+
+    #mfrs = conn.Manufacturer.query()
+    # print([mfr.to_dict() for mfr in mfrs])
+
+
+
+

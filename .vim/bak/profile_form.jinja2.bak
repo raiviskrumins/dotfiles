@@ -1,0 +1,27 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+<div data-target="#js_profile">
+    <div class="row">
+        <div class="col-md-2"><label for="logo_image">Logo</label></div>
+    </div>
+    <div class="row">
+        <div class="col-md-5">
+            <div class="logo text-center" style="background-image: url('{{ profile_form.logo_url.data or '/static/img/defaultlogo.svg'}}');">
+            </div>
+        </div>
+        <div class="col-md-1">
+            <a href="#" data-target="#image_file" class="btn btn-info js-file-trigger">Upload Image</a>
+            <input type="file" name="image_file" id="image_file" class="js-file-input" accept=".jpg,.jpeg,.png,.gif">
+        </div>
+    </div>
+    <div class="clearfix"></div>
+    {{ profile_form.hidden_tag() }}
+    {{ profile_form.logo_url(class_="hidden")}}
+    <div class="row">
+        <div class="col-md-5">{{ basic_field(profile_form.name) }}</div>
+        <div class="col-md-5">{{ basic_field(profile_form.url) }}</div>
+    </div>
+    <div class="row">
+        <div class="col-md-12">{{ basic_field(profile_form.bio) }}</div>
+    </div>
+    <div class="clearfix"></div>
+</div>

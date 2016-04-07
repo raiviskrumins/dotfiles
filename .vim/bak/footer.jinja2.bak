@@ -1,0 +1,46 @@
+{% from 'macros.jinja2' import current_year %}
+<footer class="{% block footer_color %}{% endblock %}">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-2 col-sm-2">
+                <a href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='img/rebrand/amber/ambercircles.svg') }}" alt="Amber Engine LLC logo" class="footer-logo"></a>
+            </div>
+            <div class="col-md-10 col-sm-10">
+                <ul>
+                    <li>About</li>
+                    <li><a href="{{ url_for('contact') }}">Contact</a></li>
+                    <li><a href="{{ url_for('pricing') }}">Pricing</a></li>
+                    <li><a href="{{ url_for('careers') }}">Careers</a></li>
+                    <li><a href="{{ url_for('team') }}">Team</a></li>
+                    <li><a href="{{ url_for('privacy') }}">Privacy</a></li>
+                    <li><a href="{{ url_for('terms') }}">Terms</a></li>
+                </ul>
+                <ul>
+                    <li>Our Products</li>
+                    <li><a href="{{ url_for('channel_manager') }}" class="footer-link">Channel Manager</a></li>
+                    <li><a href="{{ url_for('discover') }}" class="footer-link">Discover</a></li>
+                    {#<li><a href="" class="footer-link">Hosted Solutions</a></li>#}
+                </ul>
+                <ul>
+                    <li>Amber Engine, LLC</li>
+                    <li>711 Griswold</li>
+                    <li>Detroit, MI 48226</li>
+                    <li>(877) 615-2121</li>
+                    <li><a href="mailto:info@amberengine.com">info@amberengine.com</a></li>
+                    <li><a href="{{url_for('contact', referrer='demo')}}" class="orange-link">Contact Leslie for a Demo!</a></li>
+                </ul>
+            </div>
+            <div class="clearfix"></div>
+            <div class="col-md-12 footer-tag clearfix">
+                <p class="social-icons">
+                    <a href="https://www.facebook.com/amberengine"><span class="icon-facebook"></span></a>
+                    <a href="https://twitter.com/amberengine"><span class="icon-twitter"></span></a>
+                    <a href="https://plus.google.com/+AmberEngineLLC/about"><span class="icon-google"></span></a>
+                    <a href="https://www.linkedin.com/company/9408634"><span class="icon-linkedin"></span></a>
+                </p>
+                <p>&copy; 2015-{{ current_year() }} Amber Engine LLC</p>
+            </div>
+            <div class="clearfix visible-xs"></div>
+        </div>
+    </div>
+</footer>

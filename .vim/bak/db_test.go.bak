@@ -1,0 +1,293 @@
+package database
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+// TestNewAppContext tests to ensure a new database.AppContext instance is
+// returned, and that it contains valid pointers to the DB and MongoDB instances.
+func TestNewAppContext(t *testing.T) {
+	ctx, err := NewAppContext(TestDB, TestMongo)
+	if assert.NoError(t, err) != true {
+		assert.Fail(t, "Could not create a new AppContext.")
+		return
+	}
+
+	assert.Equal(t, TestDB, ctx.DBConn)
+	assert.Equal(t, TestMongo, ctx.MongoDB)
+}
+
+// TestBeginTransaction tests that starting a new transaction does not error,
+// and that the AppContext's DBConn is not equal to the TestDB pointer.
+func TestBeginTransaction(t *testing.T) {
+	ctx, err := NewAppContext(TestDB, nil)
+	if err != nil {
+		assert.Fail(t, "Something went wrong!", err.Error())
+		return
+	}
+
+	db := ctx.DBConn
+	err = ctx.BeginTransaction()
+	assert.NoError(t, err)
+	if assert.NotNil(t, ctx.DBConn) {
+		assert.NotEqual(t, db, ctx.DBConn)
+	}
+}
+
+// TestBeginTransaction_noDB tests that it is not possible to start a new
+// transaction when AppContext contains an nil pointer to a DB.
+func TestBeginTransaction_noDB(t *testing.T) {
+	ctx, err := NewAppContext(nil, TestMongo)
+	if err != nil {
+		assert.Fail(t, "Something went wrong!", err.Error())
+		return
+	}
+
+	err = ctx.BeginTransaction()
+	assert.Error(t, err)
+}
+
+// TestBeginTransaction_runningTransaction tests that it is not possible to
+// start a new transaction when a previously started transaction is already in
+// progress.
+func TestBeginTransaction_runningTransaction(t *testing.T) {
+	ctx, err := NewAppContext(TestDB, nil)
+	if err != nil {
+		assert.Fail(t, "Something went wrong!", err.Error())
+		return
+	}
+
+	err = ctx.BeginTransaction()
+	if assert.NoError(t, err) {
+		err = ctx.BeginTransaction()
+		assert.Error(t, err)
+	}
+}
+
+// TestCommitTransaction_invalidSQL tests that commiting a transaction
+// which included failed SQL does not result in saving any of the changes to
+// the database.
+func TestCommitTransaction_invalidSQL(t *testing.T) {
+	// This is just setup for this test
+	ctx, e := NewAppContext(TestDB, nil)
+	if e != nil {
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	e = ctx.BeginTransaction()
+	if e != nil {
+		ctx.RollbackTransaction()
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	// The last statement must always be the only invalid SQL statement in the slice.
+	stmts := []string{
+		"CREATE TABLE apples (foo varchar(3));",
+		"INSERT INTO apples (foo) VALUES ('bar');",
+		"INSERT INTO does_not_exist (buzz) VALUES ('All the things!');"}
+
+	for i, sql := range stmts {
+		_, err := ctx.DBConn.Exec(sql)
+		if i == len(stmts)-1 {
+			assert.Error(t, err)
+		}
+	}
+
+	// Commit the transaction and query the DB to ensure the commit worked.
+	e = ctx.CommitTransaction()
+	assert.Error(t, e)
+
+	row := ctx.DBConn.QueryRow("SELECT foo FROM apples LIMIT 1;")
+
+	var text string
+	err := row.Scan(&text)
+	assert.Error(t, err)
+}
+
+// TestCommitTransaction_noTransaction tests that attempting to commit when the
+// AppContext is not currently using a Transaction will result in being returned
+// an error.
+func TestCommitTransaction_noTransaction(t *testing.T) {
+	// This is just setup for this test
+	ctx, err := NewAppContext(TestDB, nil)
+	if err != nil {
+		assert.Fail(t, "Something went wrong!", err.Error())
+		return
+	}
+
+	e := ctx.CommitTransaction()
+	assert.Error(t, e)
+}
+
+// TestCommitTransaction_restoreConnection tests to ensure that upon committing
+// the transaction, the AppContext's DBConn is reset back to the database.DB pointer.
+func TestCommitTransaction_restoreConnection(t *testing.T) {
+	ctx, err := NewAppContext(TestDB, nil)
+	if err != nil {
+		assert.Fail(t, "Something went wrong!", err.Error())
+		return
+	}
+
+	db := ctx.DBConn
+
+	e := ctx.BeginTransaction()
+	if e != nil {
+		ctx.RollbackTransaction()
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	assert.NotEqual(t, db, ctx.DBConn)
+
+	e = ctx.CommitTransaction()
+	if e != nil {
+		ctx.RollbackTransaction()
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	assert.Equal(t, db, ctx.DBConn)
+}
+
+// TestCommitTransaction_validSQL tests to ensure that it is possible to save data
+// to a database when using a db transaction instance.
+func TestCommitTransaction_validSQL(t *testing.T) {
+	// This is just setup for this test
+	ctx, e := NewAppContext(TestDB, nil)
+	if e != nil {
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	e = ctx.BeginTransaction()
+	if e != nil {
+		ctx.RollbackTransaction()
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	// More setup. We will query for this new row after the commit.
+	stmts := []string{
+		"CREATE TABLE oranges (foo varchar(3));",
+		"INSERT INTO oranges (foo) VALUES ('bar');"}
+
+	for _, sql := range stmts {
+		_, err := ctx.DBConn.Exec(sql)
+		if err != nil {
+			ctx.RollbackTransaction()
+			assert.Fail(t, err.Error())
+			return
+		}
+	}
+
+	// Commit the transaction and query the DB to ensure the commit worked.
+	e = ctx.CommitTransaction()
+	if e != nil {
+		ctx.RollbackTransaction()
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	row := ctx.DBConn.QueryRow("SELECT foo FROM oranges LIMIT 1;")
+
+	var text string
+	err := row.Scan(&text)
+	if err != nil {
+		assert.Fail(t, "Something went wrong!", err.Error())
+		return
+	}
+
+	assert.Equal(t, "bar", text)
+}
+
+// TestRolbackTransaction_restoreConnect tests to ensure that upon rollingback a
+// transaction, the AppContext's DBConn is reset back to the database.DB pointer.
+func TestRollackTransaction_restoreConnection(t *testing.T) {
+	ctx, e := NewAppContext(TestDB, nil)
+	if e != nil {
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	db := ctx.DBConn
+
+	e = ctx.BeginTransaction()
+	if e != nil {
+		ctx.RollbackTransaction()
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	assert.NotEqual(t, db, ctx.DBConn)
+
+	e = ctx.RollbackTransaction()
+	if e != nil {
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	assert.Equal(t, db, ctx.DBConn)
+}
+
+// TestRollbackTransaction_noDBChanges tests to ensure that rollingback a
+// transaction will prevent any of the database changes included in the
+// transaction from actually being saved to the database.
+func TestRollackTransaction_noDBChanges(t *testing.T) {
+	// This is just setup for this test
+	ctx, e := NewAppContext(TestDB, nil)
+	if e != nil {
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	e = ctx.BeginTransaction()
+	if e != nil {
+		ctx.RollbackTransaction()
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	// More setup. We will query for this new row after the commit.
+	stmts := []string{
+		"CREATE TABLE bananas (foo varchar(3));",
+		"INSERT INTO bananas (foo) VALUES ('bar');"}
+
+	for _, sql := range stmts {
+		_, err := ctx.DBConn.Exec(sql)
+		if err != nil {
+			assert.Fail(t, "Something went wrong!", err.Error())
+			return
+		}
+	}
+
+	// Rollback the transaction. Query the DB to ensure the changes were not saved.
+	e = ctx.RollbackTransaction()
+	if e != nil {
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	row := ctx.DBConn.QueryRow("SELECT foo FROM bananas LIMIT 1;")
+
+	var text string
+	err := row.Scan(&text)
+	assert.Error(t, err)
+}
+
+// TestRollbackTransaction_noTransaction tests that attempting to rollback a
+// transaction when no transaction was present results in an error.
+func TestRollbackTransaction_noTransaction(t *testing.T) {
+	// This is just setup for this test
+	ctx, e := NewAppContext(TestDB, nil)
+	if e != nil {
+		assert.Fail(t, "Something went wrong!", e.Error())
+		return
+	}
+
+	e = ctx.RollbackTransaction()
+	assert.Error(t, e)
+}

@@ -1,0 +1,322 @@
+class APIError(Exception):
+    """ Indicates that an error occurred in an API.
+    """
+    status_code = 400
+    message = "APIError"
+
+    def to_dict(self):
+        result = {
+            name: value
+            for name, value
+            in self.__dict__.iteritems()
+            if not name.startswith('_')
+        }
+        class_level = {
+            name: value
+            for name, value
+            in self.__class__.__dict__.iteritems()
+            if not name.startswith('_')
+        }
+        result.update(class_level)
+        result['type'] = self.__class__.__name__
+        return result
+
+
+class MethodNotAllowedAPIError(APIError):
+    """ Indicates that existing message was accessed with not allowed method.
+    """
+    status_code = 405
+    message = "The provided method is not supported for given resource."
+
+
+class InvalidRequestBody(APIError):
+    """ Indicates that request body is not in JSON.
+    """
+    status_code = 400
+    message = "Request body must be in JSON!"
+
+    def __init__(self, body):
+        self.explanation = {
+            "received": body,
+        }
+
+
+class InvalidRequestPayload(APIError):
+    """ Indicates that payload is not in JSON format.
+    """
+    status_code = 400
+    message = "Request payload must be in JSON!"
+
+    def __init__(self, payload):
+        self.explanation = {
+            'received': payload,
+        }
+
+
+class UnauthenticatedRequest(APIError):
+    """ Indicates that request is signed wrongly ot it is not signed at all.
+    """
+    status_code = 403
+    message = "Request is not authenticated correctly."
+
+
+class InvalidRequestParameters(APIError):
+    """ Indicates that request was provided with invalid parameters.
+    """
+    status_code = 400
+    message = "Invalid request parameters."
+
+    def __init__(self, explanation):
+        self.explanation = explanation
+
+
+class InvalidResponse(APIError):
+    """ Indicates that the response object does not match schema.
+    """
+    status_code = 400
+    message = "Response does not match the declared schema."
+
+    def __init__(self, explanation, response):
+        self.explanation = explanation
+        self.response = response
+
+
+class MissingObject(APIError):
+    """ Indicates that the requested object with given id does not exist.
+    """
+    status_code = 404
+
+    def __init__(self, object_type, object_id):
+        self.message = "Missing %s with id=%s." % (object_type, object_id)
+        self.explanation = {
+            'type': object_type,
+            'object_id': object_id,
+        }
+
+
+class MissingReference(APIError):
+    """ Indicates that the requested object with given id does not have
+        referenced object.
+    """
+    status_code = 404
+
+    def __init__(self, object_type, reference, object_id):
+        params = (reference, object_type, object_id)
+        self.message = "Missing %s of %s with id=%s." % params
+        self.explanation = {
+            'type': object_type,
+            'reference': reference,
+            'object_id': object_id,
+        }
+
+
+class MissingImage(APIError):
+    """ Indicates that a product does not contain image with a given id.
+    """
+    status_code = 404
+
+    def __init__(self, img_id):
+        t = "Image with id=%s does not exist."
+        self.message = t % (img_id,)
+        self.explanation = {
+            'img_id': img_id,
+        }
+
+
+class MissingSalesChannelPreference(APIError):
+    """ Indicates that a SalesChannelPreference does not exist with the given
+        manufacturer_id and sales_channel_id.
+    """
+    status_code = 404
+
+    def __init__(self, manufacturer_id, sales_channel_id):
+        t = "A manufacturer with id=%s does not have a sales channel " \
+            "preference for a sales channel with id=%s."
+        self.message = t % (manufacturer_id, sales_channel_id)
+        self.explanation = {
+            'manufacturer_id': manufacturer_id,
+            'sales_channel_id': sales_channel_id
+        }
+
+
+class MissingPublicKey(APIError):
+    """ Indicates that an APIKey doesn't exist with the givin public key
+    """
+    status_code = 404
+
+    def __init__(self, public_key):
+        t = "Missing api key with public key of %s"
+        self.message = t % (public_key)
+        self.explanation = {'public_key': public_key}
+
+
+class MissingManufacturerImage(APIError):
+    """ Indicates that a manufacturer does not contain image with a given id
+    """
+    status_code = 404
+
+    def __init__(self, mfr_id, mfr_img_id):
+        t = "A manufacturer with id=%s does not contain image with id=%s."
+        self.message = t % (mfr_id, mfr_img_id)
+        self.explanation = {
+            'mfr_id': mfr_id,
+            'mfr_img_id': mfr_img_id
+        }
+
+
+class MissingOption(APIError):
+    """ Indicates that the option set with given id does not exist.
+    """
+
+    def __init__(self, object_id):
+        super(MissingOptionSet, self).__init__('option_set', object_id)
+
+
+class MissingTag(APIError):
+    """ Indicates that a product does not contain tag with a given id.
+    """
+    status_code = 404
+
+    def __init__(self, product_id, tag_id):
+        t = "A product with id=%s does not contain tag with id=%s."
+        self.message = t % (product_id, tag_id)
+        self.explanation = {
+            'product_id': product_id,
+            'img_id': tag_id,
+        }
+
+
+class UnexpectedError(APIError):
+    """ Indicates that an API have thrown an undeclared exception.
+    """
+    status_code = 500
+    message = "Request caused unexpected error."
+
+    def __init__(self, object_type=None, message=None):
+        if object_type is not None and message is not None:
+            self.explanation = {
+                'type': object_type,
+                'message': message
+            }
+
+
+class MissingAPIKey(MissingObject):
+    """ Indicates that the api key with given id does not exist.
+    """
+
+    def __init__(self, object_id):
+        super(MissingAPIKey, self).__init__('api_key', object_id)
+
+
+class MissingProduct(MissingObject):
+    """ Indicates that the product with given id does not exist.
+    """
+
+    def __init__(self, object_id):
+        super(MissingProduct, self).__init__('product', object_id)
+
+
+class MissingProductGroup(MissingObject):
+    """ Indicates that the product group with given id does not exist.
+    """
+
+    def __init__(self, object_id):
+        super(MissingProductGroup, self).__init__('product_group', object_id)
+
+
+class MissingOptionSet(MissingObject):
+    """ Indicates that the option set with given id does not exist.
+    """
+
+    def __init__(self, object_id):
+        super(MissingOptionSet, self).__init__('option_set', object_id)
+
+
+class MissingManufacturer(MissingObject):
+    """ Indicates that the manufacturer with given id does not exist.
+    """
+
+    def __init__(self, object_id):
+        super(MissingManufacturer, self).__init__('manufacturer', object_id)
+
+
+class MissingCollection(MissingObject):
+    """ Indicates that the collection with given id does not exist.
+    """
+
+    def __init__(self, object_id):
+        super(MissingCollection, self).__init__('collection', object_id)
+
+
+class MissingSalesChannel(MissingObject):
+    """ Indicates that the sales channel with given id does not exist.
+    """
+
+    def __init__(self, object_id):
+        super(MissingSalesChannel, self).__init__('sales_channel', object_id)
+
+
+class MissingSalesChannelImage(MissingObject):
+    """ Indicates that the sales channel image with given id does not exist.
+    """
+
+    def __init__(self, object_id):
+        super(
+            MissingSalesChannelImage,
+            self
+        ).__init__('sales_channel_image', object_id)
+
+
+class AmbiguousProductDetails(APIError):
+    """ Indicates that more than product description contained properties
+        of two types of product.
+    """
+    status_code = 400
+
+    def __init__(self, variants):
+        fields = ", ".join(variants)
+        msg = "Request should contain exactly one of the fields: %s." % fields
+        self.message = msg
+
+
+class InvalidProductFields(APIError):
+    """ Indicates that fields that do not belong to the product have been
+        passed.
+    """
+    status_code = 400
+
+    def __init__(self, field_name):
+        msg = "Request contains invalid field: %s." % field_name
+        self.message = msg
+
+
+class InvalidDataType(APIError):
+    """ Indicates that the data sent is not the correct type to store in the
+        specified column.
+    """
+    status_code = 400
+
+    def __init__(self, data_type, field_name, column_type):
+        msg = "Request contains invalid data " \
+            "type: %s for field: %s. Should be: %s" % (
+                data_type,
+                field_name,
+                column_type
+            )
+        self.message = msg
+
+
+class InvalidChoice(APIError):
+    """ Indicates that the data sent is not in the list of options for the
+        specified column.
+    """
+    status_code = 400
+
+    def __init__(self, data_value, field_name, options):
+        msg = "Request contains invalid data " \
+            "%s for field: %s. Should be: %s" % (
+                data_value,
+                field_name,
+                options
+            )
+        self.message = msg

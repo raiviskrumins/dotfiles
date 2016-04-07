@@ -1,0 +1,70 @@
+import os
+import json
+
+import pygame
+
+import game.actions as actions
+import game.controllers as controllers
+import game.jsonify as jsonify
+import game.objects as objects
+import game.settings as settings
+import game.tiling as tiling
+import game.tiles as tiles
+import game.zones as zones
+
+
+class TestScene:
+    def __init__(self, canvas, keyboard_events):
+        self.canvas = canvas
+        self.zone = zones.Zone()
+    
+        map_text = "####\n#@.#\n#..#\n####"
+        (flooring, _) = zones.from_string(
+            map_text,
+            {
+                ".": objects.Floor,
+                "@": objects.Floor
+            }
+        )
+        
+        (entity_atlas, controllers_) = zones.from_string(
+            map_text,
+            {
+                "#": objects.Wall,
+                "@": objects.Player
+            }
+        )
+
+        self.zone.atlases.append(flooring)
+        self.zone.atlases.append(entity_atlas)
+
+        self.zone.display = tiling.TileMap(self.zone.atlases[0].size)
+        self.zone.manager = actions.Manager(self.zone)
+
+
+        keyboard_events.bind("key_up", self.check_for_movement)
+
+    def check_for_movement(self, key, mod):
+        action = None
+
+        if key == pygame.K_UP:
+            action = actions.Move(self.player, (0, -1))
+        elif key == pygame.K_RIGHT:
+            action = actions.Move(self.player, (1, 0))
+        elif key == pygame.K_DOWN:
+            action = actions.Move(self.player, (0, 1))
+        elif key == pygame.K_LEFT:
+            action = actions.Move(self.player, (-1, 0))
+
+        if action:
+            self.action_manager.add(action)
+        
+        self.action_manager.run()
+
+    def render(self):
+        for atlas in self.zone.atlases:
+            atlas.tile_map.render()
+            self.canvas.blit(atlas.tile_map.surface, (20, 20))
+
+    def update(self, dt):
+        pass

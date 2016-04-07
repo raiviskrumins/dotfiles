@@ -1,0 +1,19 @@
+{% extends "index.jinja2" %}
+{% block title %}Channel Manager{% endblock %}
+
+{% block javascript %}
+{{super()}}
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/product.min.js')|cache_update }}"></script>
+{% endblock %}
+
+{% block content_main %}
+
+<div class="col-md-12">
+    <h1 class="collection-name" data-id="{{ collection.id }}">{{collection.name}} ({{ count }}) <a href="{{ url_for('collection_view.collection_form_id', id=collection.id)}}" class="js-edit-collection edit-collection"><span class="icon-pencil"></span></a></h1>
+    {% set prods = collection.product.products %}
+    {% include 'product/product_table.jinja2' %}
+</div>
+
+{% endblock content_main %}
+
+{% block footer %}{% endblock %}

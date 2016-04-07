@@ -1,0 +1,415 @@
+package models
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"reflect"
+	"time"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+)
+
+type Export struct {
+	ID                 lib.IntField        `json:"id" primary:"true"`
+	MappingID          lib.IntField        `json:"mapping_id"`
+	UserEmail          lib.StringField     `json:"user_email"`
+	UserManufacturerID lib.IntField        `json:"user_manufacturer_id"`
+	ProductIDs         lib.StringField     `json:"product_ids"`
+	URL                lib.StringField     `json:"url"`
+	DateCreated        lib.TimeField       `json:"date_created"`
+	DateExported       lib.TimeField       `json:"date_exported"`
+	Message            lib.StringField     `json:"message"`
+	Status             lib.StringEnumField `json:"status"`
+}
+
+func (exp Export) TableName() string {
+	return "export"
+}
+
+func (exp Export) FormSchema() *form.Schema {
+	return nil
+}
+
+func (exp *Export) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(exp).Elem(), DataType: reflect.TypeOf(*exp), Current: -1}
+}
+
+func (exp *Export) ColumnNames() []string {
+	return lib.ColumnNames(exp.NewIterator())
+}
+
+func (exp *Export) Map() map[string]lib.IteratorItem {
+	return lib.Map(exp.NewIterator())
+}
+
+// CreateExport creates a new Export object from the provided JSON data, inserts it into the database, and returns it.
+func CreateExport(ctx *app.Context, body io.Reader) (*Export, oops.Error) {
+	ptr, e := Factory("export")
+	if e != nil {
+		return nil, e
+	}
+	exp := ptr.(*Export)
+	e = lib.DecodeJSON(body, exp)
+	if e != nil {
+		return nil, e
+	}
+
+	if ctx.Role != nil && ctx.Role["Export"]&permissions.ExportCreateAll == 0 {
+		if exp.UserManufacturerID.Int64 != ctx.APIKey.(*APIKey).ManufacturerID.Int64 {
+			return nil, oops.Forbidden("User does not have access to create an Export for this manufacturer", "")
+		}
+	}
+
+	var nilTime time.Time
+	if !exp.DateCreated.Valid || exp.DateCreated.Time == nilTime {
+		exp.DateCreated.Time = time.Now().UTC()
+		exp.DateCreated.Valid = true
+	}
+	var nilStatus string
+	if !exp.Status.Valid || string(exp.Status.StringEnum) == nilStatus {
+		exp.Status.Set("not_started")
+		exp.Status.Valid = true
+	}
+
+	pkID, e := pqdb.InsertQuery(ctx.DBConn, exp, exp.TableName())
+
+	if e != nil {
+		return nil, e
+	}
+
+	exp.ID.Set(pkID.(int64))
+	return exp, nil
+}
+
+// UpdateExport updates an existing Export based on the provided ID with the provided JSON data then writes it to the database and returns it.
+func UpdateExport(ctx *app.Context, id int, body io.Reader) (*Export, oops.Error) {
+	exp, e := RetrieveExport(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+
+	if ctx.Role != nil && ctx.Role["Export"]&permissions.ExportUpdateAll == 0 {
+		if exp.UserManufacturerID.Int64 != ctx.APIKey.(*APIKey).ManufacturerID.Int64 {
+			return nil, oops.Forbidden("User does not have access to update an Export for this manufacturer", "")
+		}
+	}
+	e = lib.DecodeJSON(body, exp)
+	if e != nil {
+		return nil, e
+	}
+
+	//Run this again to make sure they didn't update the manufacturer ID.
+	if ctx.Role != nil && ctx.Role["Export"]&permissions.ExportUpdateAll == 0 {
+		if exp.UserManufacturerID.Int64 != ctx.APIKey.(*APIKey).ManufacturerID.Int64 {
+			return nil, oops.Forbidden("User does not have access to update an Export for this manufacturer", "")
+		}
+	}
+	e = pqdb.UpdateModel(ctx, exp, nil)
+	if e != nil {
+		return nil, e
+	}
+
+	return exp, nil
+}
+
+// RetrieveExport retrieves a specific export based on the provided ID.
+func RetrieveExport(ctx *app.Context, exportID int) (*Export, oops.Error) {
+	ptr, e := Factory("export")
+	if e != nil {
+		return nil, e
+	}
+
+	query, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, e
+	}
+
+	export := ptr.(*Export)
+	table := pqdb.NewTable(export.TableName())
+
+	for _, col := range export.ColumnNames() {
+		query.AddColumn(table.Column(col))
+	}
+
+	var preds []pqdb.Predicate
+	if ctx.Role["Export"]&permissions.ExportCreateOwn != 0 {
+		preds = append(preds, pqdb.Predicate{table.Column("user_manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64})
+	}
+	preds = append(preds, pqdb.Predicate{table.Column("id"), "=", exportID})
+	for i, pred := range preds {
+		op := ""
+		if i > 0 {
+			op = "AND"
+		}
+		query.Where.Items = append(query.Where.Items, pqdb.MakeWhereItem(op, pred))
+	}
+
+	query.OrderBy.Add(*table.Column("id"), true, false)
+
+	rows, e := query.Run()
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+
+	resultCount := 0
+	for rows.Next() {
+		e = pqdb.Scan(export, rows)
+		if e != nil {
+			return nil, e
+		}
+		resultCount++
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", "rows has an internal error.", err)
+	}
+	if resultCount == 0 {
+		return nil, oops.ServerError("Could not find Export", "ID:", exportID)
+	}
+	return export, nil
+}
+
+// RetrieveExports retrieves a list of all exports that match the specified filtering requirements and returns them.
+func RetrieveExports(ctx *app.Context, limit int, offset int, apiKey *APIKey, filtering map[string]interface{}) ([]*Export, int, oops.Error) {
+	ptr, e := Factory("export")
+	if e != nil {
+		return nil, 0, e
+	}
+
+	query, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	var wheres []pqdb.WhereItem
+	table := pqdb.NewTable(ptr.TableName())
+	query.AddTable(table)
+
+	for _, col := range ptr.ColumnNames() {
+		query.AddColumn(table.Column(col))
+	}
+
+	if ctx.Role != nil && ctx.Role["Export"]&permissions.ExportRetrieveOwn != 0 {
+		where := pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("user_manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64})
+		wheres = append(wheres, where)
+	} else if apiKey != nil && apiKey.ManufacturerID.Int64 > 0 {
+		where := pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("user_manufacturer_id"), "=", apiKey.ManufacturerID.Int64})
+		wheres = append(wheres, where)
+	}
+
+	query.OrderBy.Add(*table.Column("id"), true, false)
+	joins := make(map[string]pqdb.Table)
+	where, e := UnravelNestedFilter(ctx, ptr, query, table, joins, filtering)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	if len(where.Items) > 0 {
+		wheres = append(wheres, where)
+	} else if where.Pred != (pqdb.Predicate{}) {
+		wheres = append(wheres, where)
+	}
+
+	for index, whereItem := range wheres {
+		if index > 0 && len(whereItem.Operand) == 0 {
+			whereItem.Operand = "AND"
+		}
+		query.Where.Items = append(query.Where.Items, whereItem)
+	}
+
+	if limit > 0 || offset > 0 {
+		query.Limit = pqdb.LimitClause{Limit: limit, Offset: offset}
+	}
+
+	rows, e := query.Run()
+	if e != nil {
+		return nil, 0, e
+	}
+
+	total, e := query.Count()
+	if e != nil {
+		return nil, 0, e
+	}
+	var exportSlice []*Export
+	defer rows.Close()
+
+	for rows.Next() {
+		ptr, e = Factory("export")
+		if e != nil {
+			return nil, 0, e
+		}
+		export := ptr.(*Export)
+
+		e = pqdb.Scan(export, rows)
+		if e != nil {
+			return nil, 0, e
+		}
+		exportSlice = append(exportSlice, export)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	return exportSlice, total, nil
+}
+
+type ExportMapping struct {
+	ID       lib.IntField    `json:"id" primary:"true"`
+	Name     lib.StringField `json:"name" db:"export_mapping_name"`
+	Retailer lib.StringField `json:"retailer"`
+}
+
+func (exp ExportMapping) TableName() string {
+	return "export"
+}
+
+func (exp ExportMapping) FormSchema() *form.Schema {
+	return nil
+}
+
+func (exp *ExportMapping) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(exp).Elem(), DataType: reflect.TypeOf(*exp), Current: -1}
+}
+
+func (exp *ExportMapping) ColumnNames() []string {
+	return lib.ColumnNames(exp.NewIterator())
+}
+
+func (exp *ExportMapping) Map() map[string]lib.IteratorItem {
+	return lib.Map(exp.NewIterator())
+}
+
+// SubmitExport takes an existing Export based on the calling objects ExportID and creates and publishes an export job for it to rabbitmq.
+func SubmitExport(ctx *app.Context, exp *Export) oops.Error {
+	if ctx.Role != nil && ctx.Role["Export"]&permissions.ExportCreateAll == 0 {
+		if exp.UserManufacturerID.Int64 != ctx.APIKey.(*APIKey).ManufacturerID.Int64 {
+			return oops.Forbidden("User does not have access to create an Export for this manufacturer", "")
+		}
+	}
+	exp.Status.Set("submitted")
+	e := pqdb.UpdateModel(ctx, exp, nil)
+	if e != nil {
+		return oops.ServerError("Failed to update Export status to 'submitted'", e)
+	}
+	return nil
+}
+
+// FailExport changes the status of an Export to failed if an error was encountered in handling it.
+func FailExport(ctx *app.Context, exp *Export) oops.Error {
+	exp.Status.Set("failed")
+	e := pqdb.UpdateModel(ctx, exp, nil)
+	if e != nil {
+		return oops.ServerError("Failed to update Export status to 'failed'", e)
+	}
+	return nil
+}
+
+func (exp Export) MarshalJSON() ([]byte, error) {
+	var aux struct {
+		ID                 lib.IntField        `json:"id" primary:"true"`
+		MappingID          lib.IntField        `json:"mapping_id"`
+		UserEmail          lib.StringField     `json:"user_email"`
+		UserManufacturerID lib.IntField        `json:"user_manufacturer_id"`
+		ProductIDs         []lib.IntField      `json:"product_ids"`
+		URL                lib.StringField     `json:"url"`
+		DateCreated        lib.TimeField       `json:"date_created"`
+		DateExported       lib.TimeField       `json:"date_exported"`
+		Message            lib.StringField     `json:"message"`
+		Status             lib.StringEnumField `json:"status"`
+	}
+
+	aux.ID = exp.ID
+	aux.MappingID = exp.MappingID
+	aux.UserEmail = exp.UserEmail
+	aux.UserManufacturerID = exp.UserManufacturerID
+	aux.URL = exp.URL
+	aux.DateCreated = exp.DateCreated
+	aux.Message = exp.Message
+	aux.Status = exp.Status
+	var prodIDFloatList []float64
+	err := json.Unmarshal([]byte(exp.ProductIDs.String), &prodIDFloatList)
+	if err != nil {
+		return nil, oops.ServerError("", "Failed to marshal Manufacturer map.", err, aux)
+	}
+	for _, id := range prodIDFloatList {
+		intField := lib.IntField{}
+		intField.Set(int64(id))
+		aux.ProductIDs = append(aux.ProductIDs, intField)
+	}
+
+	bites, err := json.Marshal(aux)
+	if err != nil {
+		return nil, oops.ServerError("", "Failed to marshal Manufacturer map.", err, aux)
+	}
+
+	return bites, nil
+}
+
+func (exp *Export) UnmarshalJSON(input []byte) error {
+	var aux struct {
+		ID                 lib.IntField        `json:"id"`
+		MappingID          lib.IntField        `json:"mapping_id"`
+		UserEmail          lib.StringField     `json:"user_email"`
+		UserManufacturerID lib.IntField        `json:"user_manufacturer_id"`
+		ProductIDs         []lib.FloatField    `json:"product_ids"`
+		URL                lib.StringField     `json:"url"`
+		DateCreated        lib.TimeField       `json:"date_created"`
+		DateExported       lib.TimeField       `json:"date_exported"`
+		Message            lib.StringField     `json:"message"`
+		Status             lib.StringEnumField `json:"status"`
+	}
+	validStatuses := []string{
+		"not_started",
+		"running",
+		"submitted",
+		"complete",
+		"failed",
+	}
+	aux.Status.AcceptedTerms = validStatuses
+	e := lib.DecodeJSON(bytes.NewReader(input), &aux)
+	if e != nil {
+		return e
+	}
+	nilTime := time.Time{}
+	if aux.DateCreated.Time == nilTime {
+		aux.DateCreated.Time = time.Now()
+	}
+	aux.DateCreated.Time = aux.DateCreated.Time.UTC()
+
+	var nilStatus string
+	if !aux.Status.Valid || string(aux.Status.StringEnum) == nilStatus {
+		aux.Status.Set("not_started")
+		aux.Status.Valid = true
+	}
+
+	exp.ID = aux.ID
+	exp.MappingID = aux.MappingID
+	exp.UserEmail = aux.UserEmail
+	exp.UserManufacturerID = aux.UserManufacturerID
+	exp.URL = aux.URL
+	exp.DateCreated = aux.DateCreated
+	exp.DateExported = aux.DateExported
+	exp.Message = aux.Message
+	exp.Status = aux.Status
+
+	var productIDs []int64
+	for _, id := range aux.ProductIDs {
+		idInt := int64(id.Float64)
+		productIDs = append(productIDs, idInt)
+	}
+	bites, err := json.Marshal(productIDs)
+	if err != nil {
+		return err
+	}
+	exp.ProductIDs.String = string(bites)
+	exp.ProductIDs.Valid = true
+
+	return nil
+}

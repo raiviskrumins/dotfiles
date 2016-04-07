@@ -1,0 +1,100 @@
+/*---- Subscribe form ----*/
+#subs-form{
+	position:relative;
+	vertical-align:top;
+	background:#f1f1f1;
+}
+	#subs-form fieldset {border:none; padding:18px 11px 17px 30px; overflow:hidden;}
+		#subs-form h3{
+			float:left;
+			font-size:32px;
+			line-height:32px;
+			color:#a45bb6;
+			letter-spacing:-2px;
+			padding:6px 10px 11px 69px;
+			background:url(../images/subscribe-title-icon.png) 0 0 no-repeat;
+			width:211px;
+			margin-top:-2px;
+		}
+		#subs-form label {display:block; float:left;}
+		#subs-form input{
+			padding:14px 20px;
+			background:#fff;
+			border:none;
+			font:17px Arial, Helvetica, sans-serif;
+			color:#5b5a5a;
+			margin:0;
+			outline:none;
+			width:499px;
+		}
+	#subs-form a{
+		float:left;
+		display:block;
+		padding:12px 0;
+		text-align:center;
+		width:70px;
+	}
+
+/***** contact form *****/
+#contact-form {
+	position:relative;
+	vertical-align:top;
+	width:100%;
+	z-index:1;
+}
+	#contact-form fieldset {border:none; padding:0; width:100%; overflow:hidden;}
+		#contact-form label {display:block; min-height:57px; position:relative;}
+			#contact-form .message{min-height:235px;}
+			#contact-form input, #contact-form textarea {
+				padding:8px 18px;
+				margin:0;
+				font: 17px Arial, Helvetica, sans-serif;
+				color:#fff;
+				background: #a45bb6;
+				outline:none;
+				border:none;
+				width:195px;
+			}
+			#contact-form .area .error {float:none;}
+			#contact-form textarea {
+				width:355px;
+				height:200px;
+				resize:none;
+				overflow:auto;
+			}
+			#contact-form .success {display:none; margin-bottom:15px;}
+			#contact-form .error,
+			#contact-form .empty {
+				color:#fff;
+				font-size:11px;
+				line-height:14px;
+				display:none;
+				overflow:hidden;
+				margin-bottom:5px;
+			}
+.buttons-wrapper{
+	text-align:right;
+	position:relative;
+	font-size:0;
+	line-height:0;
+	overflow:hidden;
+}
+	.buttons-wrapper a{padding: 12px 10px; width:79px; text-align:center;}
+
+html>/**/body noindex:-o-prefocus, html>/**/body #subs-form input{padding:15px 20px 14px;} /*opera*/
+html>/**/body noindex:-o-prefocus, html>/**/body #contact-form input{padding:9px 18px 8px;} /*opera*/
+
+@media only screen and (max-width: 995px) {
+	#subs-form fieldset {padding:20px;}
+	#subs-form input{width:308px;}
+	#contact-form textarea{width:288px;}
+}
+@media only screen and (max-width: 767px){
+	#subs-form h3{float:none; width:auto; margin-bottom:10px;}
+	#subs-form input{width:270px;}
+	#contact-form input, #contact-form textarea{width:344px;}
+}
+@media only screen and (max-width: 479px){
+	#subs-form input{width:150px;}
+	#contact-form input, #contact-form textarea{width:224px;}
+}

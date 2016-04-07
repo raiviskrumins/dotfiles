@@ -1,0 +1,358 @@
+# -*- coding: utf-8 -*-
+
+"""
+Lower-level API for interfacing with :module:`reportlab`.
+
+Main interaction point is with :class:`Tearsheet <Tearsheet>`.
+Intentionally restrictive (for now).
+
+"""
+
+import os
+import requests
+from StringIO import StringIO
+import locale
+
+from reportlab.lib.fonts import addMapping
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import (
+    BaseDocTemplate,
+    Flowable,
+    Frame,
+    FrameBreak,
+    Image,
+    KeepInFrame,
+    PageBreak,
+    PageTemplate,
+    Paragraph,
+    Spacer,
+)
+
+
+locale.setlocale(locale.LC_ALL, '')
+here = os.path.abspath(os.path.dirname(__file__))
+
+dinot_path = os.path.join(here, 'fonts/DINOT.ttf')
+dinot_light_path = os.path.join(here, 'fonts/DINOT-Light.ttf')
+dinot_bold_path = os.path.join(here, 'fonts/DINOT-Bold.ttf')
+
+pdfmetrics.registerFont(TTFont('Dinot', dinot_path))
+pdfmetrics.registerFont(TTFont('Dinot Bold', dinot_bold_path))
+pdfmetrics.registerFont(TTFont('Dinot Light', dinot_light_path))
+
+addMapping('Dinot Light', 0, 0, 'Dinot Light')
+addMapping('Dinot Light', 1, 0, 'Dinot Bold')
+
+
+class FontStyles(object):
+    MANUFACTURER = ParagraphStyle(
+        name='dinot',
+        fontName='Dinot',
+        textColor='#000000',
+        fontSize=35,
+        alignment=0,
+        keepWhiteSpace=True,
+        leading=35,
+    )
+
+    TITLE = ParagraphStyle(
+        name='dinot',
+        fontName='Dinot',
+        textColor='#000000',
+        fontSize=22,
+        alignment=0,
+        keepWhiteSpace=True,
+        leading=0,
+        spaceAfter=0.45 * inch
+    )
+
+    LABEL = ParagraphStyle(
+        name='dinot bold',
+        fontName='Dinot Bold',
+        textColor='#000000',
+        fontSize=12,
+        alignment=0,
+        keepWhiteSpace=True,
+        leading=0,
+    )
+
+    TEXT = ParagraphStyle(
+        name='dinot',
+        fontName='Dinot',
+        textColor='#000000',
+        fontSize=12,
+        alignment=0,
+        keepWhiteSpace=True,
+        leading=0,
+    )
+
+    LIGHT = ParagraphStyle(
+        name='dinot light',
+        fontName='Dinot Light',
+        textColor='#000000',
+        fontSize=12,
+        keepWhiteSpace=True,
+        leading=16,
+    )
+
+
+def truncate_paragraph(string, style, max_width):
+    truncated = False
+    p = Paragraph('', style)
+
+    while True and len(string) > 0:
+        size = pdfmetrics.stringWidth(string, style.fontName, style.fontSize)
+        if size < max_width:
+            if truncated:
+                string = string[:-4].strip() + "..."
+            p = Paragraph(string, style)
+            break
+        else:
+            string = string[:-1]
+            truncated = True
+    return p
+
+
+class Line(Flowable):
+    def __init__(self, width, color='#000000'):
+        self.width = 0
+        self.height = inch / 8.0
+        self.doc_width = width
+        self.color = color
+
+    def draw(self):
+        line_length = self.doc_width
+
+        self.canv.setStrokeColor(self.color)
+        self.canv.line(line_length, 0, 0, 0)
+
+
+def image_flowable(url):
+        res = requests.get(url)
+        image = Image(StringIO(res.content))
+        return image
+
+
+class Tearsheet(BaseDocTemplate):
+    """ PDF generation object
+    """
+
+    def __init__(self, filename='', pagesize=letter):
+        self.WIDTH, self.HEIGHT = pagesize
+        self.PADDING = inch * 0.44
+
+        self.DOC_WIDTH = self.WIDTH - (self.PADDING * 2)
+        self.DOC_HEIGHT = self.HEIGHT - (self.PADDING * 2)
+
+        BaseDocTemplate.__init__(
+            self,
+            '',
+            pagesize=pagesize,
+            leftMargin=self.PADDING,
+            rightMargin=self.PADDING,
+            topMargin=self.PADDING,
+            bottomMargin=self.PADDING
+        )
+
+        zero_padding = [0] * 4
+        feat_frame = Frame(
+            self.PADDING,
+            self.PADDING,
+            self.DOC_WIDTH,
+            2.25 * inch,
+            *zero_padding
+        )
+        details_frame = Frame(
+            self.PADDING,
+            feat_frame.height + feat_frame.y1,
+            self.DOC_WIDTH,
+            1.25 * inch,
+            *zero_padding
+        )
+        line_frame = Frame(
+            self.PADDING,
+            details_frame.height + details_frame.y1,
+            self.DOC_WIDTH,
+            0.75 * inch,
+            *zero_padding
+        )
+        image_frame = Frame(
+            self.PADDING,
+            line_frame.height + line_frame.y1,
+            self.DOC_WIDTH,
+            3.65 * inch,
+            *zero_padding
+        )
+        title_frame = Frame(
+            self.PADDING,
+            image_frame.height + image_frame.y1,
+            self.DOC_WIDTH,
+            1.00 * inch,
+            *zero_padding
+        )
+        manufacturer_frame = Frame(
+            self.PADDING,
+            title_frame.height + title_frame.y1 + (0.25 * inch),
+            self.DOC_WIDTH,
+            1.00 * inch,
+            *zero_padding
+        )
+
+        self.addPageTemplates([
+            PageTemplate(
+                id='page',
+                frames=[
+                    manufacturer_frame,
+                    title_frame,
+                    image_frame,
+                    line_frame,
+                    details_frame,
+                    feat_frame
+                ],
+                pagesize=pagesize
+            )
+        ])
+
+        self.pages = []
+
+    def construct_manufacturer_frame(self, product):
+        manufacturer = product['manufacturer']['manufacturer']
+        logo_url = manufacturer.get('logo_url')
+        if logo_url:
+            image = image_flowable(logo_url)
+            image._restrictSize(self.DOC_WIDTH * 0.35, 1.00 * inch)
+            image.hAlign = 'LEFT'
+            image.vAlign = 'BOTTOM'
+
+            print(image.imageHeight, image.drawHeight)
+            print(image.imageWidth, image.drawWidth)
+
+            return [Spacer(1, ((1.00 * inch) - image.drawHeight) / 2), image, FrameBreak()]
+        else:
+            name = manufacturer.get('name', '')
+            p = truncate_paragraph(
+                name,
+                FontStyles.MANUFACTURER,
+                self.DOC_WIDTH
+            )
+            return [Spacer(1, (1.00 * inch) - 35), p, FrameBreak()]
+
+    def construct_title_frame(self, product):
+        identity = product['identity']
+        prod_title = truncate_paragraph(
+            identity.get('name', ''),
+            FontStyles.TITLE,
+            self.DOC_WIDTH
+        )
+
+        sku = identity.get('manufacturer_sku')
+        if sku:
+            sku_text = '<b>SKU:</b> %s' % sku
+            return [
+                prod_title,
+                truncate_paragraph(sku_text, FontStyles.LIGHT, self.DOC_WIDTH),
+                FrameBreak()
+            ]
+        return[prod_title, FrameBreak()]
+
+    def construct_image_frame(self, product):
+        def get_default_image(images):
+            for img in images:
+                if img.get("default"):
+                    return img
+            return None
+
+        default_img = get_default_image(product["image"]["images"])
+        if default_img:
+            image = image_flowable(default_img['full_size'])
+            image._restrictSize(self.DOC_WIDTH, 3.65 * inch)
+            return [image, FrameBreak()]
+        return [FrameBreak()]
+
+    def construct_line_frame(self):
+        return [
+            Spacer(1, 0.40 * inch),
+            Line(self.DOC_WIDTH, '#cccccc'),
+            FrameBreak()
+        ]
+
+    def construct_details_frame(self, product):
+        lines = []
+
+        overall_dims = product['overall_dimensions']
+        data = []
+
+        if overall_dims.get('height'):
+            data.append('H %s"' % overall_dims['height'])
+
+        if overall_dims.get('width'):
+            data.append('W %s"' % overall_dims['width'])
+
+        if overall_dims.get('depth'):
+            data.append('D %s"' % overall_dims['depth'])
+
+        if overall_dims.get('diameter'):
+            data.append('Dia %s"' % overall_dims['diameter'])
+
+        data = ", ".join(data)
+        if data:
+            lines.append('<b>Overall Dimensions:</b> %s' % data)
+
+        construct_info = product['construction_information']
+        if construct_info.get('finish'):
+            lines.append('<b>Finish:</b> %s' % construct_info.get('finish'))
+
+        if lines:
+            lines = ['<b>PRODUCT DETAILS</b>'] + lines
+        layout = []
+        for line in lines:
+            layout.append(
+                truncate_paragraph(line, FontStyles.LIGHT, self.DOC_WIDTH)
+            )
+            layout.append(Spacer(1, 0.18 * inch))
+        layout.append(FrameBreak())
+
+        return layout
+
+    def construct_feature_frames(self, product):
+        desc = product['description']
+        lines = []
+
+        if desc.get('features'):
+            lines.append('<b>Features:</b>')
+
+        for feat in desc.get('features'):
+            lines.append("- %s" % feat.get('description_of_feature', ''))
+
+        p = Paragraph("<br/>".join(lines), FontStyles.LIGHT)
+        kif = KeepInFrame(self.DOC_WIDTH, 2.25 * inch, [p], mode='truncate')
+
+        return [kif]
+
+    def add_product(self, product):
+        layout = []
+
+        layout.extend(self.construct_manufacturer_frame(product))
+        layout.extend(self.construct_title_frame(product))
+        layout.extend(self.construct_image_frame(product))
+        layout.extend(self.construct_line_frame())
+        layout.extend(self.construct_details_frame(product))
+        layout.extend(self.construct_feature_frames(product))
+        layout.append(PageBreak())
+        self.pages.extend(layout)
+
+    def to_stream(self):
+        """ Creates PDF file-like object into an instance of StringIO
+
+        :return: pdf stream object
+        :rtype: StringIO instance
+        """
+
+        stream = StringIO()
+        self.build(self.pages, filename=stream)
+        stream.seek(0)
+        return stream

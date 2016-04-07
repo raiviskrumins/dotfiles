@@ -1,0 +1,121 @@
+package models
+
+import (
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+)
+
+type AssemblageComponentRelation struct {
+	AssemblageID int
+	ComponentID  int
+}
+
+type AssemblageTemplate struct {
+	ID          lib.IntField          `json:"id"`
+	Name        lib.StringField       `db:"assemblage_name" json:"name"`
+	Description lib.StringField       `json:"description"`
+	Components  []AssemblageComponent `json:"assemblage_element_list"`
+}
+
+// NewAssemblageTemplate is a factory for creating a new instance of AssemblageTemplate.
+func NewAssemblageTemplate() (*AssemblageTemplate, oops.Error) {
+	set := new(AssemblageTemplate)
+	// TODO: refactor this
+	return set, nil
+}
+func RetrieveAssemblageByID(ctx *app.Context, assemblageID int64) (*AssemblageTemplate, oops.Error) {
+	assemblage, e := NewAssemblageTemplate()
+	if e != nil {
+		return nil, e
+	}
+
+	err := ctx.DBConn.QueryRow("SELECT id, assemblage_name, description FROM assemblage WHERE id = $1", assemblageID).Scan(&assemblage.ID, &assemblage.Name, &assemblage.Description)
+	if err != nil {
+		return nil, oops.ServerError("", "Failed to query assemblage.", err, assemblageID)
+	}
+
+	return buildAssemblage(ctx, assemblage)
+}
+
+func RetrieveAssemblageByName(ctx *app.Context, assemblageName string) (*AssemblageTemplate, oops.Error) {
+	assemblage, e := NewAssemblageTemplate()
+	if e != nil {
+		return nil, e
+	}
+
+	err := ctx.DBConn.QueryRow("SELECT id, assemblage_name, description FROM assemblage WHERE assemblage_name = $1", assemblageName).Scan(&assemblage.ID, &assemblage.Name, &assemblage.Description)
+	if err != nil {
+		return nil, oops.BadRequest("", "Failed to find assemblage by name.", err, assemblageName)
+	}
+
+	return buildAssemblage(ctx, assemblage)
+}
+
+func RetrieveAssemblageByCategory(ctx *app.Context, primaryCategory string, secondaryCategory string, tertiaryCategory string) (*AssemblageTemplate, oops.Error) {
+	if tertiaryCategory != "" {
+		return RetrieveAssemblageByName(ctx, tertiaryCategory)
+	} else if secondaryCategory != "" {
+		return RetrieveAssemblageByName(ctx, secondaryCategory)
+	} else if primaryCategory != "" {
+		return RetrieveAssemblageByName(ctx, primaryCategory)
+	}
+
+	return RetrieveAssemblageByName(ctx, "base_entity")
+}
+
+func buildAssemblage(ctx *app.Context, assemblage *AssemblageTemplate) (*AssemblageTemplate, oops.Error) {
+	var assComponents []AssemblageComponentRelation
+	rows, err := ctx.DBConn.Query("SELECT assemblage_id, component_id FROM assemblage_components WHERE assemblage_id = $1", assemblage.ID.Int64)
+	if err != nil {
+		return nil, oops.ServerError("", "Failed to select assemblage by id.", err, assemblage.ID)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var component AssemblageComponentRelation
+		err := rows.Scan(&component.AssemblageID, &component.ComponentID)
+		if err != nil {
+			return nil, oops.ServerError("", "Failed to scan component ID.", err)
+		}
+
+		assComponents = append(assComponents, component)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	subComponents := make(map[string]AssemblageComponent)
+	compRows, err := ctx.DBConn.Query("SELECT id, component_name, description, table_name, class_name, parent_name FROM component WHERE parent_name IS NOT NULL")
+	if err != nil {
+		return nil, oops.ServerError("", "Failed to query component data.", err)
+	}
+	defer compRows.Close()
+
+	for compRows.Next() {
+		var component AssemblageComponent
+		err := compRows.Scan(&component.ID, &component.Name, &component.Description, &component.TableName, &component.ClassName, &component.ParentName)
+		if err != nil {
+			return nil, oops.ServerError("", "Failed to scan component data.", err)
+		}
+		subComponents[component.ParentName.String] = component
+	}
+
+	if err := compRows.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	for _, assComp := range assComponents {
+		var component AssemblageComponent
+		err := ctx.DBConn.QueryRow("SELECT id, component_name, description, table_name, class_name, parent_name FROM component WHERE id = $1", assComp.ComponentID).Scan(&component.ID, &component.Name, &component.Description, &component.TableName, &component.ClassName, &component.ParentName)
+		if err != nil {
+			return nil, oops.ServerError("", "Failed to query component data.", err)
+		}
+		if val, ok := subComponents[component.Name.String]; ok {
+			component.ChildComponent = &val
+		}
+		assemblage.Components = append(assemblage.Components, component)
+	}
+	return assemblage, nil
+}

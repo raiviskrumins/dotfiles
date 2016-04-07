@@ -1,0 +1,107 @@
+{% extends "index.jinja2" %}
+
+{% block title %}Discover | Amber Engine{% endblock %}
+
+{% block javascript %}
+  {{ super() }}
+  <script type="text/javascript" src="{{ url_for('static', filename='js/min/discover.min.js')|cache_update }}" defer></script>
+{% endblock %}
+
+{% block content_main %}
+<span itemscope itemtype="http://schema.org/WebApplication">
+  <section class="splash-image discover-splash">
+    <span class="overlay"></span>
+    <div class="container">
+      <div class="row">
+        <div class="col-md-12 text-center">
+          <h1>Discover</h1>
+          <h4>A Portal for Online Retailers</h4>
+          <div class="center-buttons center-block">
+            <a role="button" href="{{url_for('contact', referrer='demo')}}" class="btn btn-success visible-xs-block visible-sm-inline-block visible-md-inline-block visible-lg-inline-block">Request a Demo</a>
+            <a role="button" href="http://discover.amberengine.com/login" class="btn btn-primary visible-xs-block visible-sm-inline-block visible-md-inline-block visible-lg-inline-block">Beta Login</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="white text-center">
+    <div class="container">
+      <div class="row" id="productOverview" itemprop="featureList">
+        <h5 class="text-center">As an online retailer, Discover allows you to:</h5>
+        <div class="col-md-4 product-overview">
+          <img class="img-circle" src="{{ url_for('static', filename='img/rebrand/discover/find-products.svg') }}" alt="magnifying glass in circle icon">
+          <h6>Find Products</h6>
+          <p>Discover products and brands to capture the interest of your unique customers.</p>
+        </div>
+        <div class="col-md-4 product-overview">
+          <img class="img-circle" src="{{ url_for('static', filename='img/rebrand/discover/stay-updated.svg') }}" alt="rotating arrows in circle icon">
+          <h6>Stay Updated</h6>
+          <p>Easy access to the latest product offerings from new and favorite manufacturers.</p>
+        </div>
+        <div class="col-md-4 product-overview">
+          <img class="img-circle" src="{{ url_for('static', filename='img/rebrand/discover/connect.svg') }}" alt="parallel arrows in circle icon">
+          <h6>Connect</h6>
+          <p>Contact manufacturers directly from their profile page with ease.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <hr>
+  <section class="white text-center">
+    <div class="container-fluid">
+      <div class="row">
+        <div id="discoverCarousel" class="carousel slide" data-ride="carousel" data-interval="7000">
+          <div class="carousel-inner" role="listbox">
+            <div class="item active">
+              <h2>Find Products</h2>
+              <p>Browse by category or manufacturer, then save and organize your finds. <br class="visible-sm">Know the products you find are online-ready.</p>
+              <img src="{{ url_for('static', filename='img/assets/d-carousel1.png') }}" alt="First slide" class="center-block">
+            </div>
+            <div class="item">
+              <h2>Stay Updated</h2>
+              <p>Access to trusted information directly from the manufacturer.</p>
+              <img src="{{ url_for('static', filename='img/assets/d-carousel2.png') }}" alt="Second slide" class="center-block">
+            </div>
+            <div class="item">
+              <h2>Connect</h2>
+              <p>Contact manufacturers without leaving the system.</p>
+              <img src="{{ url_for('static', filename='img/assets/d-carousel3.png') }}" alt="Third slide" class="center-block">
+            </div>
+          </div><!-- end carousel inner -->
+
+          <a class="left carousel-control" href="#discoverCarousel" role="button" data-slide="prev">
+            <span class="icon-leftarrow"></span>
+            <span class="sr-only">Previous</span>
+          </a>
+          <a class="right carousel-control" href="#discoverCarousel" role="button" data-slide="next">
+            <span class="icon-rightarrow"></span>
+            <span class="sr-only">Next</span>
+          </a>
+
+          <ol class="carousel-indicators visible-xs-block">
+            <li data-target="#discoverCarousel" data-slide-to="0" class="active"></li>
+            <li data-target="#discoverCarousel" data-slide-to="1"></li>
+            <li data-target="#discoverCarousel" data-slide-to="2"></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="overlapped one-seventeen grey tagline text-center">
+    <div class="container">
+      <div class="row">
+        <div class="col-md-12">
+          <h5>Beta Testing is currently Full</h5>
+          <p>We are no longer accepting new accounts for this phase of beta testing. Subscribe below to receive updates <br class="hidden-xs hidden-sm">as we continue to build our launch product. In the meantime, Leslie, our Account Manager would be <br class="hidden-xs hidden-sm">happy to give you a demo. Email her at <a href="mailto:info@amberengine.com">info@amberengine.com</a> if you’re interested.</p>
+          <div class="center-buttons">
+            <a role="button" href="#modal{{ url_for('subscribe_modal') }}" class="btn btn-default visible-xs-block visible-sm-inline-block visible-md-inline-block visible-lg-inline-block js-subscribe-modal">Subscribe</a>
+            <a role="button" href="{{url_for('contact', referrer='demo')}}" class="btn btn-success visible-xs-block visible-sm-inline-block visible-md-inline-block visible-lg-inline-block">Request a Demo</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</span>
+{% endblock content_main %}
+
+{% block footer_color %}white{% endblock %}

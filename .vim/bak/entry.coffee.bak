@@ -1,0 +1,15 @@
+Rlite = require 'rlite-router'
+nAJAX = require 'nanoajax'
+routes = new Rlite()
+
+routes.add '', ->
+  nAJAX.ajax 'html/login.html', (code, res) ->
+    console.log code, res
+  console.log 'test'
+
+processHash = ->
+  hash = location.hash || '#'
+  routes.run hash.slice 1
+
+window.addEventListener 'hashchange', processHash
+processHash()

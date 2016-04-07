@@ -1,0 +1,255 @@
+<div class="modal fade" id="productPreviewDiscover">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title">Preview on Discover</h4>
+                  <div class="row">
+                    <div class="col-md-12">
+                      <p class="preview-status-message">
+                      {%- if product.preference.id and not product.preference.active -%}
+                        Your products are not visible on Discover. To allow retailers to view and to update your preferences, go to the <a href="{{ url_for('sales_view.sales_channels') }}">‘Sales Channel’</a> tab.
+                      {%- elif not product.preference.id and not product.preference.active -%}
+                        Your products are not visible on Discover. To allow retailers to view, turn on your visibility in the <a href="{{ url_for('sales_view.sales_channels') }}">‘Sales Channel’</a> tab.
+                      {%- elif product.preference.id and product.preference.active -%}
+                        This preview reflects the current view of your product on Discover. To update your preferences, go to the <a href="{{ url_for('sales_view.sales_channels') }}">‘Sales Channel’</a> tab.
+                      {%- endif -%}
+                      </p>
+                    </div>
+                  </div>
+            </div>
+            <div class="modal-body">
+              <div class="container-fluid">
+                <div class="row">
+                  <div class="col-md-9">
+                      {% if product["promotional_tags-best_seller"] %}
+                        <span class="label label-info">Best Seller</span>
+                      {% endif %}
+                      {% if product["promotional_tags-limited_stock"] %}
+                        <span class="label label-info">Limited Stock</span>
+                      {% endif %}
+                      {% if product["promotional_tags-new"] %}
+                        <span class="label label-info">New</span>
+                      {% endif %}
+                      {% if product["promotional_tags-discontinued"] %}
+                          <span class="label label-info">Discontinued</span>
+                      {% endif %}
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-md-12">
+                      <h2 class="product-name">
+                        {% if product.preference.identity_name == 'name' %}
+                          {{ product["identity-name"]  or "Product Name" }}
+                        {% elif product.preference.identity_name == 'alternate_name' %}
+                          {{ product["identity-alternate_name"] or "Product Alternate Name" }}
+                        {% endif %}
+                      </h2>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-md-9">
+                      <p class="pull-left"><a href="#">{{ product.manufacturer.manufacturer.name }}</a></p>
+                  </div>
+                  <div class="col-md-3">
+                    <p class="pull-right">
+                      {%- if product["pricing-msrp"] -%}
+                      ${{ product["pricing-msrp"] }}
+                      {%- endif %}
+                      MSRP</p>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="col-md-12">
+                      <hr>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-md-6 product-info">
+                      <div class="row product-info-section">
+                        <div class="col-md-12">
+                          <p class="product-description">
+                            {% if product.preference.description_description == 'description' %}
+                              {{ product["description-description"] or "Product Description" }}
+                            {% elif product.preference.description_description == 'alternate_description' %}
+                              {{ product["description-alternate_description"] or "Product Alternate Description" }}
+                            {% endif %}
+                          </p>
+                        </div>
+                      </div>
+                    {%- if product["identity-manufacturer_sku"] -%}
+                      <div class="row product-info-section">
+                        <div class="col-md-3">
+                          <h3 class="info-type">SKU:</h3>
+                        </div>
+                        <div class="col-md-9">
+                          <p>{{ product["identity-manufacturer_sku"] }}</p>
+                        </div>
+                      </div>
+                    {%- endif -%}
+                    {%- if product.preference.pricing_msrp or
+                      product.preference.pricing_minimum_internet_price or
+                      product.preference.pricing_trade_price or
+                      product.preference.pricing_dealer_price or
+                      product.preference.pricing_wholesale -%}
+                      <div class="row product-info-section">
+                        <div class="col-md-12">
+                          <h3 class="info-type">Price:</h3>
+                            <div class="table-responsive">
+                              <table class="table">
+                                <tbody>
+                                  {%- if product.preference.pricing_msrp -%}
+                                  <tr>
+                                    <td class="col-md-3"><p class="text-left"><strong>MSRP:</strong></p></td>
+                                    <td class="col-md-9"><p class="info-content">${{ product["pricing-msrp"] or 'MSRP' }}</p></td>
+                                  </tr>
+                                  {%- endif -%}
+                                  {%- if product.preference.pricing_minimum_internet_price -%}
+                                  <tr>
+                                    <td class="col-md-3"><p class="text-left"><strong>Min. Internet:</strong></p></td>
+                                    <td class="col-md-9"><p class="info-content">${{ product["pricing-minimum_internet_price"] or 'Minimum Internet Price' }}</p></td>
+                                  </tr>
+                                  {%- endif -%}
+                                  {%- if product.preference.pricing_trade_price -%}
+                                  <tr>
+                                    <td class="col-md-3"><p class="text-left"><strong>Trade:</strong></p></td>
+                                    <td class="col-md-9"><p class="info-content">${{ product["pricing-trade_price"] or 'Trade Price' }}</p></td>
+                                  </tr>
+                                  {%- endif -%}
+                                  {%- if product.preference.pricing_dealer_price -%}
+                                  <tr>
+                                    <td class="col-md-3"><p class="text-left"><strong>Dealer:</strong></p></td>
+                                    <td class="col-md-9"><p class="info-content">${{ product["pricing-dealer_price"] or 'Dealer Price' }}</p></td>
+                                  </tr>
+                                  {%- endif -%}
+                                  {%- if product.preference.pricing_wholesale -%}
+                                  <tr>
+                                    <td class="col-md-3"><p class="text-left"><strong>Wholesale:</strong></p></td>
+                                    <td class="col-md-9"><p class="info-content">${{ product["pricing-wholesale"] or 'Wholesale Price' }}</p></td>
+                                  </tr>
+                                  {%- endif -%}
+                                </tbody>
+                              </table>
+                            </div>
+                        </div>
+                      </div>
+                    {%- endif -%}
+                    {% if product["overall_dimensions-width"] or product["overall_dimensions-depth"] or product["overall_dimensions-height"] or product["overall_dimensions-diameter"] %}
+                      <div class="row product-info-section">
+                        <div class="col-md-3">
+                          <h3 class="info-type">Dimensions:</h3>
+                        </div>
+                        <div class="col-md-9">
+                          <p class="info-content">
+                            {% set ex = joiner(" x") %}
+                            {%- if product["overall_dimensions-height"] -%}
+                              {{ ex() }}
+                              {{ product["overall_dimensions-height"] }}"H
+                            {%- endif -%}
+                            {%- if product["overall_dimensions-width"] -%}
+                              {{ ex() }}
+                              {{ product["overall_dimensions-width"] }}"W
+                            {%- endif -%}
+                            {%- if product["overall_dimensions-depth"] -%}
+                              {{ ex() }}
+                              {{ product["overall_dimensions-depth"] }}"D
+                            {%- endif -%}
+                            {%- if product["overall_dimensions-diameter"] -%}
+                              {{ ex() }}
+                              {{ product["overall_dimensions-diameter"] }}"Dia
+                            {%- endif -%}
+                          </p>
+                        </div>
+                      </div>
+                    {% endif %}
+                    {% if product["construction_information-material"] %}
+                      <div class="row product-info-section">
+                        <div class="col-md-3">
+                            <h3 class="info-type">Material:</h3>
+                        </div>
+                        <div class="col-md-9">
+                            <p class="info-content">{{ product["construction_information-material"] }}</p>
+                        </div>
+                      </div>
+                    {% endif %}
+                    {% if product.option.option_sets %}
+                      <div class="row option-sets-section">
+                        <div class="col-md-12">
+                            <h3 class="info-type">Option Sets:</h3>
+                        </div>
+                      </div>
+                      {% for set in product.option.option_sets %}
+                      <div class="product-option">
+                        <div class="row">
+                          <div class="col-md-12">
+                            <p data-target="#collapse{{ set.id }}" data-toggle="collapse" {%- if loop.index != 1 -%}class="collapsed"{%- endif -%}><strong class="option-clickable">
+                              <span class="plus-minus"></span>
+                              {{ set.name }}
+                            </strong></p>
+                          </div>
+                        </div>
+                        <div class="row collapse{%- if loop.index == 1 %} in{% endif -%}" id="collapse{{ set.id }}">
+                          <div class="col-md-12">
+                            {% for option in set.options %}
+                              <div class="product-option-thumb" style="background-image: url({{ option.image }});" data-set="{{ set.id }}" data-option="{{ option.id }}"></div>
+                            {% endfor %}
+                          </div>
+                        </div>
+                      </div>
+                      {% endfor %}
+                    {% endif %}
+                  </div>
+                  <div class="col-md-1 product-details-gutter"></div>
+                  <div class="col-md-5 product-images">
+                      {% for image in product.image.images %}
+                          {% if image.default %}
+                              <div style="background-image: url({{ image.full_size }});" data-url="{{ image.full_size }}" class="product-main-image"></div>
+                          {% endif %}
+                      {% endfor %}
+                      <div class="row">
+                      {% if  product.image.images|length > 1 %}
+                          {% for image in product.image.images %}
+                              <div class="col-lg-3 col-md-4 product-thumb {%- if image.default %} current{% endif -%}">
+                                  <div style="background-image: url({{ image.full_size }});" data-url="{{ image.full_size }}" class="js-thumb-preview product-thumb-image"></div>
+                              </div>
+                          {% endfor %}
+                      {% endif %}
+                      </div>
+                  </div>
+                  <div class="shipping-section col-md-12">
+                    <hr>
+                    <h3>Shipping &amp; Returns</h3>
+                    {% if product["ordering_information-lead_time"] %}
+                        <p><strong>Lead Time:</strong> {{ product["ordering_information-lead_time"] }}</p>
+                    {% endif %}
+
+                    {% if product.shipping_boxes %}
+                      <p><strong>Number of Shipping Packages:</strong> {{ product.shipping_boxes }}</p>
+                    {% endif %}
+
+                    {% if product["shipping_information-ships_from"] %}
+                        <p><strong>Ships From:</strong> {{ product["shipping_information-ships_from"] }}</p>
+                    {% endif %}
+
+                    {% if product["shipping_information-drop_ship"] or product["shipping_information-standard"] or product["shipping_information-freight"] or product["shipping_information-white_glove"] %}
+                        <p><strong>Shipping Method:</strong> <span class="shipping-method">{{ product.shipping_methods|join(', ') }}</span></p>
+                    {% endif %}
+
+                    <p class="return-message">
+                      {% if product.manufacturer.manufacturer.returnable %}
+                        <strong>Return Period:</strong> {{product.manufacturer.manufacturer.return_period}} days. <a href="#">See full return policy</a>
+                      {% else %}
+                        <strong>This product is not returnable.</strong>
+                      {% endif %}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

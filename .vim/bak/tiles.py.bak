@@ -1,0 +1,23 @@
+import os
+import json
+
+import pygame
+
+import game.jsonify as jsonify
+import game.tiling as tiling
+import game.settings as settings
+
+
+class Floor(tiling.Tile):
+    def __init__(self, *args, **kwargs):
+        tiling.Tile.__init__(".", *args, **kwargs)
+
+
+class Player(tiling.Tile):
+    def __init__(self, *args, **kwargs):
+        tiling.Tile.__init__("@", foreground=(0, 0, 255), *args, **kwargs)
+
+            
+class Wall(tiling.Tile):
+    def __init__(self, *args, **kwargs):
+        tiling.Tile.__init__("#", *args, **kwargs)

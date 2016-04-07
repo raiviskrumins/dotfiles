@@ -1,0 +1,57 @@
+{% extends "base.jinja2" %}
+
+{% block content %}
+<div class="container_12">
+  <div class="wrapper indent-bottom4">
+    <div class="grid_12 last-col">
+      <div class="bg-color5">
+        <h3 class="box-title">Infant/Toddler Program</h3>
+        <div class="indents">
+          <p class="wrapper">
+            Here at Sunny Meadows Child Care, we are reponsive to all aspects of
+            children's development. By using defined practices of the Infant-Toddler
+            development; caregivers develop close, supportive relationships with
+            the children in their care and their families.
+          </p>
+          <p class="wrapper">
+            Our caregivers support children's natural desire to be active learners.
+            We create an active learning enviroment for infacts and toddlers that
+            meet all their needs - their social and emotional, physical and cognitive
+            needs. Their programs purpose is to ensure that your child's first year
+            of learning is a positive experience in a warm and caring enviroment, 
+            where children can learn in a group settings, and also individually.
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-color0">
+        <h3 class="box-title">Preschool Program</h3>
+        <div class="indents">
+          <p class="wrapper">
+            In our preschool class, children start learning numbers, counting,
+            the alphabet, beginning pencil skills, color and shape names,
+            small and large motor development, hand-eye coordination spatial 
+            awareness, music melody and rhythm. We offer activities to
+            introduce and foster the growth and development. We provide a 
+            caring, loving, learning enviroment that is developmentally appropriate
+            for each child's interest and needs. We help prepare them for 
+            kindergarten by building onto skills they already learned.
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-color1">
+        <h3 class="box-title">Before & After School Program</h3>
+        <div class="indents">
+          <p class="wrapper">
+            We provide indoor and outdoor activities, we offer arts and crafts,
+            reading time, and we also have game time (game time is limited per
+            day). School-age children can also work on homework after school before
+            parents pick them up.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

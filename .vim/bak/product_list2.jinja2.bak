@@ -1,0 +1,23 @@
+{% extends "index.jinja2" %}
+{% block title %}Channel Manager{% endblock %}
+
+{% block javascript %}
+{{super()}}
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/combobox.min.js')|cache_update }}"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='js/min/product.min.js')|cache_update }}"></script>
+{% endblock %}
+
+{% block content_main %}
+
+<div class="col-md-12">
+    <h1>All Products (<span class="count">{{ count }}</span>)</h1>
+    {% include 'product/product_table2.jinja2' %}
+</div>
+
+{% endblock content_main %}
+
+{% block footer %}
+<div class="hidden-md hidden-lg">
+  {{super()}}
+</div>
+{% endblock %}

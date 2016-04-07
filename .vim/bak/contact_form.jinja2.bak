@@ -1,0 +1,34 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+
+{{ contact_form.hidden_tag() }}
+<div class="row">
+    <div class="col-md-5">
+        {{ basic_field(contact_form.email) }}
+        <div class="row">
+            <div class="col-md-8">{{ basic_field(contact_form.phone, placeholder="(###) ###-####") }}</div>
+            <div class="col-md-4">{{ basic_field(contact_form.extension) }}</div>
+        </div>
+        {{ basic_field(contact_form.street_address_1) }}
+        {{ basic_field(contact_form.country) }}
+        {{ basic_field(contact_form.city) }}
+        <div class="row">
+            <div class="col-md-8">
+                <div id="US"{% if contact_form.country.data == 'CA' %} class="hide"{% endif %}>
+                    {{ basic_field(contact_form.state) }}
+                </div>
+                <div id="CA"{% if contact_form.country.data != 'CA' %} class="hide"{% endif %}>
+                    {{ basic_field(contact_form.province) }}
+                </div>
+            </div>
+            <div class="col-md-4">{{ basic_field(contact_form.zipcode) }}</div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        {{ basic_field(contact_form.facebook_url) }}
+        {{ basic_field(contact_form.twitter_url) }}
+        {{ basic_field(contact_form.google_plus_url) }}
+        {{ basic_field(contact_form.pinterest_url) }}
+        {{ basic_field(contact_form.linkedin_url) }}
+    </div>
+</div>

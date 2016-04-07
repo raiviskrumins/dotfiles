@@ -1,0 +1,42 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Amber Engine</title>
+    <meta charset="UTF-8" />
+    <meta name="google" content="notranslate" />
+    <meta http-equiv="Content-Language" content="en_US" />
+    <link rel="shortcut icon" href="/static/favicon.ico">
+    <link rel="stylesheet" type="text/css" href="/static/vendor/bootstrap/css/bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="/static/css/error.css">
+</head>
+<body class="error500">
+    <div class="wrapper">
+        <header class="clearfix">
+            <a href="/">
+                <img class="pull-left landing-logo-image" src="/static/img/rebrand/amber/amberengine-white.svg">
+            </a>
+        </header>
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12">
+                    <h1 class="xl-text">500</h1>
+
+    <h6>Something went wrong.</h6>
+    <p>Sorry about that, there seems to have been an error on our end.</p>
+    <p><a href="/" class="btn btn-primary">Back to Amber Engine</a></p>
+
+                </div>
+            </div>
+        </div>
+        <div class="push"></div>
+    </div>
+    <footer class="text-center">
+    <p>&copy; 2014-2016 Amber Engine LLC.
+        <a href="/contact">Contact</a>
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy Policy</a>
+        <a href="http://amberengine.com" target="_blank">Amber Engine</a></p>
+</footer>
+</body>
+</html>

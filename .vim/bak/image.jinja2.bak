@@ -1,0 +1,10 @@
+{% from 'macros.jinja2' import basic_field, checkbox_field, append_field, prepend_field %}
+
+<a href="{{url_for('product_view.product_image_modal_new', prod_id=product.id)}}" class="js-new-image btn btn-primary new-image-btn">+ New Image</a>
+<div class="image-frame">
+    <div class="image-holder">
+      {% for image in product.images.image_list %}
+            {% include "product/sub_components/images.jinja2" %}
+        {% endfor %}
+    </div>
+</div>

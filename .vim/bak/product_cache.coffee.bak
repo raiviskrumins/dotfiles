@@ -1,0 +1,283 @@
+# helper function for sort. gets value from a nested object.
+# Ex.
+#   object = {id: 432, identity: {name: 'Test Product'}}
+#   keys = 'identity.name'
+#   finds object['identity']['name']
+#   returns 'Test Product'
+getValue = (object, keys) ->
+  key_list = keys.split('.')
+  value = object
+  _.each key_list, (key) ->
+    value = value[key]
+  return String(value).toLowerCase()
+
+class ProductCache
+
+  constructor: (@source_url, @template_url, @chunk_size=100, ui={}) ->
+    @initialized = false
+    @selected_products = []
+    @all_products = []
+    @searchFilterQueue = []
+
+    @total = 0  # total number of products
+    @count = 0  # count of products in search
+
+    @search = {
+      terms: ''
+      limit: @chunk_size
+      offset: 0
+      category: ''
+      sort_key: ''
+      sort_direction: ''
+      return_ids: false
+      selected: []
+    }
+
+    @ui = {
+      table: '' # table where product data will go
+      count: '.count' # display for product count
+      selected_count: '.js-selected-count' # display for selected product count
+      master_toggle: '.js-master-select'
+      filters: [] # elements acting as filters
+    }
+
+    @available_ids = []
+
+    #optional attributes:
+    # - no_products_url: path to a template for when no products are in the main
+    #   cache (i.e. no products exist)
+    # - no_results_url: path to a template for when no products are in the
+    #   active cache (i.e. search/filter has no results)
+    @no_products_url = null
+    @no_results_url = null
+
+    _.extend @ui, ui
+
+  # Update any UI elements after object creation.
+  setUI: (ui) ->
+    _.extend @ui, ui
+
+  # Initial GET for a new search. Will grab search terms from the filter
+  # elements set in the ui object.
+  get: (options={}) ->
+    for filter in @ui.filters
+      @search[filter.attribute] = $(filter.element).val() or ''
+
+    @search.return_ids = true
+    @search.selected = @selected_products
+
+    $('.js-loading-row').show()
+
+    $.ajax @source_url,
+      type: 'PUT'
+      contentType: 'application/json'
+      data: JSON.stringify @search
+      success: (result) =>
+        if @searchFilterQueue.length > 0
+          fn = _.bind(@searchFilterQueue.pop(), @)
+          @searchFilterQueue = []
+          fn()
+          return
+        $('.js-loading-row').hide()
+
+        #get the total number of products
+        @available_ids = result.ids
+        @total = result.total
+        @count = result.products.length
+
+        if @available_ids.length != @selected_products.length
+          $('.js-master-select').removeClass 'selected'
+
+        $('.js-visible-count').html @available_ids.length
+        if @search.terms.length > 0 || @search.category.length > 0
+          $('.products-visible').show()
+        else
+          $('.products-visible').hide()
+
+        if @count > 0
+          @draw result.products
+        else if @total > 0 || parseInt($('.products-visible .count').html()) > 0
+          @noResults()
+        else
+          @noProducts()
+
+        @drawMaster()
+        $(document).trigger 'loaded.cache.list'
+        window.fetching_products = false
+
+      complete: () =>
+        callbackWrapper = () =>
+          if options.callback? and not @initialized
+            options.callback.call()
+            @initialized = true
+        $(document).on 'shown.list.chunk', callbackWrapper
+
+  # gets the rendered template for the set of products and adds it to the DOM
+  draw: (products) ->
+    $.ajax @template_url,
+      type: 'PUT'
+      contentType: 'application/json'
+      data: JSON.stringify
+        products: products,
+      success: (result) =>
+        $('.js-loading-row').before result
+        @markSelected()
+      complete: () =>
+        @search.offset += @chunk_size
+        $('.js-loading-row').hide()
+        $(document).trigger 'shown.list.chunk'
+        $(@).trigger 'loaded'
+
+  # Loads a chunk of the cache based on the offset and chunk size.
+  showNext: () ->
+    if @count < @available_ids.length
+          $('.js-loading-row').show()
+    else
+      window.fetching_products = false
+      return
+
+    $.ajax @source_url,
+      type: 'PUT'
+      contentType: 'application/json'
+      data: JSON.stringify @search
+      success: (result) =>
+        parsedJSON = result
+        @draw parsedJSON.products
+        @count += parsedJSON.products.length
+        @available_ids = parsedJSON.ids
+        if @available_ids.length != @selected_products.length
+          $('.js-master-select').removeClass 'selected'
+        window.fetching_products = false
+        $('.js-visible-count').html @available_ids.length
+
+  noProducts: () ->
+    $('.js-loading-row').hide()
+
+    if @no_products_url?
+      $.ajax @no_products_url,
+        type: 'GET'
+        success: (result) =>
+          $('.no-products').parent('tr').remove()
+          $(@ui.table).append result
+
+  noResults: () ->
+    $('.js-loading-row').hide()
+
+    if @no_results_url?
+      $.ajax @no_results_url,
+        type: 'GET'
+        success: (result) =>
+          $('.no-results').parent('tr').remove()
+          $(@ui.table).append result
+
+  # mark products selected once added to DOM
+  markSelected: () ->
+    selected_prods = @selected_products
+
+    $('.product-row .selected').removeClass 'selected'
+
+    _.each @selected_products, (product_id) ->
+      $(".select-button[data-id=#{product_id}]").addClass 'selected'
+    $('.js-selected-count').html @selected_products.length
+
+  # Add a search/filter field to be used with the cache.
+  # - element: String css selector
+  # - prod_attribute: what attribute of product this filter will look at
+  addFilter: (element, prod_attribute) ->
+    @ui.filters.push
+      element: element
+      attribute: prod_attribute
+
+  searchFilter: () ->
+    fn = ->
+      window.fetching_products = true
+      @search.offset = 0
+
+      $('.no-results').remove()
+      $('.product-row').remove()
+
+      @get()
+    fn = fn.bind(@)
+
+    if window.fetching_products
+      @searchFilterQueue.push(fn)
+    else
+      fn()
+
+  sortBy: (key, direction) ->
+    @search.sort_direction = direction
+    @search.sort_key = key
+    @search.offset = 0
+
+    $('.product-row').remove()
+
+    @get()
+
+  # Adds product with this id to selected products list.
+  # * null/undefined id is assumed to be the master select (will add all)
+  select: (id) ->
+    # add selected product to list
+    # if it's the master, add all products
+    # update the ui
+    if id
+      @selected_products.push id
+    else # no id, must be the master toggle
+      @selected_products = _.union @selected_products, @all_products
+      @markSelected()
+
+  # Removes product with this is from selected products list.
+  # * null/undefined id is assumed to be master select (will remove all)
+  unselect: (id) ->
+    # remove product from list
+    # if it's the master, remove all visible products from list
+    # update the ui
+    if id
+      @selected_products = _.without @selected_products, id
+    else # no id, must be the master toggle
+      @selected_products = _.difference @selected_products, @all_products
+      @markSelected()
+
+  # Sets the selected products to the provided list. Does not add to currently
+  # selected products, it replaces the list entirely.
+  setSelected: (list) ->
+    @selected_products = list
+    @markSelected()
+    @setMaster()
+
+  setMaster: (e) ->
+    if e
+        e.preventDefault()
+        e.stopPropagation()
+
+    # clear master select classes
+    $(@ui.master_toggle).toggleClass 'selected all'
+
+    if $(@ui.master_toggle).hasClass('all') and not $(@ui.master_toggle).hasClass 'selected'
+      $(@ui.master_toggle).removeClass 'all'
+
+    # TODO: set a selected attribute for sorting somewhere??
+
+    selected_count = @selected_products.length
+    $(@ui.selected_count).html selected_count
+
+    if $(@ui.master_toggle).hasClass 'selected'
+      $('.js-select-toggle').addClass 'selected'
+      @selected_products = @available_ids
+      $(document).trigger 'selected.amber.toggle'
+    else
+      $('.js-select-toggle').removeClass 'selected'
+      @selected_products = []
+      $(document).trigger 'unselected.amber.toggle'
+    $(@ui.selected_count).html @selected_products.length
+
+  # doing brute force shit
+  drawMaster: () ->
+    $(@ui.master_toggle).removeClass 'selected all'
+
+    if @selected_products.length > 0
+      $(@ui.master_toggle).addClass 'selected'
+
+    # if the selected product ids and the available ids are the same, then all
+    # visible products are selected
+    if @selected_products.length == @available_ids.length
+      $(@ui.master_toggle).addClass 'all'

@@ -1,0 +1,243 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// createHardwareTable will return the necessary SQL statements to be executed in
+// order to generate the option_hardware table in the database.
+func createHardwareTable() []string {
+	var sql []string
+
+	sql = append(sql, `
+		CREATE TABLE option_hardware (
+			id integer NOT NULL,
+			finish character varying,
+			height double precision,
+			width double precision,
+			option_depth double precision,
+			diameter double precision,
+			option_id integer
+		);
+	`)
+
+	sql = append(sql, `ALTER TABLE option_hardware OWNER TO doodle;`)
+
+	sql = append(sql, `
+		CREATE SEQUENCE option_hardware_id_seq
+			START WITH 1
+			INCREMENT BY 1
+			NO MINVALUE
+			NO MAXVALUE
+			CACHE 1;
+	`)
+
+	sql = append(sql, `ALTER TABLE option_hardware_id_seq OWNER TO doodle;`)
+	sql = append(sql, `ALTER SEQUENCE option_hardware_id_seq OWNED BY option_hardware.id;`)
+	sql = append(sql, `ALTER TABLE ONLY option_hardware ALTER COLUMN id SET DEFAULT nextval('option_hardware_id_seq'::regclass);`)
+	sql = append(sql, `ALTER TABLE ONLY option_hardware ADD CONSTRAINT pk_option_hardware PRIMARY KEY (id);`)
+	sql = append(sql, `CREATE INDEX ix_option_option_hardware_id ON option_hardware USING btree (option_id);`)
+	sql = append(sql, `ALTER TABLE ONLY option_hardware ADD CONSTRAINT fk_option_option_hardware_id_option FOREIGN KEY (option_id) REFERENCES option(id) ON DELETE CASCADE;`)
+
+	return sql
+}
+
+// createLeatherTable will return the necessary SQL statements to be executed in
+// order to generate the option_leather table in the database.
+func createLeatherTable() []string {
+	var sql []string
+
+	sql = append(sql, `
+		CREATE TABLE option_leather (
+		id integer NOT NULL,
+		leather_type character varying,
+		pattern_number character varying,
+		hide_size double precision,
+		average_thickness double precision,
+		finish character varying,
+		performance character varying,
+		flammability character varying,
+		cleaning_instructions character varying,
+		option_id integer);`)
+
+	sql = append(sql, `ALTER TABLE option_leather OWNER TO doodle;`)
+
+	sql = append(sql, `
+		CREATE SEQUENCE option_leather_id_seq
+			START WITH 1
+			INCREMENT BY 1
+			NO MINVALUE
+			NO MAXVALUE
+			CACHE 1;`)
+
+	sql = append(sql, `ALTER TABLE option_leather_id_seq OWNER TO doodle;`)
+	sql = append(sql, `ALTER SEQUENCE option_leather_id_seq OWNED BY option_leather.id;`)
+	sql = append(sql, `ALTER TABLE ONLY option_leather ALTER COLUMN id SET DEFAULT nextval('option_leather_id_seq'::regclass);`)
+	sql = append(sql, `ALTER TABLE ONLY option_leather ADD CONSTRAINT pk_option_leather PRIMARY KEY (id);`)
+	sql = append(sql, `CREATE INDEX ix_option_leather_option_id ON option_leather USING btree (option_id);`)
+	sql = append(sql, `ALTER TABLE ONLY option_leather ADD CONSTRAINT fk_option_leather_option_id_option FOREIGN KEY (option_id) REFERENCES option(id) ON DELETE CASCADE;`)
+
+	return sql
+}
+
+// createNailheadTable will return the necessary SQL statements to be executed in
+// order to generate the option_nailhead table in the database.
+func createNailheadTable() []string {
+	var sql []string
+
+	sql = append(sql, `
+		CREATE TABLE option_nailhead (
+			id integer NOT NULL,
+			finish character varying,
+			height double precision,
+			width double precision,
+			option_depth double precision,
+			diameter double precision,
+			option_id integer
+		);
+	`)
+
+	sql = append(sql, `ALTER TABLE option_nailhead OWNER TO doodle;`)
+	sql = append(sql, `
+		CREATE SEQUENCE option_nailhead_id_seq
+			START WITH 1
+			INCREMENT BY 1
+			NO MINVALUE
+			NO MAXVALUE
+			CACHE 1;
+	`)
+
+	sql = append(sql, `ALTER TABLE option_nailhead_id_seq OWNER TO doodle;`)
+	sql = append(sql, `ALTER SEQUENCE option_nailhead_id_seq OWNED BY option_nailhead.id;`)
+	sql = append(sql, `ALTER TABLE ONLY option_nailhead ALTER COLUMN id SET DEFAULT nextval('option_nailhead_id_seq'::regclass);`)
+	sql = append(sql, `ALTER TABLE ONLY option_nailhead ADD CONSTRAINT pk_option_nailhead PRIMARY KEY (id);`)
+	sql = append(sql, `CREATE INDEX ix_option_nailhead_option_id ON option_nailhead USING btree (option_id);`)
+	sql = append(sql, `ALTER TABLE ONLY option_nailhead ADD CONSTRAINT fk_option_nailhead_option_id_option_set FOREIGN KEY (option_id) REFERENCES option_set(id) ON DELETE CASCADE;`)
+
+	return sql
+}
+
+// createTextileTable will return the necessary SQL statements to be executed in
+// order to generate the option_textile table in the database.
+func createTextileTable() []string {
+	var sql []string
+
+	sql = append(sql, `
+		CREATE TABLE option_textile (
+			id integer NOT NULL,
+			option_content character varying,
+			weave_type character varying,
+			width double precision,
+			treatment character varying,
+			option_usage character varying,
+			grade character varying,
+			pattern_number character varying,
+			vertical_repeat double precision,
+			horizontal_repeat double precision,
+			direction character varying,
+			color character varying,
+			option_scale character varying,
+			design_type character varying,
+			martindale character varying,
+			wyzenbeek character varying,
+			flammability character varying,
+			cleaning_instructions character varying,
+			option_id integer
+		);
+	`)
+
+	sql = append(sql, `ALTER TABLE option_textile OWNER TO doodle;`)
+	sql = append(sql, `
+		CREATE SEQUENCE option_textile_id_seq
+			START WITH 1
+			INCREMENT BY 1
+			NO MINVALUE
+			NO MAXVALUE
+			CACHE 1;
+	`)
+
+	sql = append(sql, `ALTER TABLE option_textile_id_seq OWNER TO doodle;`)
+	sql = append(sql, `ALTER SEQUENCE option_textile_id_seq OWNED BY option_textile.id;`)
+	sql = append(sql, `ALTER TABLE ONLY option_textile ALTER COLUMN id SET DEFAULT nextval('option_textile_id_seq'::regclass);`)
+	sql = append(sql, `ALTER TABLE ONLY option_textile ADD CONSTRAINT pk_option_textile PRIMARY KEY (id);`)
+	sql = append(sql, `CREATE INDEX ix_option_textile_option_id ON option_textile USING btree (option_id);`)
+	sql = append(sql, `ALTER TABLE ONLY option_textile ADD CONSTRAINT fk_option_textile_option_id_option_set FOREIGN KEY (option_id) REFERENCES option(id) ON DELETE CASCADE;`)
+
+	return sql
+}
+
+// createTrimTable will return the necessary SQL statements to be executed in
+// order to generate the option_trim table in the database.
+func createTrimTable() []string {
+	var sql []string
+
+	sql = append(sql, `
+		CREATE TABLE option_trim (
+			id integer NOT NULL,
+			color character varying,
+			height double precision,
+			width double precision,
+			depth double precision,
+			diameter double precision,
+			content character varying,
+			trim_type character varying,
+			name character varying,
+			"default" boolean,
+			image character varying,
+			description character varying,
+			number character varying,
+			option_id integer,
+			surcharge integer
+		);
+	`)
+
+	sql = append(sql, `ALTER TABLE option_trim OWNER TO doodle;`)
+	sql = append(sql, `
+	CREATE SEQUENCE option_trim_id_seq
+   		 START WITH 1
+    	INCREMENT BY 1
+    	NO MINVALUE
+    	NO 	MAXVALUE
+    	CACHE 1;
+	`)
+
+	sql = append(sql, `ALTER TABLE option_trim_id_seq OWNER TO doodle;`)
+
+	sql = append(sql, `ALTER SEQUENCE option_trim_id_seq OWNED BY option_trim.id;`)
+	sql = append(sql, `ALTER TABLE ONLY option_trim ALTER COLUMN id SET DEFAULT nextval('option_trim_id_seq'::regclass);`)
+
+	sql = append(sql, `ALTER TABLE ONLY option_trim ADD CONSTRAINT pk_option_trim PRIMARY KEY (id);`)
+	sql = append(sql, `CREATE INDEX ix_option_trim_option_id ON option_trim USING btree (option_id);`)
+	sql = append(sql, `ALTER TABLE ONLY option_trim ADD CONSTRAINT fk_option_trim_option_id_option_set FOREIGN KEY (option_id) REFERENCES option_set(id) ON DELETE CASCADE;`)
+
+	return sql
+}
+
+// Up is executed when this migration is applied
+func Up_20151109113200(txn *sql.Tx) {
+	var sql []string
+
+	sql = append(sql, createHardwareTable()...)
+	sql = append(sql, createLeatherTable()...)
+	sql = append(sql, createNailheadTable()...)
+	sql = append(sql, createTextileTable()...)
+	sql = append(sql, createTrimTable()...)
+
+	for _, stmt := range sql {
+		txn.Exec(stmt)
+	}
+}
+
+// Down is executed when this migration is rolled back
+func Down_20151109113200(txn *sql.Tx) {
+	sql := []string{
+		"DROP TABLE option_hardware;",
+		"DROP TABLE option_leather;",
+		"DROP TABLE option_nailhead;",
+		"DROP TABLE option_textile;",
+		"DROP TABLE option_trim;"}
+
+	for _, stmt := range sql {
+		txn.Exec(stmt)
+	}
+}

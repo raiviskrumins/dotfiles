@@ -1,0 +1,351 @@
+package models
+
+import (
+	"database/sql/driver"
+	"io"
+	"reflect"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+)
+
+// ManufacturerImage contains the necessary properties required for representation
+// within the database.
+type ManufacturerImage struct {
+	ID             lib.IntField    `json:"id" primary:"true"`
+	ManufacturerID lib.IntField    `json:"manufacturer_id"`
+	Default        lib.BoolField   `db:"manufacturer_image_default" json:"default"`
+	Caption        lib.StringField `json:"caption"`
+	URL            lib.StringField `json:"url"`
+}
+
+func (img ManufacturerImage) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("default", form.ClassBool, form.Render("Default", form.ElementCheckbox)),
+		form.NewField("caption", form.ClassStr, form.Render("Caption", form.ElementText)),
+		form.NewField("url", form.ClassURL, form.Render("URL", "string")),
+	)
+}
+
+// NewIterator returns a iterator for the current ManufacturerImage instance.
+func (comp *ManufacturerImage) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(comp).Elem(), DataType: reflect.TypeOf(*comp), Current: -1}
+}
+
+// ColumnNames returns a slice of strings for each DB column name for the struct.
+func (comp *ManufacturerImage) ColumnNames() []string {
+	return lib.ColumnNames(comp.NewIterator())
+}
+
+func (comp *ManufacturerImage) Map() map[string]lib.IteratorItem {
+	return lib.Map(comp.NewIterator())
+}
+
+func (comp *ManufacturerImage) SetValue(newComp interface{}) {
+	lib.SetFields(comp, newComp)
+}
+
+// TableName returns the name of the table in the DB for the ManufacturerImage struct.
+func (set ManufacturerImage) TableName() string {
+	return "manufacturer_image"
+}
+
+func (set ManufacturerImage) FetchRelation(ctx *app.Context, primaryID driver.Value) (interface{}, oops.Error) {
+	return RetrieveManufacturer(ctx, int(primaryID.(int64)))
+}
+
+// CreateManufacturerImage inserts a new entry into the database and returns a
+// ManufacturerImage instance.
+func CreateManufacturerImage(ctx *app.Context, body io.ReadCloser) (*ManufacturerImage, oops.Error) {
+	ptr, e := Factory("manufacturer_image")
+	if e != nil {
+		return nil, e
+	}
+	img := ptr.(*ManufacturerImage)
+
+	e = lib.DecodeJSON(body, img)
+	if e != nil {
+		return nil, e
+	}
+
+	if img.Default.Valid == true && img.Default.Bool == true {
+		e = ResetFeatureImages(ctx, img.ManufacturerID.Int64)
+		if e != nil {
+			return nil, e
+		}
+	}
+
+	pkID, e := pqdb.CreateModel(ctx, img)
+	if e != nil {
+		return nil, e
+	}
+
+	img.ID.Set(pkID.(int64))
+
+	return img, nil
+}
+
+// ListManufacturerImages returns a collection of ManufacturerImages which relate to the
+// manufacturer specified by the provided Public Key.
+func ListManufacturerImages(ctx *app.Context, limit int, offset int, filtering map[string]interface{}, orderBy pqdb.OrderExpression) ([]ManufacturerImage, int, oops.Error) {
+	ptr, e := Factory("manufacturer_image")
+	if e != nil {
+		return nil, 0, e
+	}
+	img := ptr.(*ManufacturerImage)
+
+	mfrImgsTable := pqdb.NewTable(img.TableName())
+	mfrTable := pqdb.NewTable("manufacturer")
+
+	query, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	for _, col := range img.ColumnNames() {
+		query.AddColumn(mfrImgsTable.Column(col))
+	}
+
+	query.AddTable(mfrImgsTable)
+
+	var wheres []pqdb.WhereItem
+
+	if ctx.Role != nil && ctx.Role["ManufacturerImage"]&permissions.ManufacturerImageRetrieveAll == 0 {
+		if ctx.Role["ManufacturerImage"]&permissions.ManufacturerImageRetrieveActive != 0 {
+			query.LeftJoin(mfrTable, pqdb.Predicate{mfrImgsTable.Column("manufacturer_id"), "=", mfrTable.Column("id")})
+			wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{mfrTable.Column("active"), "=", true}))
+		} else {
+			wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{mfrImgsTable.Column("manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}))
+		}
+	}
+
+	joins := make(map[string]pqdb.Table)
+	where, e := UnravelNestedFilter(ctx, img, query, mfrImgsTable, joins, filtering)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	if len(where.Items) > 0 {
+		wheres = append(wheres, where)
+	} else if where.Pred != (pqdb.Predicate{}) {
+		wheres = append(wheres, where)
+	}
+
+	for index, whereItem := range wheres {
+		if index > 0 && len(whereItem.Operand) == 0 {
+			whereItem.Operand = "AND"
+		}
+		query.Where.Items = append(query.Where.Items, whereItem)
+	}
+
+	if limit > 0 || offset > 0 {
+		query.Limit = pqdb.LimitClause{Limit: limit, Offset: offset}
+	}
+
+	query.SetWhere(where)
+	query.OrderBy.Add(*mfrImgsTable.Column("id"), true, false)
+
+	idRows, e := query.Run()
+	if e != nil {
+		return nil, 0, e
+	}
+	defer idRows.Close()
+
+	total, e := query.Count()
+	if e != nil {
+		return nil, 0, e
+	}
+
+	var collection []ManufacturerImage
+	var ptr2 Model
+
+	for idRows.Next() {
+		ptr2, e = Factory("manufacturer_image")
+		if e != nil {
+			return nil, 0, e
+		}
+		img2 := ptr2.(*ManufacturerImage)
+
+		e = pqdb.Scan(img2, idRows)
+		if e != nil {
+			return nil, 0, e
+		}
+
+		collection = append(collection, *img2)
+	}
+	if err := idRows.Err(); err != nil {
+		return nil, 0, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	return collection, total, nil
+}
+
+// RetrieveManufacturerImage returns a ManufacturerImage instance from the database
+// which matches the specified primary-key ID number.
+func RetrieveManufacturerImage(ctx *app.Context, id int) (*ManufacturerImage, oops.Error) {
+	ptr, e := Factory("manufacturer_image")
+	if e != nil {
+		return nil, e
+	}
+	img := ptr.(*ManufacturerImage)
+
+	var wheres []pqdb.WhereItem
+	wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{"id", "=", id}))
+
+	if ctx.Role != nil && ctx.Role["ManufacturerImage"]&permissions.ManufacturerImageRetrieveAll == 0 {
+		pred := pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+
+	if e := pqdb.RetrieveModel(ctx, img, wheres); e != nil {
+		return nil, e
+	}
+	return img, nil
+}
+
+// RetrieveManufacturerImages will return a collection of pointers to
+// ManufacturerImage instances.
+func RetrieveManufacturerImages(ctx *app.Context, qParams *pqdb.QueryParams) ([]*ManufacturerImage, int, oops.Error) {
+	ptr, e := Factory("manufacturer_image")
+	if e != nil {
+		return nil, 0, e
+	}
+	img := ptr.(*ManufacturerImage)
+
+	query, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	table := pqdb.NewTable(img.TableName())
+	query.AddTable(table)
+
+	for _, col := range img.ColumnNames() {
+		query.AddColumn(table.Column(col))
+	}
+
+	var wheres []pqdb.WhereItem
+	if ctx.Role != nil && ctx.Role["ManufacturerImage"]&permissions.ManufacturerImageRetrieveAll == 0 {
+		pred := pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+
+	for _, pred := range qParams.Preds {
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+	query.Where.Items = wheres
+	query.Where.DefaultOperands()
+
+	query.Limit = pqdb.LimitClause{Limit: qParams.Limit, Offset: qParams.Offset}
+	query.OrderBy.Add(*table.Column("id"), true, false)
+
+	rows, err := query.Run()
+	if err != nil {
+		return nil, 0, oops.ServerError("", "Selection query failed.", err)
+	}
+	defer rows.Close()
+
+	total, e := query.Count()
+	if e != nil {
+		return nil, 0, e
+	}
+
+	var mfrImageCollection []*ManufacturerImage
+	for rows.Next() {
+		ptr, e := Factory("manufacturer_image")
+		if e != nil {
+			return nil, 0, e
+		}
+		img := ptr.(*ManufacturerImage)
+
+		e = pqdb.Scan(img, rows)
+		if e != nil {
+			return nil, 0, e
+		}
+		mfrImageCollection = append(mfrImageCollection, img)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, oops.ServerError("", "rows had an internal error.", err)
+	}
+
+	return mfrImageCollection, total, nil
+}
+
+// UpdateManufacturerImage updates the database entry with the provided JSON
+// ManufacturerImage data.
+func UpdateManufacturerImage(ctx *app.Context, id int, body io.ReadCloser) (*ManufacturerImage, oops.Error) {
+	img, e := RetrieveManufacturerImage(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+
+	e = lib.DecodeJSON(body, img)
+	if e != nil {
+		return nil, e
+	}
+
+	if img.Default.Bool == true {
+		e = ResetFeatureImages(ctx, img.ManufacturerID.Int64)
+		if e != nil {
+			return nil, e
+		}
+	}
+
+	var wheres []pqdb.WhereItem
+	wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{"id", "=", id}))
+
+	if ctx.Role != nil && ctx.Role["ManufacturerImage"]&permissions.ManufacturerImageUpdateAll == 0 {
+		pred := pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+
+	e = pqdb.UpdateModel(ctx, img, wheres)
+	return img, e
+}
+
+// DeleteManufacturerImage deletes the ManufacturerImage from the database which matches
+// the specified primary-key number.
+func DeleteManufacturerImage(ctx *app.Context, id int) oops.Error {
+	ptr, e := Factory("manufacturer_image")
+	if e != nil {
+		return e
+	}
+	img := ptr.(*ManufacturerImage)
+	img.ID.Set(id)
+
+	var wheres []pqdb.WhereItem
+	wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{"id", "=", id}))
+
+	if ctx.Role != nil && ctx.Role["ManufacturerImage"]&permissions.ManufacturerImageDeleteAll == 0 {
+		pred := pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+
+	return pqdb.DeleteModel(ctx, img, wheres)
+}
+
+func ResetFeatureImages(c *app.Context, mfrID int64) oops.Error {
+	query, e := pqdb.NewUpdateQuery(c)
+	if e != nil {
+		panic(e)
+	}
+
+	table := pqdb.NewTable("manufacturer_image")
+	query.Table = table
+
+	exp := pqdb.SetExpression{pqdb.NewColumn("manufacturer_image_default"), false}
+	query.Set.Expressions = append(query.Set.Expressions, exp)
+
+	query.SetWhere(pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("manufacturer_id"), "=", mfrID}))
+
+	_, e = query.Run()
+	if e != nil {
+		return e
+	}
+
+	return nil
+}

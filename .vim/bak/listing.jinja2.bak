@@ -1,0 +1,88 @@
+{% from 'macros.jinja2' import basic_field %}
+{% extends 'index.jinja2' %}
+
+{% block classes %} dark{% endblock %}
+
+{% block content_main %}
+<section>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                {% block description %}
+                {% endblock %}
+            </div>
+        </div>
+    </div>
+</section>
+<hr>
+<section>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-8" id="application_form">
+                <h2>Interested in this Position?</h2>
+                <p>Submit your application by filling out the information below and attaching your documents. We’ll be in touch shortly.</p>
+                <form action="#application_form" method="POST" enctype="multipart/form-data">
+                    {{ basic_field(form.first_name) }}
+                    {{ basic_field(form.last_name) }}
+                    {{ basic_field(form.email) }}
+                    {{ basic_field(form.phone) }}
+                    {{ basic_field(form.address1) }}
+                    {{ basic_field(form.address2) }}
+                    <div class="row">
+                        <div class="col-md-5">{{ basic_field(form.city) }}</div>
+                        <div class="col-md-5">{{ basic_field(form.state) }}</div>
+                        <div class="col-md-2">{{ basic_field(form.zipcode) }}</div>
+                    </div>
+                    <div class="file{% if form.resume.errors %} has-error{% endif %}">
+                        <label>Attach Resume*</label>
+                        <p><span class="help-text"><i>We accept "pdf", "doc", "docx", "rtf", or "txt" files.</i></span></p>
+                        {{ form.resume }}
+                        {% if form.resume.errors %}
+                        <span class="help-block">{% for error in form.resume.errors %}{{error}} {% endfor %}</span>
+                        {% endif %}
+                    </div>
+                    <div class="file">
+                        <label>Attach Cover Letter</label>
+                        <p><span class="help-text"><i>We accept "pdf", "doc", "docx", "rtf", or "txt" files.</i></span></p>
+                        {{ form.cover }}
+                    </div>
+                    <input type="submit" value="Submit Application" class="btn btn-primary btn-block visible-xs">
+                    <input type="submit" value="Submit Application" class="btn btn-primary hidden-xs">
+                </form>
+                {% if request.method == "POST" and form.errors|length == 0 %}
+                <div class="modal fade" id="successModal">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                                {% if success_modal %}
+                                    <h5>Thank You for Your Application</h5>
+                                {% else %}
+                                  <h5>Error</h5>
+                                {% endif %}
+                            </div>
+                            <div class="modal-body">
+                                <p>
+                                    {%- if success_modal -%}
+                                        We have received your information and will be in touch with any updates!
+                                    {%- else -%}
+                                        We're sorry! There was an error processing
+                                        your application. <br> Please email your
+                                        application, requirements and any attached documents to
+                                        <a href="mailto:careers@amberengine.com">careers@amberengine.com</a>.
+                                        We apologize for the inconvenience.
+                                    {%- endif -%}
+                                </p>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-primary" data-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

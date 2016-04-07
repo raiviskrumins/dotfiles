@@ -1,0 +1,233 @@
+# Path to your oh-my-zsh installation.
+export ZSH=/Users/curtislagraff/.oh-my-zsh
+
+# Set name of the theme to load.
+# Look in ~/.oh-my-zsh/themes/
+# Optionally, if you set this to "random", it'll load a random theme each
+# time that oh-my-zsh is loaded.
+ZSH_THEME="avit"
+
+# Uncomment the following line to use case-sensitive completion.
+# CASE_SENSITIVE="true"
+
+# Uncomment the following line to disable bi-weekly auto-update checks.
+# DISABLE_AUTO_UPDATE="true"
+
+# Uncomment the following line to change how often to auto-update (in days).
+# export UPDATE_ZSH_DAYS=13
+
+# Uncomment the following line to disable colors in ls.
+# DISABLE_LS_COLORS="true"
+
+# Uncomment the following line to disable auto-setting terminal title.
+# DISABLE_AUTO_TITLE="true"
+
+# Uncomment the following line to enable command auto-correction.
+# ENABLE_CORRECTION="true"
+
+# Uncomment the following line to display red dots whilst waiting for completion.
+COMPLETION_WAITING_DOTS="true"
+
+# Uncomment the following line if you want to disable marking untracked files
+# under VCS as dirty. This makes repository status check for large repositories
+# much, much faster.
+# DISABLE_UNTRACKED_FILES_DIRTY="true"
+
+# Uncomment the following line if you want to change the command execution time
+# stamp shown in the history command output.
+# The optional three formats: "mm/dd/yyyy"|"dd.mm.yyyy"|"yyyy-mm-dd"
+# HIST_STAMPS="mm/dd/yyyy"
+
+# Would you like to use another custom folder than $ZSH/custom?
+# ZSH_CUSTOM=/path/to/new-custom-folder
+
+# Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
+# Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
+# Example format: plugins=(rails git textmate ruby lighthouse)
+# Add wisely, as too many plugins slow down shell startup.
+plugins=(aws dircycle encode64 fabric jsontools npm sudo urltools vagrant web-search zsh-syntax-highlighting zsh-history-substring-search)
+
+# User configuration
+
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/X11/bin:.:/usr/local/sbin"
+# export MANPATH="/usr/local/man:$MANPATH"
+
+source $ZSH/oh-my-zsh.sh
+
+# You may need to manually set your language environment
+export LANG=en_US.UTF-8
+
+# Preferred editor for local and remote sessions
+# if [[ -n $SSH_CONNECTION ]]; then
+#   export EDITOR='vim'
+# else
+#   export EDITOR='mvim'
+# fi
+
+# Compilation flags
+# export ARCHFLAGS="-arch x86_64"
+
+# ssh
+# export SSH_KEY_PATH="~/.ssh/dsa_id"
+
+# Set personal aliases, overriding those provided by oh-my-zsh libs,
+# plugins, and themes. Aliases can be placed here, though oh-my-zsh
+# users are encouraged to define aliases within the ZSH_CUSTOM folder.
+# For a full list of active aliases, run `alias`.
+#
+# Example aliases
+# alias zshconfig="mate ~/.zshrc"
+# alias ohmyzsh="mate ~/.oh-my-zsh"
+
+
+
+# Node Version Manager
+NVM_DIR=~/.nvm
+NVM_ENV_DIR=$(brew --prefix nvm)
+
+if [ -s $NVM_ENV_DIR/nvm.sh ]
+then
+  source $NVM_ENV_DIR/nvm.sh
+fi
+
+# bind UP and DOWN arrow keys
+zmodload zsh/terminfo
+bindkey "$terminfo[kcuu1]" history-substring-search-up
+bindkey "$terminfo[kcud1]" history-substring-search-down
+
+# bind UP and DOWN arrow keys (compatibility fallback
+# for Ubuntu 12.04, Fedora 21, and MacOSX 10.9 users)
+bindkey '^[[A' history-substring-search-up
+bindkey '^[[B' history-substring-search-down
+
+#source $ZSH/custom/plugins/zsh-autosuggestions/autosuggestions.zsh
+# Enable autosuggestions automatically.
+#zle-line-init() {
+#    zle autosuggest-start
+#}
+#zle -N zle-line-init
+
+# User Aliases
+alias ls="ls -lhAG"
+alias cls="clear && ls"
+alias h="history"
+alias j="jobs -l"
+alias venv="virtualenv --no-site-packages"
+alias root="sudo -i"
+alias c="clear"
+alias cdv="cdvirtualenv"
+alias ?="ag"
+alias !="echo"
+alias gitlog="git log --graph --decorate --oneline"
+
+alias fetch="git fetch -p"
+alias get="fetch && git checkout"
+alias pull="git pull origin"
+alias use="git checkout"
+
+alias dowork="workon $1"
+
+alias ":q"="exit"
+alias v="vim"
+
+alias args="python ~/args.py"
+alias fib="echo '0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144'"
+alias py="python"
+
+alias fuckmongo="mongo api --eval \"db.product_cache.remove({})\""
+
+eval "$(thefuck --alias)"
+
+function notes() {
+    if [ $# -eq 0 ]
+        then
+            mkdir -p ~/notes
+            \ls ~/notes | sed 's/\.md//' 
+    fi
+    if [ $# -eq 1 ]
+        then
+            mkdir -p ~/notes
+            vim ~/notes/$1.md
+    fi
+    if [ $# -eq 2 ]
+        then
+            mkdir -p ~/notes
+            echo $2 > ~/notes/$1.md
+    fi
+}
+
+alias curtis-dev1="echo ec2-54-237-61-187.compute-1.amazonaws.com"
+alias curtis-dev2="echo ec2-54-157-133-14.compute-1.amazonaws.com"
+
+export WORKON_HOME=$HOME/.virtualenvs
+export PROJECT_HOME=$HOME/src
+
+export GOROOT=/usr/local/go
+export GOPATH=$HOME/go
+
+export PATH=$PATH:$GOPATH/bin
+export PATH=$PATH:$GOROOT/bin
+
+export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+export PATH="~/.bin/gcc-arm-none-eabi-4_9-2015q3/bin:$PATH"
+
+source /usr/local/bin/virtualenvwrapper.sh
+
+
+export VISUAL=vim
+export EDITOR="$VISUAL"
+export CERT="delve-cert"
+
+. ~/.fabrc.zsh
+
+function initialize {
+    clear
+
+    # Startup required applications
+    elasticsearch &
+    ~/Downloads/rabbitmq_server-3.5.3/sbin/rabbitmq-server &
+    redis-server &
+
+    sleep 5
+
+    # Run CM scripts
+    workon channel-manager
+    cdv && cd channel-manager/scripts
+    python export_worker.py &
+    python image_worker.py &
+
+    # Initialize AmberAPI
+    workon amber-api
+    cdv && cd amber-api
+    python app.py runserver -p 8001 &
+
+    # Initiailize Channel-Manager
+    workon channel-manager
+    cdv && cd channel-manager
+    python app.py runserver -p 8002 &
+    gulp && gulp watch &
+
+    # Initialize Amber-Discover
+    workon amber-discover
+    cdv && cd amber-discover
+    python app.py runserver -p 8003 &
+    gulp && gulp watch &
+
+    # Initialize AmberEngine
+    workon amberenginecom
+    cdv && cd AmberEngine.com
+    python app.py &
+    gulp && gulp watch &
+}
+
+fancy-ctrl-z () {
+  if [[ $#BUFFER -eq 0 ]]; then
+    BUFFER="fg"
+    zle accept-line
+  else
+    zle push-input
+    zle clear-screen
+  fi
+}
+zle -N fancy-ctrl-z
+bindkey '^Z' fancy-ctrl-z

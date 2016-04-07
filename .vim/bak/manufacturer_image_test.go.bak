@@ -1,0 +1,206 @@
+package models
+
+import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+	"testing"
+
+	"github.com/AmberEngine/api/pqdb"
+	"github.com/stretchr/testify/assert"
+)
+
+// TestDeleteManufacturerImage_InvalidKey asserts that it is not possible to delete a
+// entry from the database using a ManufacturerImage ID that is non-existant.
+func TestDeleteManufacturerImage_InvalidKey(t *testing.T) {
+	// This ID does not exist in the database.
+	id := 101010
+
+	e := DeleteManufacturerImage(TestCtx, id)
+
+	assert.Error(t, e)
+}
+
+// TestDeleteManufacturerImage_Valid asserts that it is possible to delete a entry
+// from the database using an existing ManufacturerImage ID.
+func TestDeleteManufacturerImage_Valid(t *testing.T) {
+	id := 19
+	e := DeleteManufacturerImage(TestCtx, id)
+	if !assert.NoError(t, e) {
+		return
+	}
+
+	// Check to make sure the ManufacturerImage was actually removed.
+	img, e := RetrieveManufacturerImage(TestCtx, id)
+	assert.Nil(t, img)
+	assert.Error(t, e)
+}
+
+// TestCreateManufacturerImage attempts to assert that a new MFR Image  will be
+// inserted into the database, and returned as a ManufacturerImage instance.
+func TestCreateManufacturerImage(t *testing.T) {
+	stringData := `{"manufacture_id": 42, "default": true, "caption": "New Image", "url": "http://example.com/fake.jpg"}`
+	jsonData := ioutil.NopCloser(bytes.NewBufferString(stringData))
+
+	img, e := CreateManufacturerImage(TestCtx, jsonData)
+
+	if !assert.NoError(t, e) || !assert.NotNil(t, img) {
+		assert.Fail(t, "A valid ManufactureImage must be returned without error.")
+		return
+	}
+
+	img, e = RetrieveManufacturerImage(TestCtx, int(img.ID.Int64))
+	assert.NotNil(t, img)
+	assert.NoError(t, e)
+}
+
+// TestListManufacturerImages_NoneAvaiable tests that an error is raised and nil is
+// returned when attempting to list ManufacturerImages for a manufacturer which has none.
+func TestListManufacturerImages_NoneAvailable(t *testing.T) {
+	// This public-key has no ManufacturerImages associated with its referring Manufacturer.
+	mfrID := 0
+	filter := make(map[string]interface{})
+	filter["manufacturer_id"] = map[string]interface{}{"==": mfrID}
+
+	collection, total, e := ListManufacturerImages(TestCtx, 0, 0, filter, pqdb.OrderExpression{})
+
+	assert.Empty(t, collection)
+	assert.Zero(t, total)
+	assert.NoError(t, e)
+}
+
+// TestListManufacturerImages_Valid tests that a valid slice of ManufacturerImage instances
+// are returned for the manufacturer specified via a valid Public Key.
+func TestListManufacturerImages_Valid(t *testing.T) {
+	// This public key is for a manufacturer which is associated with multiple
+	// ManufacturerImages
+	mfrID := 691
+	filter := make(map[string]interface{})
+	filter["manufacturer_id"] = map[string]interface{}{"==": mfrID}
+
+	collection, total, e := ListManufacturerImages(TestCtx, 0, 0, filter, pqdb.OrderExpression{})
+
+	if !assert.NotNil(t, collection) || !assert.NoError(t, e) || !assert.NotZero(t, total) {
+		assert.Fail(t, e.Slog())
+		return
+	}
+
+	assert.True(t, len(collection) > 1)
+}
+
+// TestRetrieveManufacturerImage_MissingID tests that using a non-existant ID
+// number when retrieving a ManufacturerImage will result in being returned a
+// nil ManufacturerImage and an error.
+func TestRetrieveManufacturerImage_MissingID(t *testing.T) {
+	id := 101010
+
+	img, e := RetrieveManufacturerImage(TestCtx, id)
+
+	assert.Nil(t, img)
+	assert.Error(t, e)
+}
+
+// TestRetrieveManufacturerImage_ValidID tests that retrieving a ManufacturerImage
+// with a valid ID number results in returning a ManufacturerImage instance.
+func TestRetrieveManufacturerImage_ValidID(t *testing.T) {
+	id := 20
+
+	img, e := RetrieveManufacturerImage(TestCtx, id)
+
+	if assert.NotNil(t, img) && assert.NoError(t, e) && assert.True(t, img.ID.Valid) {
+		assert.Equal(t, img.ID.Int64, int64(id))
+	}
+}
+
+// TestRetrieveManufacturerImages_all test that it is possbile to retrieve "all"
+// ManufacturerImages when giving no limit, no offset, and a valid API Public key.
+func TestRetrieveManufacturerImages_all(t *testing.T) {
+	limit := 0
+	offset := 0
+
+	queryParams, e := pqdb.NewQueryParams(limit, offset)
+	if e != nil {
+		assert.Fail(t, e.Error())
+	}
+
+	collection, total, e := RetrieveManufacturerImages(TestCtx, queryParams)
+
+	if assert.NoError(t, e) && assert.NotNil(t, collection) {
+		// This will need to be updated to test against the default limit
+		// for retrieving all manufacturer images.
+		assert.Len(t, collection, total)
+	}
+}
+
+//TestRetrieveManufacturerImages_limited tests to assert that it is possible to
+// limit the number of ManufacturerImages returned.
+func TestRetrieveManufacturerImages_limited(t *testing.T) {
+	limit := 5
+	offset := 0
+
+	queryParams, e := pqdb.NewQueryParams(limit, offset)
+	if e != nil {
+		assert.Fail(t, e.Error())
+	}
+
+	collection, total, e := RetrieveManufacturerImages(TestCtx, queryParams)
+
+	if assert.NoError(t, e) && assert.NotNil(t, collection) {
+		assert.Len(t, collection, limit)
+		assert.True(t, total >= limit)
+	}
+}
+
+// TestUpdateManufacturerImage_Updated asserts that attempting to update an existing
+// ManufacturerImage using valid data results in a successful update within the database.
+func TestUpdateManufacturerImage_Updated(t *testing.T) {
+	id := 25
+	ptr, e := Factory("manufacturer_image")
+
+	if !assert.NoError(t, e) || assert.NotNil(t, ptr) {
+		return
+	}
+	expected := ptr.(*ManufacturerImage)
+
+	expected.ID.Set(id)
+	expected.ManufacturerID.Set(666)
+	expected.Default.Set(true)
+	expected.Caption.Set("Awesome Caption Here")
+	expected.URL.Set("http://example.com/fake_png.jpg")
+
+	actual, e := RetrieveManufacturerImage(TestCtx, id)
+
+	if !assert.NotNil(t, expected) {
+		assert.Fail(t, "The created, expected ManufacturerImage must not be nil.")
+		return
+	}
+
+	if !assert.NotNil(t, actual) || !assert.NoError(t, e) {
+		assert.Fail(t, "The retrieved ManufacturerImage must not be nil.")
+		return
+	}
+
+	jsonBytes, err := json.Marshal(expected)
+
+	if !assert.NotEmpty(t, jsonBytes) || !assert.NoError(t, err) {
+		assert.Fail(t, "The marshalled JSON bytes must be valid & without error.")
+		return
+	}
+
+	jsonReadCloser := ioutil.NopCloser(bytes.NewBuffer(jsonBytes))
+
+	img, e := UpdateManufacturerImage(TestCtx, id, jsonReadCloser)
+
+	if !assert.NoError(t, e) && assert.NotNil(t, img) {
+		assert.Fail(t, "The manufacturer image must be valid, and without error.")
+		return
+	}
+
+	assert.Equal(t, expected, img)
+
+	img, e = RetrieveManufacturerImage(TestCtx, id)
+
+	if assert.NotNil(t, img) && assert.NoError(t, e) {
+		assert.Equal(t, expected, img)
+	}
+}

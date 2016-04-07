@@ -1,0 +1,16 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20150914112639(txn *sql.Tx) {
+
+	txn.Exec("ALTER TABLE manufacturer_image RENAME COLUMN default_image TO manufacturer_image_default")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20150914112639(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE manufacturer_image RENAME COLUMN manufacturer_image_default TO default_image")
+}

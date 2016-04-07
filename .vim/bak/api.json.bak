@@ -1,0 +1,23 @@
+{
+    "sql": {
+        "type": "postgres",
+        "host": "localhost",
+        "user": "doodle",
+        "password": "amber123",
+        "database": "api",
+        "ssl-mode": false
+    },
+    "mongo": {
+        "database": "api",
+        "host": "127.0.0.1",
+        "port": 27017,
+        "user": "amber",
+        "password": "amber123"
+    },
+    "es": {
+        "host": "localhost",
+        "port": 9200
+    },
+    "port": 80,
+    "log-errors": false
+}

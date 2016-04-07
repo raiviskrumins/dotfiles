@@ -1,0 +1,118 @@
+package app
+
+import (
+	"database/sql"
+	"fmt"
+	"strings"
+
+	"github.com/AmberEngine/api/config"
+)
+
+// PrepareTestDB creates a DB for the purpose of testing against
+func PrepareTestDB(testDBName string) (*DB, *MongoSession, *ES, error) {
+	dbType := config.String("sql", "type")
+	dbHost := config.String("sql", "host")
+	dbUser := config.String("sql", "user")
+	dbName := config.String("sql", "database")
+	dbPassword := config.String("sql", "password")
+	dbSSLMode := config.String("sql", "ssl-mode")
+
+	adminDBConnectString := fmt.Sprintf("host=%s user=%s dbname=postgres password=%s, sslmode=%s", dbHost, dbUser, dbPassword, dbSSLMode)
+	adminDBSQL := fmt.Sprintf("CREATE DATABASE %s WITH TEMPLATE %s OWNER %s;", testDBName, dbName, dbUser)
+
+	adminDB, e := Open(dbType, adminDBConnectString)
+	if e != nil {
+		return nil, nil, nil, e
+	}
+	defer adminDB.Close()
+
+	err := adminDB.Ping()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	_, err = adminDB.Exec(adminDBSQL)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	dbConnectString := fmt.Sprintf("host=%s user=%s dbname=%s password=%s, sslmode=%s", dbHost, dbUser, testDBName, dbPassword, dbSSLMode)
+
+	db, err := Open(dbType, dbConnectString)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	err = db.Ping()
+
+	if err != nil {
+		if strings.Contains(err.Error(), "Error 1049: Unknown database") == true {
+			fmt.Println("Caught ya! you need to create one test database for you!")
+		}
+		return nil, nil, nil, err
+	}
+
+	mongoUser := config.String("mongo", "user")
+	mongoDBName := config.String("mongo", "test-index")
+	mongoHost := config.String("mongo", "host")
+	mongoPort := config.String("mongo", "port")
+	mongoPassword := config.String("mongo", "password")
+
+	mongoConnectString := fmt.Sprintf("mongodb://%s:%s@%s:%s/%s", mongoUser, mongoPassword, mongoHost, mongoPort, mongoDBName)
+	mongoDB := &MongoSession{mongoConnectString}
+
+	elasticHost := config.String("es", "host")
+	elasticPort := config.String("es", "port")
+	elasticIndexName := config.String("es", "test-index")
+
+	es := &ES{elasticHost, elasticPort, elasticIndexName}
+
+	return db, mongoDB, es, nil
+
+}
+
+// CleanUpTestDB removes the DB that was used for the testing
+func CleanUpTestDB(testDBName string) error {
+	dbType := config.String("sql", "type")
+	dbHost := config.String("sql", "host")
+	dbUser := config.String("sql", "user")
+	dbPassword := config.String("sql", "password")
+	dbSSLMode := config.String("sql", "ssl-mode")
+
+	adminDBConnectString := fmt.Sprintf("host=%s user=%s dbname=postgres password=%s, sslmode=%s", dbHost, dbUser, dbPassword, dbSSLMode)
+	var adminDBSQLarray []string
+
+	adminDBSQLarray = append(adminDBSQLarray, fmt.Sprintf("UPDATE pg_database SET datallowconn = 'false' WHERE datname = '%s';", testDBName))
+	adminDBSQLarray = append(adminDBSQLarray, fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s';", testDBName))
+	adminDBSQLarray = append(adminDBSQLarray, fmt.Sprintf("DROP DATABASE %s;", testDBName))
+
+	adminDB, e := Open(dbType, adminDBConnectString)
+	if e != nil {
+		panic(e)
+	}
+	defer adminDB.Close()
+
+	err := adminDB.Ping()
+
+	if err != nil {
+		panic(err)
+	}
+
+	for _, adminDBSQL := range adminDBSQLarray {
+		_, err := adminDB.Exec(adminDBSQL)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return nil
+
+}
+
+func ClearTable(db *sql.DB, table_name string) error {
+	del, err := db.Prepare(fmt.Sprintf("DELETE from %s", table_name))
+	if err == nil {
+		del.Exec()
+	}
+	return err
+}

@@ -1,0 +1,4 @@
+if 1 == 0
+  console.log "The world is messed up!"
+else
+  console.log "Everything is okay."

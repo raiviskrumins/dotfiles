@@ -1,0 +1,145 @@
+import math
+
+import game.jsonify as jsonify
+
+
+class Struct(object):
+    def __init__(self, init_dict=None):
+        if init_dict is not None and isinstance(initDict, dict):
+            for key in init_dict:
+                setattr(self, key, init_dict[key])
+
+
+class Angle:
+    def __init__(self, degrees=None, radians=None):
+        self._radians = 0
+        self.set(degrees, radians)
+    
+    def degrees(self):
+        return math.degrees(self._radians)
+    
+    def radians(self):
+        return self._radians
+    
+    def rotate(self, degrees=None, radians=None):
+        rads = self._get_rad(degrees, radians)
+        self._radians = self._radians + rads
+        self.reduce()
+    
+    def reduce(self):
+        if self._radians > (2 * math.pi):
+            multiplier = math.floor(self._radians / (2 * math.pi))
+            self._radians = self._radian - (2 * math.pi * multiplier)
+            
+    def _get_rad(self, degrees=None, radians=None):
+        if degrees is not None and radians is not None:
+            raise Exception("You cannot pass both a degree and a radian.")
+        elif degrees is not None or radians is not None:
+            if isinstance(degrees, (int, float)) is True:
+                return math.radians(degrees)
+            elif isinstance(radians, (int, float)) is True:
+                return radians
+        elif degrees is None and radians is None:
+            raise Exception("No angle was provided.")
+        raise Exception("The degrees (or radians) must be a real number.")
+    
+    def set(self, degrees=None, radians=None):
+        rads = self._get_angles(degrees, radians)
+        self._radians = rads
+        self.reduce()
+
+
+class GridPos(jsonify.Storage.Basic):
+    def __init__(self, position):
+        (self.x, self.y) = position
+
+    def get(self):
+        return (self.x, self.y)
+
+    def move(self, *args):
+        if len(args) == 2:
+            (x, y) = args
+        elif len(args) == 1:
+            (x, y) = args[0]
+        else:
+            raise TypeError(
+                "Must provide an x and y value or a tuple containing both."
+            )
+        self.x = x
+        self.y = y
+
+class Coord(object):
+    def __init__(self, x=0, y=0):
+        self.x = x
+        self.y = y
+        
+    def rx(self):
+        return int(round(self.x))
+    
+    def ry(self):
+        return int(round(self.y))
+    
+    def round(self):
+        (x, y) = [int(round(pos)) for pos in [self.x, self.y]]
+        return (x, y)
+    
+    def round_self(self):
+        (self.x, self.y) = self.round()
+        return (self.x, self.y)
+    
+    def get_as_list(self):
+        return [self.x, self.y]
+    
+    def get_as_tuple(self):
+        return (self.x, self.y)
+    
+    def set(self, pos):
+        if isinstance(pos, (list, tuple, Coord)) is False:
+            raise Exception("Can only add with other Pos-like objects")
+        elif isinstance(pos[0], (int, float)) is False or \
+                isinstance(pos[1], (int, float)) is False:
+            raise Exception("Must be either a int or a float")
+        
+        self.x = pos[0]
+        self.y = pos[1]
+        
+    def get_deg(self):
+        return math.degrees(math.atan2(self.y, self.x))
+    
+    def get_rad(self):
+        return math.atan2(self.y, self.x)
+
+    def __eq__(self, other):
+        if isinstance(other, (list, tuple, Coord)) is False:
+            raise Exception("Can only add with other Pos-like objects")
+        if (self.x == other[0]) and (self.y == other[1]):
+            return True
+        return False
+    
+    def __ne__(self, other):
+        if isinstance(other, (list, tuple, Coord)) is False:
+            raise Exception("Can only add with other Pos-like objects")
+        if (self.x != other[0]) and (self.y != other[1]):
+            return True
+        return False
+    
+    def __str__(self):
+        return "(" + str(self.x) + ", " + str(self.y) + ")"
+
+    def __getitem__(self, key):
+        if key == 0:
+            return self.x
+        elif key == 1:
+            return self.y
+        else:
+            raise Exception("Use 0 for x index, 1 for y index")
+
+    def __setitem__(self, key, value):
+        if isinstance(value, (int, float)) is False:
+            raise Exception("Must be either an int or a float")
+        if key == 0:
+            self.x = value
+        elif key == 1:
+            self.y = value
+        else:
+            raise Exception("Use 0 for x index, 1 for y index")

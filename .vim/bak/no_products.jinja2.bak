@@ -1,0 +1,7 @@
+<tr>
+    <td class="text-center no-products" colspan="6">
+        <img src="/static/img/no_products-chair.png">
+        <h3>You haven't added any products</h3>
+        <p>Start <a href="/products/new" class="table-link js-new-product-modal">adding products now</a>, or contact our specialist<br>at (877) 615-2121 for assistance.</p>
+    </td>
+</tr>

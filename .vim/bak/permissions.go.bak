@@ -1,0 +1,328 @@
+package permissions
+
+type Permission uint32
+
+func UserRole(roleName string) map[string]Permission {
+	role := make(map[string]Permission)
+	switch roleName {
+	case "SalesChannelUser":
+		role = map[string]Permission{
+			"FormSchema":             FormSchemaRetrieveAll,
+			"Manufacturer":           ManufacturerRetrieveActive | ManufacturerSearchActive,
+			"ManufacturerImage":      ManufacturerImageRetrieveActive,
+			"Option":                 OptionRetrieveOwn,
+			"OptionSet":              OptionSetRetrieveOwn,
+			"Product":                ProductRetrieveVisible | ProductSearchVisible,
+			"SalesChannel":           SalesChannelRetrieveOwn | SalesChannelUpdateOwn,
+			"SalesChannelPreference": SalesChannelPreferenceRetrieveOwn,
+		}
+	case "SalesChannel":
+		role = map[string]Permission{
+			"FormSchema":             FormSchemaRetrieveAll,
+			"Manufacturer":           ManufacturerRetrieveActive | ManufacturerSearchActive,
+			"ManufacturerImage":      ManufacturerImageRetrieveActive,
+			"Option":                 OptionRetrieveOwn,
+			"OptionSet":              OptionSetRetrieveOwn,
+			"Product":                ProductRetrieveVisible | ProductSearchVisible,
+			"SalesChannel":           SalesChannelRetrieveOwn | SalesChannelUpdateOwn,
+			"SalesChannelPreference": SalesChannelPreferenceRetrieveOwn,
+		}
+	case "APIClient":
+		role = map[string]Permission{
+			"FormSchema":             FormSchemaRetrieveAll,
+			"Manufacturer":           ManufacturerRetrieveActive | ManufacturerSearchActive,
+			"ManufacturerImage":      ManufacturerImageRetrieveActive,
+			"Option":                 OptionRetrieveOwn,
+			"OptionSet":              OptionSetRetrieveOwn,
+			"Product":                ProductRetrieveVisible | ProductSearchVisible,
+			"SalesChannel":           SalesChannelRetrieveOwn | SalesChannelUpdateOwn,
+			"SalesChannelPreference": SalesChannelPreferenceRetrieveOwn,
+		}
+	case "DiscoverAdmin":
+		role = map[string]Permission{
+			"APIKey":                 APIKeyCreateClient | APIKeyCreateUser | APIKeyRetrieveAll | APIKeyUpdateAll | APIKeyDeleteAll,
+			"FormSchema":             FormSchemaRetrieveAll,
+			"Manufacturer":           ManufacturerRetrieveActive | ManufacturerSearchActive,
+			"ManufacturerImage":      ManufacturerImageRetrieveActive,
+			"Option":                 OptionRetrieveOwn,
+			"OptionSet":              OptionSetRetrieveOwn,
+			"Product":                ProductRetrieveVisible | ProductSearchVisible,
+			"SalesChannel":           SalesChannelRetrieveAll | SalesChannelRetrieveActive | SalesChannelCreateAll | SalesChannelUpdateAll | SalesChannelDeleteAll | SalesChannelSearchAll,
+			"SalesChannelPreference": SalesChannelPreferenceRetrieveOwn,
+		}
+	case "ChannelManagerAdmin":
+		role = map[string]Permission{
+			"APIKey":                 APIKeyCreateClient | APIKeyCreateUser | APIKeyRetrieveAll | APIKeyUpdateAll | APIKeyDeleteAll,
+			"Collection":             CollectionCreateAll | CollectionDeleteAll | CollectionRetrieveAll | CollectionUpdateAll,
+			"FormSchema":             FormSchemaRetrieveAll,
+			"Manufacturer":           ManufacturerRetrieveAll | ManufacturerCreateAll | ManufacturerDeleteAll | ManufacturerUpdateAll | ManufacturerSearchAll,
+			"ManufacturerImage":      ManufacturerImageCreateAll | ManufacturerImageDeleteAll | ManufacturerImageRetrieveAll | ManufacturerImageUpdateAll,
+			"Option":                 OptionRetrieveAll | OptionCreateAll | OptionDeleteAll | OptionRetrieveAll,
+			"OptionSet":              OptionSetUpdateAll | OptionSetCreateAll | OptionSetDeleteAll | OptionSetRetrieveAll,
+			"Product":                ProductRetrieveAll | ProductSearchAll | ProductCreateAll | ProductUpdateAll | ProductDeleteAll,
+			"ProductComponent":       ProductComponentCreateAll | ProductComponentRetrieveAll | ProductComponentUpdateAll | ProductComponentDeleteAll,
+			"Relation":               ProductRelateOptionSetCreateAll | ProductRelateOptionSetRetrieveAll | ProductRelateOptionSetUpdateAll | ProductRelateOptionSetDeleteAll | ProductRelateCollectionCreateAll | ProductRelateCollectionRetrieveAll | ProductRelateCollectionUpdateAll | ProductRelateCollectionDeleteAll | ProductRelateSalesChannelCreateAll | ProductRelateSalesChannelRetrieveAll | ProductRelateSalesChannelUpdateAll | ProductRelateSalesChannelDeleteAll,
+			"SalesChannel":           SalesChannelRetrieveAll | SalesChannelSearchAll,
+			"SalesChannelPreference": SalesChannelPreferenceCreateAll | SalesChannelPreferenceSearchAll | SalesChannelPreferenceRetrieveAll | SalesChannelPreferenceUpdateAll | SalesChannelPreferenceDeleteAll,
+		}
+	case "ManufacturerUser":
+		role = map[string]Permission{
+			"APIKey":                 APIKeyCreateUser | APIKeyRetrieveOwn | APIKeyUpdateOwn | APIKeyDeleteOwn,
+			"Collection":             CollectionCreateOwn | CollectionDeleteOwn | CollectionRetrieveOwn | CollectionUpdateOwn,
+			"FormSchema":             FormSchemaRetrieveAll,
+			"Manufacturer":           ManufacturerRetrieveOwn | ManufacturerCreateOwn | ManufacturerDeleteOwn | ManufacturerUpdateOwn | ManufacturerSearchOwn,
+			"ManufacturerImage":      ManufacturerImageCreateOwn | ManufacturerImageDeleteOwn | ManufacturerImageRetrieveOwn | ManufacturerImageUpdateOwn,
+			"Option":                 OptionUpdateOwn | OptionCreateOwn | OptionDeleteOwn | OptionRetrieveOwn,
+			"OptionSet":              OptionSetUpdateOwn | OptionSetCreateOwn | OptionSetDeleteOwn | OptionSetRetrieveOwn,
+			"Product":                ProductRetrieveOwn | ProductSearchOwn | ProductCreateOwn | ProductUpdateOwn | ProductDeleteOwn,
+			"ProductComponent":       ProductComponentCreateOwn | ProductComponentRetrieveOwn | ProductComponentUpdateOwn | ProductComponentDeleteOwn,
+			"Relation":               ProductRelateOptionSetCreateOwn | ProductRelateOptionSetRetrieveOwn | ProductRelateOptionSetUpdateOwn | ProductRelateOptionSetDeleteOwn | ProductRelateCollectionCreateOwn | ProductRelateCollectionRetrieveOwn | ProductRelateCollectionUpdateOwn | ProductRelateCollectionDeleteOwn | ProductRelateSalesChannelCreateOwn | ProductRelateSalesChannelRetrieveOwn | ProductRelateSalesChannelUpdateOwn | ProductRelateSalesChannelDeleteOwn,
+			"SalesChannel":           SalesChannelRetrieveActive | SalesChannelSearchActive,
+			"SalesChannelPreference": SalesChannelPreferenceCreateOwn | SalesChannelPreferenceSearchOwn | SalesChannelPreferenceRetrieveOwn | SalesChannelPreferenceUpdateOwn | SalesChannelPreferenceDeleteOwn,
+		}
+	}
+	return role
+}
+
+const (
+	APIKeyCreateUser Permission = 1 << iota
+	APIKeyCreateClient
+	APIKeyRetrieveAll
+	APIKeyRetrieveGroup
+	APIKeyRetrieveOwn
+	APIKeyUpdateAll
+	APIKeyUpdateGroup
+	APIKeyUpdateOwn
+	APIKeyDeleteAll
+	APIKeyDeleteGroup
+	APIKeyDeleteOwn
+)
+const (
+	CollectionCreateAll Permission = 1 << iota
+	CollectionCreateGroup
+	CollectionCreateOwn
+	CollectionRetrieveAll
+	CollectionRetrieveGroup
+	CollectionRetrieveOwn
+	CollectionUpdateAll
+	CollectionUpdateGroup
+	CollectionUpdateOwn
+	CollectionDeleteAll
+	CollectionDeleteGroup
+	CollectionDeleteOwn
+)
+const (
+	EventCreateAll Permission = 1 << iota
+	EventCreateGroup
+	EventCreateOwn
+	EventRetrieveAll
+	EventRetrieveGroup
+	EventRetrieveOwn
+	EventUpdateAll
+	EventUpdateGroup
+	EventUpdateOwn
+	EventDeleteAll
+	EventDeleteGroup
+	EventDeleteOwn
+)
+const (
+	FormSchemaCreateAll Permission = 1 << iota
+	FormSchemaCreateGroup
+	FormSchemaCreateOwn
+	FormSchemaRetrieveAll
+	FormSchemaRetrieveGroup
+	FormSchemaRetrieveOwn
+	FormSchemaUpdateAll
+	FormSchemaUpdateGroup
+	FormSchemaUpdateOwn
+	FormSchemaDeleteAll
+	FormSchemaDeleteGroup
+	FormSchemaDeleteOwn
+)
+const (
+	ManufacturerCreateAll Permission = 1 << iota
+	ManufacturerCreateGroup
+	ManufacturerCreateOwn
+	ManufacturerSearchAll
+	ManufacturerSearchGroup
+	ManufacturerSearchOwn
+	ManufacturerSearchActive
+	ManufacturerRetrieveAll
+	ManufacturerRetrieveGroup
+	ManufacturerRetrieveOwn
+	ManufacturerRetrieveActive
+	ManufacturerUpdateAll
+	ManufacturerUpdateGroup
+	ManufacturerUpdateOwn
+	ManufacturerDeleteAll
+	ManufacturerDeleteGroup
+	ManufacturerDeleteOwn
+)
+const (
+	ManufacturerImageCreateAll Permission = 1 << iota
+	ManufacturerImageCreateGroup
+	ManufacturerImageCreateOwn
+	ManufacturerImageRetrieveAll
+	ManufacturerImageRetrieveGroup
+	ManufacturerImageRetrieveOwn
+	ManufacturerImageRetrieveActive
+	ManufacturerImageUpdateAll
+	ManufacturerImageUpdateGroup
+	ManufacturerImageUpdateOwn
+	ManufacturerImageDeleteAll
+	ManufacturerImageDeleteGroup
+	ManufacturerImageDeleteOwn
+)
+const (
+	ManufacturerRelateSalesChannelCreateAll Permission = 1 << iota
+	ManufacturerRelateSalesChannelCreateGroup
+	ManufacturerRelateSalesChannelCreateOwn
+	ManufacturerRelateSalesChannelRetrieveAll
+	ManufacturerRelateSalesChannelRetrieveGroup
+	ManufacturerRelateSalesChannelRetrieveOwn
+	ManufacturerRelateSalesChannelUpdateAll
+	ManufacturerRelateSalesChannelUpdateGroup
+	ManufacturerRelateSalesChannelUpdateOwn
+	ManufacturerRelateSalesChannelDeleteAll
+	ManufacturerRelateSalesChannelDeleteGroup
+	ManufacturerRelateSalesChannelDeleteOwn
+)
+const (
+	OptionCreateAll Permission = 1 << iota
+	OptionCreateGroup
+	OptionCreateOwn
+	OptionRetrieveAll
+	OptionRetrieveGroup
+	OptionRetrieveOwn
+	OptionUpdateAll
+	OptionUpdateGroup
+	OptionUpdateOwn
+	OptionDeleteAll
+	OptionDeleteGroup
+	OptionDeleteOwn
+)
+const (
+	OptionSetCreateAll Permission = 1 << iota
+	OptionSetCreateGroup
+	OptionSetCreateOwn
+	OptionSetRetrieveAll
+	OptionSetRetrieveGroup
+	OptionSetRetrieveOwn
+	OptionSetUpdateAll
+	OptionSetUpdateGroup
+	OptionSetUpdateOwn
+	OptionSetDeleteAll
+	OptionSetDeleteGroup
+	OptionSetDeleteOwn
+)
+const (
+	ProductCreateAll Permission = 1 << iota
+	ProductCreateGroup
+	ProductCreateOwn
+	ProductRetrieveAll
+	ProductRetrieveGroup
+	ProductRetrieveOwn
+	ProductRetrieveVisible
+	ProductSearchAll
+	ProductSearchGroup
+	ProductSearchOwn
+	ProductSearchVisible
+	ProductUpdateAll
+	ProductUpdateGroup
+	ProductUpdateOwn
+	ProductDeleteAll
+	ProductDeleteGroup
+	ProductDeleteOwn
+)
+const (
+	ProductComponentCreateAll Permission = 1 << iota
+	ProductComponentCreateGroup
+	ProductComponentCreateOwn
+	ProductComponentRetrieveAll
+	ProductComponentRetrieveGroup
+	ProductComponentRetrieveOwn
+	ProductComponentUpdateAll
+	ProductComponentUpdateGroup
+	ProductComponentUpdateOwn
+	ProductComponentDeleteAll
+	ProductComponentDeleteGroup
+	ProductComponentDeleteOwn
+)
+const (
+	ProductRelateOptionSetCreateAll Permission = 1 << iota
+	ProductRelateOptionSetCreateGroup
+	ProductRelateOptionSetCreateOwn
+	ProductRelateOptionSetRetrieveAll
+	ProductRelateOptionSetRetrieveGroup
+	ProductRelateOptionSetRetrieveOwn
+	ProductRelateOptionSetUpdateAll
+	ProductRelateOptionSetUpdateGroup
+	ProductRelateOptionSetUpdateOwn
+	ProductRelateOptionSetDeleteAll
+	ProductRelateOptionSetDeleteGroup
+	ProductRelateOptionSetDeleteOwn
+)
+const (
+	ProductRelateCollectionCreateAll Permission = 1 << iota
+	ProductRelateCollectionCreateGroup
+	ProductRelateCollectionCreateOwn
+	ProductRelateCollectionRetrieveAll
+	ProductRelateCollectionRetrieveGroup
+	ProductRelateCollectionRetrieveOwn
+	ProductRelateCollectionUpdateAll
+	ProductRelateCollectionUpdateGroup
+	ProductRelateCollectionUpdateOwn
+	ProductRelateCollectionDeleteAll
+	ProductRelateCollectionDeleteGroup
+	ProductRelateCollectionDeleteOwn
+)
+const (
+	ProductRelateSalesChannelCreateAll Permission = 1 << iota
+	ProductRelateSalesChannelCreateGroup
+	ProductRelateSalesChannelCreateOwn
+	ProductRelateSalesChannelRetrieveAll
+	ProductRelateSalesChannelRetrieveGroup
+	ProductRelateSalesChannelRetrieveOwn
+	ProductRelateSalesChannelUpdateAll
+	ProductRelateSalesChannelUpdateGroup
+	ProductRelateSalesChannelUpdateOwn
+	ProductRelateSalesChannelDeleteAll
+	ProductRelateSalesChannelDeleteGroup
+	ProductRelateSalesChannelDeleteOwn
+)
+const (
+	SalesChannelCreateAll Permission = 1 << iota
+	SalesChannelCreateGroup
+	SalesChannelCreateOwn
+	SalesChannelSearchAll
+	SalesChannelSearchGroup
+	SalesChannelSearchOwn
+	SalesChannelSearchActive
+	SalesChannelRetrieveAll
+	SalesChannelRetrieveGroup
+	SalesChannelRetrieveOwn
+	SalesChannelRetrieveActive
+	SalesChannelUpdateAll
+	SalesChannelUpdateGroup
+	SalesChannelUpdateOwn
+	SalesChannelDeleteAll
+	SalesChannelDeleteGroup
+	SalesChannelDeleteOwn
+)
+const (
+	SalesChannelPreferenceCreateAll Permission = 1 << iota
+	SalesChannelPreferenceCreateGroup
+	SalesChannelPreferenceCreateOwn
+	SalesChannelPreferenceSearchAll
+	SalesChannelPreferenceSearchGroup
+	SalesChannelPreferenceSearchOwn
+	SalesChannelPreferenceRetrieveAll
+	SalesChannelPreferenceRetrieveGroup
+	SalesChannelPreferenceRetrieveOwn
+	SalesChannelPreferenceUpdateAll
+	SalesChannelPreferenceUpdateGroup
+	SalesChannelPreferenceUpdateOwn
+	SalesChannelPreferenceDeleteAll
+	SalesChannelPreferenceDeleteGroup
+	SalesChannelPreferenceDeleteOwn
+)

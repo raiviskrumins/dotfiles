@@ -1,0 +1,33 @@
+{% from 'macros.jinja2' import basic_field %}
+
+<div class="modal fade" id="collectionEdit">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title">Add to Collection</h4>
+            </div>
+            <div class="modal-body">
+                <label>Choose an existing Collection</label>
+                <select class="form-control js-collection-select">
+                    <option value="">Select a Collection</option>
+                    {% for collection in g.collections|sort(attribute='name') %}
+                    <option value="{{collection.id}}">{{collection.name}}</option>
+                    {% endfor %}
+                </select>
+                <h3>- or -</h3>
+                <form class="js-new-collection-form">
+                    {{ basic_field(form.name, label="Add to New Collection") }}
+                    {{ hidden_field(form.manufacturer_id) }}
+                </form>
+            </div>
+            <div class="modal-footer">
+                <span class="pull-left text-danger hidden">
+                    Please choose an existing collection or add a new collection.
+                </span>
+                <button class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary js-collection-add-product">Add</button>
+            </div>
+        </div>
+    </div>
+</div>

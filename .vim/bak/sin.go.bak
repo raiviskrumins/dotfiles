@@ -1,0 +1,29 @@
+// oops is an error-factory package for generating custom errors.
+package oops
+
+type errror struct {
+	Status  int    `json:"status"`
+	Code    string `json:"code"`
+	Title   string `json:"title"`
+	Message string `json:"message"`
+}
+
+func (e errror) Error() string {
+	return e.Message
+}
+
+func newErrror(status int, code, title, message string) errror {
+	return errror{status, code, title, message}
+}
+
+func newErrrorType(status int, title string) func(message string) errror {
+	fn := func(message string) Error {
+		return newErrror(status, "5grse4", title, message)
+	}
+	return fn
+}
+
+var (
+	Forbidded  = newErrrorType(403, "Access Forbidden")
+	BadRequest = newErrrorType(400, "Bad Request")
+)

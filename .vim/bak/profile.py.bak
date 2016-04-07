@@ -1,0 +1,221 @@
+from flask import (
+    Blueprint,
+    g,
+    jsonify,
+    render_template,
+    request
+)
+
+import flask
+
+from amber_discover.signals import user_signals
+from amber_discover.lib.s3 import upload_image
+from amber_discover.lib.utils import amber_api, Struct
+from amber_discover.forms.retailer import (
+    RetailerForm,
+    RetailerContactForm
+)
+
+from flask.ext.login import current_user
+
+from auth import authenticated
+
+app = flask.current_app
+
+profile_view = Blueprint(
+    'profile_view',
+    __name__,
+    template_folder='templates'
+)
+
+
+@profile_view.route('/profile', methods=['GET'])
+@authenticated
+def profile():
+    profile_form = RetailerForm(**g.retailer)
+    contact_form = RetailerContactForm(**g.retailer)
+    if g.retailer['state']:
+        contact_form.state.default = g.retailer['state']
+
+    api_client = amber_api()
+    images = api_client.get_sales_channel_images(
+        sc_id=current_user.sales_channel_id
+    )
+
+    return render_template(
+        'profile/index.jinja2',
+        profile_form=profile_form,
+        contact_form=contact_form,
+        images=images
+    )
+
+
+@profile_view.route('/profile/edit', methods=['PUT'])
+@authenticated
+def profile_put():
+    form = RetailerForm()
+    result = {
+        'success': False,
+        'no_changes': False,
+        'errors': {}
+    }
+
+    if request.json["changed"]:
+        if form.validate_on_submit():
+            api_client = amber_api()
+            g.retailer = api_client.update_sales_channel(
+                sc_id=current_user.sales_channel_id,
+                data=form.data
+            )
+
+            if form.new_images.data:
+                images = form.new_images.data.split(',')
+                for image in images:
+                    image_data = {
+                        'url': image,
+                    }
+                    api_client.add_sales_channel_image(
+                        sc_id=current_user.sales_channel_id,
+                        data=image_data
+                    )
+
+            if form.delete_images.data:
+                delete = form.delete_images.data.split(',')
+                # need to get ids from this instead of urls
+                for image_id in delete:
+                    api_client.delete_sales_channel_image(
+                        sc_id=current_user.sales_channel_id,
+                        img_id=image_id
+                    )
+            result['success'] = True
+            result['message'] = u'Your changes have been saved.'
+        else:
+            # let's return errors
+            for field in form.errors:
+                result['errors'][field] = form.errors[field]
+    else:
+        if form.validate_on_submit():
+            result['success'] = True
+            result['no_changes'] = True
+            result['message'] = u'No changes were made.'
+        else:
+            # let's return errors
+            for field in form.errors:
+                result['errors'][field] = form.errors[field]
+
+    return jsonify(result)
+
+
+@profile_view.route('/profile/contact/edit', methods=['PUT'])
+@authenticated
+def contact_put():
+    form = RetailerContactForm()
+    result = {
+        'success': False,
+        'no_changes': False,
+        'errors': {}
+    }
+
+    if request.json["changed"]:
+        import pprint
+        print "=" * 1000
+        if form.validate_on_submit():
+            print "validate"
+            pprint.pprint(form)
+            if g.retailer['email'] != form.email.data.lower():
+                email_changed = True
+                old_email = g.retailer['email']
+            else:
+                email_changed = False
+
+            api_client = amber_api()
+            g.retailer = api_client.update_sales_channel(
+                sc_id=current_user.sales_channel_id,
+                data=form.data
+            )
+
+            if email_changed:
+                user_signals.updated_email.send(
+                    Struct(**g.retailer),
+                    old_email=old_email
+                )
+
+            result['success'] = True
+            result['message'] = u'Your changes have been saved.'
+        else:
+            print "no validate"
+            pprint.pprint(form)
+            # let's return errors
+            for field in form.errors:
+                result['errors'][field] = form.errors[field]
+    else:
+        if form.validate_on_submit():
+            result['success'] = True
+            result['no_changes'] = True
+            result['message'] = u'No changes were made.'
+        else:
+            # let's return errors
+            for field in form.errors:
+                result['errors'][field] = form.errors[field]
+
+    return jsonify(result)
+
+
+@profile_view.route('/profile/preview', methods=['POST'])
+@authenticated
+def profile_preview():
+    data = request.json
+    if len(data["profile"]["images"]) < 1:
+        data["profile"]["images"] = g.retailer["images"]
+
+    return render_template(
+        'modals/profile_preview_modal.jinja2',
+        profile_data=data
+    )
+
+
+@profile_view.route('/profile/confirm', methods=['GET'])
+@authenticated
+def confirm():
+    return render_template('modals/confirm_visibility.jinja2')
+
+
+@profile_view.route('/profile/visibility', methods=['PUT'])
+@authenticated
+def set_visibility():
+    set_visible = request.json['set_visible']
+    api_client = amber_api()
+
+    if set_visible:
+        api_client.update_sales_channel(
+            sc_id=current_user.sales_channel_id,
+            data={'visible': True}
+        )
+    else:
+        api_client.update_sales_channel(
+            sc_id=current_user.sales_channel_id,
+            data={'visible': False}
+        )
+
+    return jsonify({'success': True})
+
+
+@profile_view.route('/profile/upload', methods=['POST'])
+@authenticated
+def file_upload():
+
+    access = app.config['S3_ACCESS']
+    secret = app.config['S3_SECRET']
+
+    image = request.files['img']
+    image_url = upload_image(image, access, secret)
+
+    return jsonify({'success': True, 'image_url': image_url})
+
+
+@profile_view.route('/profile/unsaved', methods=['POST'])
+def unsaved_changes_modal():
+    return render_template(
+        'modals/unsaved_changes.jinja2',
+        url=request.json
+    )

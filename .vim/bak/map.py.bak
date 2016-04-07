@@ -1,0 +1,30 @@
+import pygame
+
+import engine.settings as settings
+
+
+class Tile:
+    def __init__(self):
+        self.surface = pygame.Surface(
+            (settings.TILE_SIZE, settings.TILE_SIZE),
+            pygame.SRCALPHA
+        )
+        self.char = "#"
+        self.position = (0, 0)
+
+    def render(self):
+        self.surface = self.font.render(
+            self.char, True, (255, 255, 255)        
+        ).convert_alpha()
+
+class TileMap:
+    def __init__(self, size):
+        self.surface = pygame.Surface(size, pygame.SRCALPHA)
+        self.tiles = []
+
+    def render(self):
+        self.surface.fill((0, 0, 0))
+        for tile in self.tiles:
+            self.surface.blit(tile.surface, tile.position)
+        
+

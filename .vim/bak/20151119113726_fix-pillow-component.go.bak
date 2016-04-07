@@ -1,0 +1,15 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20151119113726(txn *sql.Tx) {
+	txn.Exec("INSERT INTO pillow_component (product_id) SELECT id FROM product_entity WHERE assemblage_id = 107 AND id NOT IN (SELECT product_id FROM pillow_component)")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20151119113726(txn *sql.Tx) {
+
+}

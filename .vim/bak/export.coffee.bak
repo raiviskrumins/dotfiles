@@ -1,0 +1,170 @@
+# functionality for product export. includes filter, sort, search, and starts
+# the excel file download request
+#
+# UI COMPONENTS:
+# --------------
+#
+# .js-product-search : text input to search through the list of products
+#
+# .js-category-select : select input to filter list of products by category
+#
+# #export_table : table of products to be exported
+#
+# .js-selected-count : container that displays the number of products selected
+#
+# th.sortable : headers for columns by which products can be sorted
+#
+# CUSTOM EVENTS:
+# --------------
+# filtered.amber.list : fires when the list has been filtered by either a search
+#       or a category selection. (used in select_toggle.coffee to update the
+#       master select icon)
+
+$(document).ready ->
+
+  search_timeout = ''
+
+  no_products = $('<tr class="export-row visible empty"><td colspan="6" class="text-center"><h3>You have no products to export.</h3><p><a href="/export/select" class="table-link">Go back to Step 1</a> and select products you<br>would like to include in this export.</p></td></tr>')
+
+  prod = new ProductCache '/export/select/list', '/export/rows'
+  prod.no_results_url = '/export/no-results'
+  prod.no_products_url = '/export/no-products'
+  prod.setUI
+    table: '#export_table tbody'
+
+  prod.addFilter '.js-product-search', 'identity.name'
+  prod.addFilter '.js-product-search', 'identity.manufacturer_sku'
+  prod.addFilter '.js-collection-select', 'collection.collection_id'
+  prod.addFilter '.js-category-select', 'category.category'
+
+  # grabs the product ids from the selected product rows and submits them via a
+  # hidden form field
+  getProductIDs = (e) ->
+    e.preventDefault()
+
+    product_list = prod.selected_products
+
+    if product_list.length > 0
+      product_string = "#{product_list.join(',')}"
+      $('#product_ids').val product_string
+
+      $('#form_start_export').submit()
+    else
+      $('.empty-warning').stop(true).fadeIn()
+
+  # makes the warning message when no products are selected fade out
+  fadeOutWarning = (e) ->
+    if $('.empty-warning').is ':visible'
+      $('.empty-warning').fadeOut('fast')
+
+  # sends a request with the product list and returns the file
+  download = (e) ->
+    e.preventDefault()
+
+    id = $(e.currentTarget).data 'id'
+    url = $(e.currentTarget).attr 'href'
+    product_list = _.map $('.export-row'), (row) ->
+      return $(row).data 'id'
+
+    if product_list.length > 0
+      $.ajax url,
+        type: 'POST'
+        contentType: 'application/json'
+        data: JSON.stringify {product_list: product_list}
+        beforeSend: () ->
+          $('#prepareDownload').remove().modal 'show'
+        success: (result) ->
+          if result.success
+            location.assign "/export/#{id}/complete"
+
+  # removes a product row
+  remove = (e) ->
+    e.preventDefault()
+    $(e.currentTarget).parents('.export-row').remove()
+
+    if $('.export-row').length is 0
+      $('#export_table').append no_products
+      $('.js-download').addClass 'disabled'
+
+  # update the selected counter at the bottom of /export/select
+  selectCount = (e) ->
+    count = $('.select-button.selected').length
+    $('.js-selected-count').html "#{count}"
+
+
+  # see where page is, load next page of products if needed
+  where = (e) ->
+    if window.pageYOffset == $(document).height() - $(window).height()
+      prod.showNext()
+
+  sortProduct = (e) ->
+    $header = $(e.currentTarget)
+    key = $header.data 'sort'
+    direction = $header.data 'direction'
+
+    # if resorting selected header
+    if $header.hasClass 'sorted'
+      if direction is 'asc'
+        direction = 'desc'
+      else
+        direction = 'asc'
+    else
+      direction = 'asc'
+
+    $('.sorted').removeClass 'sorted'
+    $header.addClass 'sorted'
+
+    $header.data 'direction', direction
+    $header.attr 'data-direction', direction
+
+    prod.sortBy key, direction
+
+    $(document).trigger 'sorted.amber.list'
+
+  # toggles an individual item (UI)
+  selectToggle = (e) ->
+    e.preventDefault()
+    $(@).toggleClass 'selected'
+
+    id = $(@).data 'id'
+
+    if $(@).hasClass 'selected'
+      prod.select id
+    else
+      prod.unselect id
+
+  # SEARCH / FILTER
+  # Updates 'x' button UI, searches the cache.
+  search = (e) ->
+    if search_timeout > 0
+      clearTimeout search_timeout
+      search_timeout = 0
+
+    search_timeout = setTimeout _.bind(prod.searchFilter, prod), 150
+
+  cancelQueue = (e) ->
+    if search_timeout > 0
+      clearTimeout search_timeout
+      search_timeout = 0
+
+  bindFilters = () ->
+    $('.js-product-search').on 'keyup', search #filter
+    $('.js-category-select').on 'change', search #filter
+    $('.js-collection-select').on 'change', search
+
+  $('body').on 'click', 'th.sortable', sortProduct
+
+  $('.js-start-export').on 'click', getProductIDs
+  $('.js-download').on 'click', download
+  $('.js-remove').on 'click', remove
+  $(document).on 'selected.amber.toggle', fadeOutWarning
+
+  $(document).on 'loaded.cache.list', bindFilters
+
+  $('body').on 'click', '.js-select-toggle', selectToggle #select
+  $('body').on 'click', '.js-master-select', selectToggle #select
+
+  $(document).on 'scroll', where
+
+  if window.location.pathname is '/export/select'
+    prod.get()

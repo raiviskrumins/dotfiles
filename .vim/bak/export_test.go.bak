@@ -1,0 +1,54 @@
+package models
+
+import (
+	"bytes"
+	"encoding/xml"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+// TestMarshalXML_No_start_or_sub_elements tests MarshalXML to make sure it properly handles being run by an XMLElement
+// with no SubElement XMLElements and being passed a blank xml.StartElement
+func TestMarshalXML_NoStartOrSubElements(t *testing.T) {
+	startEl := xml.StartElement{}
+	var buffer bytes.Buffer
+	enc := xml.NewEncoder(&buffer)
+	exampleXml := XMLElement{XMLName: xml.Name{"", "testElement"}, SubElement: nil, Value: "foo/bar"}
+	expected := "<testElement>foo/bar</testElement>"
+	output := exampleXml.MarshalXML(enc, startEl)
+	assert.NoError(t, output, "Marshalling should not have resulted in an error being thrown")
+	assert.Equal(t, expected, buffer.String())
+}
+
+// TestMarshalXML_With_start_or_sub_elements tests MarshalXML to make sure it properly handles being run by an XMLElement
+// with one SubElement XMLElement and being passed fully declared/populated xml.StartElement
+func TestMarshalXML_WithStartAndSubElements(t *testing.T) {
+	startEl := xml.StartElement{xml.Name{"", "startElement"}, []xml.Attr{{xml.Name{"", "foo"}, "bar"}, {xml.Name{"", "testing"}, "123"}}}
+	var buffer bytes.Buffer
+	enc := xml.NewEncoder(&buffer)
+	innerXML := []*XMLElement{{XMLName: xml.Name{"inner-element", "batman"}, SubElement: nil, Value: "better than superman"}}
+	exampleXml := XMLElement{XMLName: xml.Name{"", "testElement"}, SubElement: nil, Value: "foo/bar"}
+	exampleXml.SubElement = innerXML
+	expected := "<startElement foo=\"bar\" testing=\"123\"><testElement><batman xmlns=\"inner-element\">better than superman</batman></testElement></startElement>"
+	output := exampleXml.MarshalXML(enc, startEl)
+	assert.NoError(t, output, "Marshalling should not have resulted in an error being thrown")
+	assert.Equal(t, expected, buffer.String())
+}
+
+func TestBuildTemplate(t *testing.T) {
+	exportFields, err := BuildTemplate(TestAppCtx)
+	assert.IsType(
+		t,
+		[]ExportField{},
+		exportFields,
+		"BuildTemplate should return a slice of ExportField objects")
+	assert.Empty(
+		t,
+		exportFields,
+		"On the test database this should be empty")
+	assert.NoError(
+		t,
+		err,
+		"BuildTemplate should not have thrown an error")
+}

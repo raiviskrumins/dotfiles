@@ -1,0 +1,16 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20151119140746(txn *sql.Tx) {
+	txn.Exec("UPDATE visibility_component SET meets_posting_requirements = TRUE WHERE meets_posting_requirements IS NULL")
+	txn.Exec("ALTER TABLE visibility_component ALTER COLUMN meets_posting_requirements DROP NOT NULL")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20151119140746(txn *sql.Tx) {
+	// who cares?
+}

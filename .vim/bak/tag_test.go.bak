@@ -1,0 +1,97 @@
+package models
+
+import (
+	"database/sql"
+	"testing"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/stretchr/testify/assert"
+)
+
+// TestNewTag asserts that a new instance is returned via the model's New
+// method, without any errors.
+func TestNewTag(t *testing.T) {
+	pointer, err := NewTag()
+	assert.NoError(t, err)
+	assert.NotNil(t, pointer)
+}
+
+// TestRetrieveTag_ExistingTag tests that RetrieveTag correctly returns the
+// identified tag when passed an ID for an existing tag.
+func TestRetrieveTag_ExistingTag(t *testing.T) {
+	expected := Tag{
+		ID:   lib.IntField{sql.NullInt64{1, true}},
+		Name: lib.StringField{sql.NullString{"test", true}}}
+	actual, err := RetrieveTag(TestAppCtx, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, actual)
+}
+
+// TestRetrieveTag_NonexistentTag tests that RetrieveTag correctly returns nil
+// and an error when passed an ID for a nonexistent tag.
+func TestRetrieveTag_NonexistentTag(t *testing.T) {
+	actual, err := RetrieveTag(TestAppCtx, 1337)
+	assert.Error(t, err)
+	assert.Nil(t, actual)
+}
+
+// TestCreateTag tests that a Tag object is correctly created and stored
+// in the database when passed an appropriate value.
+func TestCreateTag(t *testing.T) {
+	name := "mock"
+	expected := Tag{
+		ID:   lib.IntField{sql.NullInt64{-1, true}},
+		Name: lib.StringField{sql.NullString{"mock", true}}}
+	actual, err := CreateTag(TestAppCtx, name)
+	assert.NoError(t, err)
+
+	if actual != nil {
+		assert.NotNil(t, actual.ID)
+		expected.ID = actual.ID
+	}
+	assert.Equal(t, expected, *actual)
+	actual, err = RetrieveTag(TestAppCtx, int(expected.ID.Int64))
+	assert.NoError(
+		t,
+		err,
+		"CreateTag should have properly stored the new Tag in the database.")
+	assert.Equal(
+		t,
+		expected,
+		actual,
+		"The tag retrieved from the database should match what was provided.")
+}
+
+// TestDeleteTag_Valid tests that a Tag is correctly deleted from the database.
+func TestDeleteTag_Valid(t *testing.T) {
+	actual, err := RetrieveTag(TestAppCtx, 1)
+	assert.NoError(
+		t,
+		err,
+		"The Tag needs to be in the database before we can test deleting it.")
+	assert.NotNil(
+		t,
+		actual,
+		"The Tag should exist before it is deleted.")
+	err = DeleteTag(TestAppCtx, 1)
+	assert.NoError(
+		t,
+		err,
+		"No error should be thrown when deleting an existing Tag")
+	actual, err = RetrieveTag(TestAppCtx, 1)
+	assert.Error(
+		t,
+		err,
+		"The Tag should no longer be in the database after delete.")
+	assert.Nil(
+		t,
+		actual,
+		"The Tag should no longer exist")
+}
+
+// TestDeleteTag_Invalid tests that an error is correctly thrown when one
+// attempts to delete a nonexistent Tag.
+func TestDeleteTag_Invalid(t *testing.T) {
+	err := DeleteTag(TestAppCtx, 42)
+	assert.Error(t, err, "No Tag with this ID should be in the database.")
+}

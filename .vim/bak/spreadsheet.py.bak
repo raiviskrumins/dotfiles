@@ -1,0 +1,569 @@
+"""
+amber_portal.lib.spreadsheet
+~~~~~~~~~~~~~~~~~~~~~~
+
+Functions and such for exporting to Excel. Hooray.
+
+
+:copyright: (c) 2013 by Doodle Home.
+"""
+from amber_portal.models import db
+from sqlalchemy import text
+
+import xlwt
+
+try:
+    from collections import OrderedDict
+except ImportError as exception:
+    OrderedDict = dict
+
+from cStringIO import StringIO
+
+no_style = None
+odd_row_style = None
+primary_header_style = None
+secondary_header_style = None
+
+bold_style = xlwt.XFStyle()
+bold_style.font = xlwt.Font()
+bold_style.font.bold = True
+
+date_style = xlwt.XFStyle()
+date_style.num_format_str = 'D-MMM-YY'
+
+percent_style = xlwt.XFStyle()
+percent_style.num_format_str = '0.00%'
+
+dollar_style = xlwt.XFStyle()
+dollar_style.num_format_str = '"$"#,##0.00_);("$"#,##0.00)'
+
+
+def extract_value(path, product):
+    try:
+        return product[path]
+    except KeyError:
+        path_list = path.split('.')
+        origin = path_list.pop(0)
+        new_path = '.'.join(path_list)
+        return extract_value(new_path, product[origin])
+
+
+def write_cells(worksheet, row_index, column_index, cell_type, cell_values):
+    for r, cell in enumerate(cell_values):
+        if isinstance(cell, list):
+            row_index += write_cells(
+                worksheet,
+                r + row_index,
+                column_index,
+                cell_type,
+                cell
+            )
+        else:
+            if cell_type == '%':
+                worksheet.write(
+                    r + row_index,
+                    column_index,
+                    cell,
+                    percent_style
+                )
+            elif cell_type == '$':
+                worksheet.write(
+                    r + row_index,
+                    column_index,
+                    cell,
+                    dollar_style
+                )
+            else:
+                worksheet.write(r + row_index, column_index, str(cell))
+    return len(cell_values) - 1
+
+
+def write_header(
+        worksheet,
+        row_index,
+        column_index,
+        column_title,
+        column_data,
+        style
+):
+    inner_row_index = row_index
+    inner_column_index = column_index
+    outer_column_index = column_index
+    column_visible = False
+    if isinstance(column_data, dict):
+        for cd, cdv in column_data.iteritems():
+            for cdvr in cdv:
+                if cdvr['__meta_data__'].get('visible'):
+                    column_visible = True
+                    break
+            if column_visible:
+                break
+    else:
+        for cd in column_data:
+            if cd['__meta_data__']['visible']:
+                column_visible = True
+                break
+    if column_visible:
+        inner_style = style
+        if column_title is not None:
+            inner_style = secondary_header_style
+
+        #needs to check if data is more column keys or data
+        if isinstance(column_data, dict):
+            #    increment row index to pass to children
+            #    loop through them and call write_header recursively
+            #    return number of internal columns
+            if column_title is not None:
+                inner_row_index += 1
+            for inner_title, inner_data in column_data.iteritems():
+                inner_column_index, _ = write_header(
+                    worksheet,
+                    inner_row_index,
+                    inner_column_index,
+                    inner_title,
+                    inner_data,
+                    inner_style
+                )
+                if inner_column_index > outer_column_index:
+                    outer_column_index = inner_column_index
+        else:
+            outer_column_index += 1
+
+        #write column key merged if needed
+        worksheet.col(column_index).width = 5120
+        if column_title is not None:
+            if outer_column_index - 1 > column_index:
+                worksheet.write_merge(
+                    row_index, row_index, column_index, outer_column_index - 1,
+                    column_title, style
+                )
+            else:
+                worksheet.write(
+                    row_index, column_index,
+                    column_title, style
+                )
+    outer_row_index = inner_row_index + 1
+    return outer_column_index, outer_row_index
+
+
+def write_cell(
+    worksheet,
+    row_index,
+    column_index,
+    cell_value,
+    meta_data,
+    row_style
+):
+    if not row_style:
+        row_style = xlwt.easyxf(meta_data.get('style', ''))
+    if cell_value is not None:
+        if not isinstance(cell_value, str):
+            if isinstance(cell_value, unicode):
+                cell_value = cell_value.encode('utf-8')
+            else:
+                cell_value = str(cell_value)
+        worksheet.write(
+            row_index,
+            column_index,
+            cell_value,
+            row_style
+        )
+
+
+def write_column(
+        worksheet,
+        row_index,
+        column_index,
+        column_title,
+        column_data,
+        data_index
+):
+    inner_row_index = 0
+    column_visible = False
+    if isinstance(column_data, dict):
+        for cd, cdv in column_data.iteritems():
+            for cdvr in cdv:
+                if cdvr['__meta_data__']['visible']:
+                    column_visible = True
+                    break
+            if column_visible:
+                break
+    else:
+        for cd in column_data:
+            if cd['__meta_data__'].get('visible'):
+                column_visible = True
+                break
+    if column_visible:
+        row_style = no_style
+        if data_index % 2 == 1:
+            row_style = odd_row_style
+        if isinstance(column_data, list) and len(column_data) > data_index:
+            cell_value = column_data[data_index]['value']
+            if isinstance(cell_value, list):
+                for cv in cell_value:
+                    write_cell(
+                        worksheet,
+                        row_index,
+                        column_index,
+                        cv,
+                        column_data[data_index]['__meta_data__'],
+                        row_style
+                    )
+                    inner_row_index += 1
+                    row_index += 1
+                inner_row_index -= 1
+            else:
+                write_cell(
+                    worksheet,
+                    row_index,
+                    column_index,
+                    cell_value,
+                    column_data[data_index]['__meta_data__'],
+                    row_style
+                )
+            column_index += 1
+    return column_index, inner_row_index
+
+
+def get_table_map(export_map):
+    table_map = OrderedDict()
+    table_map['sheets'] = OrderedDict()
+
+    mapping = db.session.execute(text(
+        "select id from export_mapping where id = :mapping_id"
+    ), {'mapping_id': export_map}).first()
+    sheets = db.session.execute(text(
+        "SELECT id, name, mapping_id FROM export_sheet "
+        "WHERE mapping_id = :mapping_id ORDER BY weight ASC"
+    ), {'mapping_id': mapping[0]}).fetchall()
+
+    for sheet in sheets:
+        sheet_dict = dict(zip(('id', 'name', 'mapping_id'), sheet))
+        sheet_name = sheet_dict['name']
+        table_map['sheets'][sheet_name] = OrderedDict()
+        columns = db.session.execute(text(
+            "SELECT id, field_name, label, style, primary_column, "
+            "sheet_id, parent_id, visible FROM export_column "
+            "WHERE sheet_id = :sheet_id ORDER BY weight ASC"
+        ), {'sheet_id': sheet_dict['id']}).fetchall()
+        column_fields = (
+            'id', 'field_name', 'label', 'style',
+            'primary_column', 'sheet_id', 'parent_id', 'visible'
+        )
+        columns = [
+            dict(zip(column_fields, column))
+            for column in columns
+        ]
+        for column in columns:
+            if not column['parent_id']:
+                add_column(table_map['sheets'][sheet_name], column, columns)
+
+    return table_map
+
+
+def add_column(sheet, column, columns):
+    if column['field_name'] not in sheet:
+        sheet[column['field_name']] = OrderedDict()
+    meta_data = {
+        'style': column['style'],
+        'primary_column': column['primary_column'],
+        'visible': column['visible']
+    }
+    if column['label']:
+        meta_data['label'] = column['label']
+    if '__meta_data__' not in sheet[column['field_name']] \
+            or column['primary_column']:
+        sheet[column['field_name']]['__meta_data__'] = meta_data
+    for col in columns:
+        if col['parent_id'] and col['parent_id'] == column['id']:
+            # if col['field_name'] != 'sub_component_data_id':
+            #     print "*****************"
+            #     print col['field_name']
+            #     print "*****************"
+            add_column(sheet[column['field_name']], col, columns)
+
+
+def map_column_list(sub_data, column_contents, column_name):
+    mapped_data = OrderedDict()
+    for sd in sub_data:
+        for field, field_contents in column_contents.iteritems():
+            if not field == '__meta_data__':
+                if isinstance(field_contents, dict):
+                    if len(column_contents.keys()) > 1:
+                        label = field_contents['__meta_data__']['label']
+                        if not label in mapped_data:
+                            mapped_data[label] = {
+                                '__meta_data__':
+                                    field_contents['__meta_data__'],
+                                'values': []
+                            }
+                        if isinstance(field_contents, dict) \
+                                and len(field_contents.keys()) > 1:
+                            mapped_data[column_name] = map_column(
+                                field,
+                                field_contents,
+                                sd
+                            )
+                        else:
+                            mapped_data[label]['values'].append(sd.get(field))
+                    else:
+                        if not field_contents['label'] in mapped_data:
+                            mapped_data[field_contents['label']] = []
+                        label = field_contents['label']
+                        mapped_data[label].append(sd.get(column_name))
+                else:
+                    if not field_contents in mapped_data:
+                        mapped_data[field_contents] = []
+                    if isinstance(field_contents, dict):
+                        mapped_data[column_name] = map_column(
+                            field,
+                            field_contents,
+                            sd
+                        )
+                    else:
+                        mapped_data[field_contents].append(sd.get(field))
+    return mapped_data
+
+
+def map_column_dict(sub_data, column_contents, column_name):
+    mapped_data = {column_name: OrderedDict()}
+    for field, field_contents in column_contents.iteritems():
+        if not field == '__meta_data__':
+            if isinstance(field_contents, dict):
+                if len(field_contents.keys()) > 1:
+                    inner = map_column(
+                        field,
+                        field_contents,
+                        sub_data
+                    )
+                    for inner_name, inner_value in inner.iteritems():
+                        mapped_data[column_name][inner_name] = inner_value
+                else:
+                    if '.' in field:
+                        parent_field, field = field.split('.')
+                        sub_sub_data = sub_data.get(parent_field, {})
+                        label = field_contents['__meta_data__']['label']
+                        mapped_data[column_name][label] = sub_sub_data.get(
+                            field
+                        )
+                    else:
+                        label = field_contents['__meta_data__']['label']
+                        mapped_data[column_name][label] = sub_data.get(field)
+            else:
+                mapped_data[column_name][field_contents] = sub_data.get(field)
+    return mapped_data
+
+
+def map_column(column_name, column_contents, data):
+    sub_data = data.get(column_name, OrderedDict())
+    if isinstance(sub_data, list):
+        return map_column_list(sub_data, column_contents, column_name)
+    elif isinstance(sub_data, dict):
+        mapped_data = map_column_dict(sub_data, column_contents, column_name)
+        return mapped_data[column_name]
+    else:
+        mapped_data = OrderedDict()
+        if isinstance(column_contents, dict):
+            mapped_data[column_contents['__meta_data__']['label']] = sub_data
+        else:
+            mapped_data[column_contents] = sub_data
+        return mapped_data
+
+
+def find_primary_column(mapping):
+    primary_column = ''
+    for field, value in mapping.iteritems():
+        if not field == '__meta_data__':
+            if isinstance(value, dict):
+                if value.get('__meta_data__', {}).get('primary_column'):
+                    return field
+            if isinstance(value, dict) and (
+                len(value.keys()) > 1 or not '__meta_data__' in value
+            ):
+                primary_column = '.'.join([field, find_primary_column(value)])
+                if primary_column.endswith('.'):
+                    primary_column = ''
+    return primary_column
+
+
+def get_primary_value(primary_column, data):
+    value = data
+    for column_fragment in primary_column.split('.'):
+        if isinstance(value, dict):
+            value = value.get(column_fragment)
+    return value
+
+
+def map_data(sheet_map, products):
+    """
+    :param sheet_map: The sheet template to map data to
+    :param products: List of products
+    :return: Data formated as a dict with keys corresponding to column names
+             and values for each key being a list of values, one for each row.
+    """
+    data = OrderedDict()
+    num_rows = 0
+    primary_column = find_primary_column(sheet_map)
+    if primary_column:
+        unique_rows = []
+        unique_objects = []
+        for product in products:
+            primary_value = get_primary_value(primary_column, product)
+            if primary_value and not primary_value in unique_rows:
+                unique_rows.append(primary_value)
+                unique_objects.append(product)
+        products = unique_objects
+
+    for field, value in sheet_map.iteritems():
+        for product in products:
+            num_rows += 1
+            inner = map_column(field, value, product)
+            for inner_name, inner_value in inner.iteritems():
+                if isinstance(inner_value, dict):
+                    data_value = {
+                        '__meta_data__': inner_value.get('__meta_data__', {}),
+                        'value': inner_value.get('values', [])
+                    }
+                else:
+                    data_value = {
+                        '__meta_data__': value.get('__meta_data__', {}),
+                        'value': inner_value
+                    }
+
+                if isinstance(value, dict) and len(value.keys()) > 1:
+                    column_label = value['__meta_data__'].get('label')
+                    if not column_label in data:
+                        data[column_label] = OrderedDict()
+                    if not inner_name in data[column_label]:
+                        data[column_label][inner_name] = []
+                    data[column_label][inner_name].append(data_value)
+                else:
+                    if not inner_name in data:
+                        data[inner_name] = []
+                    data[inner_name].append(data_value)
+    return {'data': data, 'num_rows': num_rows}
+
+
+def create_worksheet(workbook, sheet_name, sheet_map, products):
+    print("== WORKSHEET ==" * 10)
+    print(sheet_name)
+
+    mapped_data = map_data(sheet_map, products)
+    data = mapped_data['data']
+    num_rows = mapped_data['num_rows']
+
+    print("TEST")
+    print("Num of Rows", num_rows)
+    if sheet_map.keys() and num_rows:
+        print("MADE IT HERE")
+        num_rows /= len(sheet_map.keys())
+
+        worksheet = workbook.add_sheet(sheet_name)
+        print("Added sheet!")
+
+        row_index = 0
+        header_row_index = 0
+        header_column_index = 0
+        for component_title, component_columns in data.iteritems():
+            header_column_index, inner_row_index = write_header(
+                worksheet,
+                row_index,
+                header_column_index,
+                component_title,
+                component_columns,
+                primary_header_style
+            )
+            if inner_row_index > header_row_index:
+                header_row_index = inner_row_index
+
+        inner_row_index = 0
+        for data_index in range(num_rows):
+            column_index = 0
+            row_index = header_row_index + inner_row_index + data_index
+            additional_rows = 0
+            for component_title, component_columns in data.iteritems():
+                row_style = no_style
+                if data_index % 2 == 1:
+                    row_style = odd_row_style
+                if isinstance(component_columns, list):
+                    column_index, outer_row_index = write_column(
+                        worksheet,
+                        row_index,
+                        column_index,
+                        component_title,
+                        component_columns,
+                        data_index
+                    )
+                    if outer_row_index > additional_rows:
+                        additional_rows = outer_row_index
+                else:
+                    for inner_title, inner_column in \
+                            component_columns.iteritems():
+                        column_index, outer_row_index = write_column(
+                            worksheet,
+                            row_index,
+                            column_index,
+                            inner_title,
+                            inner_column,
+                            data_index
+                        )
+                        if outer_row_index > additional_rows:
+                            additional_rows = outer_row_index
+
+                rows = worksheet.get_rows()
+                for row in range(row_index, row_index + additional_rows + 1):
+                    if row < len(rows):
+                        current_row = rows[row]
+                        current_row.set_style(row_style)
+            inner_row_index += additional_rows
+
+        worksheet.set_panes_frozen(True)
+        worksheet.set_horz_split_pos(header_row_index)
+    return workbook
+
+
+def create_excel_file(products, mapping_id):
+    """ Creates and returns an MS Excel file
+
+    :param products: list of raw product data
+    :return: file-like, excel object
+    """
+
+    workbook = xlwt.Workbook(encoding="UTF-8")
+    xlwt.add_palette_colour("light_gray", 0x21)
+    workbook.set_colour_RGB(0x21, 228, 228, 228)
+    xlwt.add_palette_colour("medium_gray", 0x22)
+    workbook.set_colour_RGB(0x22, 200, 200, 200)
+
+    global no_style, odd_row_style, \
+        primary_header_style, secondary_header_style
+    no_style = xlwt.easyxf('')
+    odd_row_style = xlwt.easyxf('pattern: pattern solid, fore_color light_gray')
+    primary_header_style = xlwt.easyxf(
+        'pattern: pattern solid, fore_color medium_gray; '
+        'alignment: horiz center; '
+        'font: bold on; '
+        'borders: left thin, right thin, top thin, bottom thin'
+    )
+    secondary_header_style = xlwt.easyxf(
+        'pattern: pattern solid, fore_color light_gray; '
+        'alignment: horiz center; '
+        'font: bold on; '
+        'borders: left thin, right thin, top thin, bottom thin'
+    )
+
+    table_map = get_table_map(mapping_id)
+    for sheet_name, sheet_map in table_map['sheets'].iteritems():
+        print("===" * 50)
+        print(sheet_name)
+        workbook = create_worksheet(workbook, sheet_name, sheet_map, products)
+
+    stream = StringIO()
+    print("*" * 100)
+    import pprint
+    pprint.pprint(dir(workbook))
+    print("=" * 50)
+    pprint.pprint(workbook._Workbook__worksheets)
+    pprint.pprint(workbook._Workbook__active_sheet)
+    workbook.save(stream)
+    return stream

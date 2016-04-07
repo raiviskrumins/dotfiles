@@ -1,0 +1,7304 @@
+--
+-- PostgreSQL database dump
+--
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SET check_function_bodies = false;
+SET client_min_messages = warning;
+
+--
+-- Name: plpgsql; Type: EXTENSION; Schema: -; Owner:
+--
+
+CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
+CREATE EXTENSION IF NOT EXISTS citext;
+
+--
+-- Name: EXTENSION plpgsql; Type: COMMENT; Schema: -; Owner:
+--
+
+COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: api_key_kind_type; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE api_key_kind_type AS ENUM (
+    'client_key',
+    'user_key'
+);
+
+
+ALTER TYPE api_key_kind_type OWNER TO doodle;
+
+--
+-- Name: fiber_construction_type; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE fiber_construction_type AS ENUM (
+    'none',
+    'hand_crafted',
+    'hand_hooked',
+    'hand_tufted',
+    'hand_knotted',
+    'hand_loomed',
+    'hand_woven',
+    'machine_made'
+);
+
+
+ALTER TYPE fiber_construction_type OWNER TO doodle;
+
+--
+-- Name: image_category_type; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE image_category_type AS ENUM (
+    'setting',
+    'isolated',
+    'other'
+);
+
+
+ALTER TYPE image_category_type OWNER TO doodle;
+
+--
+-- Name: lead_time_unit_type; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE lead_time_unit_type AS ENUM (
+    'day',
+    'week',
+    'month'
+);
+
+
+ALTER TYPE lead_time_unit_type OWNER TO doodle;
+
+--
+-- Name: multi_value_type; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE multi_value_type AS ENUM (
+    'weave_type',
+    'design_type',
+    'usage',
+    'color'
+);
+
+
+ALTER TYPE multi_value_type OWNER TO doodle;
+
+--
+-- Name: option_set_set_type; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE option_set_set_type AS ENUM (
+    'finish',
+    'textile',
+    'leather',
+    'hardware',
+    'nailhead',
+    'trim'
+);
+
+
+ALTER TYPE option_set_set_type OWNER TO doodle;
+
+--
+-- Name: ordering_information_unit_types; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE ordering_information_unit_types AS ENUM (
+    'none',
+    'each',
+    'yard',
+    'sq_ft',
+    'sq_yard',
+    'pair',
+    'set',
+    'foot',
+    'single_roll',
+    'double_roll'
+);
+
+
+ALTER TYPE ordering_information_unit_types OWNER TO doodle;
+
+--
+-- Name: product_category_type; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE product_category_type AS ENUM (
+    'none',
+    'accessory',
+    'casegood',
+    'lighting',
+    'outdoor',
+    'textiles',
+    'upholstery',
+    'youth'
+);
+
+
+ALTER TYPE product_category_type OWNER TO doodle;
+
+--
+-- Name: sales_channel_description_preference_type; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE sales_channel_description_preference_type AS ENUM (
+    'description',
+    'alternate_description'
+);
+
+
+ALTER TYPE sales_channel_description_preference_type OWNER TO doodle;
+
+--
+-- Name: sales_channel_name_preference_type; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE sales_channel_name_preference_type AS ENUM (
+    'name',
+    'alternate_name'
+);
+
+
+ALTER TYPE sales_channel_name_preference_type OWNER TO doodle;
+
+--
+-- Name: time_interval_type; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE time_interval_type AS ENUM (
+    'day',
+    'week',
+    'month'
+);
+
+
+ALTER TYPE time_interval_type OWNER TO doodle;
+
+--
+-- Name: time_interval_type; Type: TYPE; Schema: public; Owner: doodle
+--
+
+CREATE TYPE running_status AS ENUM (
+    'not_started',
+    'submitted',
+    'running',
+    'complete',
+    'failed'
+);
+
+
+ALTER TYPE running_status OWNER TO doodle;
+
+SET default_tablespace = '';
+
+SET default_with_oids = false;
+-- ------------------------------------------------------------------------
+--
+-- Name: export; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE export (
+    id integer NOT NULL,
+    user_email citext,
+    user_manufacturer_id integer,
+    product_ids citext,
+    url citext,
+    date_created timestamp with time zone,
+    date_exported timestamp with time zone,
+    mapping_id integer,
+    message citext,
+    status running_status
+);
+
+
+ALTER TABLE export OWNER TO doodle;
+
+--
+-- Name: export_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE export_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE export_pk_seq OWNER TO doodle;
+
+--
+-- Name: export_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE export_pk_seq OWNED BY export.id;
+
+
+--
+-- Name: export_mapping; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE export_mapping (
+    id integer NOT NULL,
+    export_mapping_name citext,
+    retailer citext
+);
+
+
+ALTER TABLE export_mapping OWNER TO doodle;
+
+--
+-- Name: export_mapping_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE export_mapping_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE export_mapping_pk_seq OWNER TO doodle;
+
+--
+-- Name: export_mapping_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE export_mapping_pk_seq OWNED BY export_mapping.id;
+
+
+-- ------------------------------------------------------------------------
+--
+-- Name: api_key; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE api_key (
+    id integer NOT NULL,
+    api_key_name citext NOT NULL,
+    kind api_key_kind_type NOT NULL,
+    public character varying(256) NOT NULL,
+    private character varying(256) NOT NULL,
+    manufacturer_id integer,
+    sales_channel_id integer,
+    role_name character varying NOT NULL
+);
+
+
+ALTER TABLE api_key OWNER TO doodle;
+
+--
+-- Name: api_key_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE api_key_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE api_key_pk_seq OWNER TO doodle;
+
+--
+-- Name: api_key_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE api_key_pk_seq OWNED BY api_key.id;
+
+
+--
+-- Name: api_log; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE api_log (
+    id integer NOT NULL,
+    log_timestamp timestamp with time zone,
+    client_ip citext,
+    public_key citext,
+    uri citext,
+    payload_action citext,
+    http_method citext
+);
+
+
+ALTER TABLE api_log OWNER TO doodle;
+
+--
+-- Name: api_log_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE api_log_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE api_log_pk_seq OWNER TO doodle;
+
+--
+-- Name: api_log_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE api_log_pk_seq OWNED BY api_log.id;
+
+
+--
+-- Name: arm_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE arm_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    arm_style citext,
+    height double precision
+);
+
+
+ALTER TABLE arm_component OWNER TO doodle;
+
+--
+-- Name: arm_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE arm_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE arm_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: arm_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE arm_component_pk_seq OWNED BY arm_component.component_data_id;
+
+
+--
+-- Name: assemblage; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE assemblage (
+    id integer NOT NULL,
+    assemblage_name text NOT NULL,
+    description text
+);
+
+
+ALTER TABLE assemblage OWNER TO doodle;
+
+--
+-- Name: assemblage_components; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE assemblage_components (
+    assemblage_id integer NOT NULL,
+    component_id integer NOT NULL
+);
+
+
+ALTER TABLE assemblage_components OWNER TO doodle;
+
+--
+-- Name: assemblage_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE assemblage_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE assemblage_pk_seq OWNER TO doodle;
+
+--
+-- Name: assemblage_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE assemblage_pk_seq OWNED BY assemblage.id;
+
+
+--
+-- Name: audit_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE audit_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    date_added timestamp with time zone,
+    date_updated timestamp with time zone,
+    updated_by_api_key citext
+);
+
+
+ALTER TABLE audit_component OWNER TO doodle;
+
+--
+-- Name: audit_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE audit_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE audit_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: audit_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE audit_component_pk_seq OWNED BY audit_component.component_data_id;
+
+
+--
+-- Name: base_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE base_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    base_depth double precision,
+    diameter double precision
+);
+
+
+ALTER TABLE base_component OWNER TO doodle;
+
+--
+-- Name: base_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE base_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE base_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: base_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE base_component_pk_seq OWNED BY base_component.component_data_id;
+
+
+--
+-- Name: box_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE box_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer NOT NULL,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    box_depth double precision,
+    quantity bigint,
+    volume double precision,
+    weight double precision
+);
+
+
+ALTER TABLE box_component OWNER TO doodle;
+
+--
+-- Name: box_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE box_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE box_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: box_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE box_component_pk_seq OWNED BY box_component.component_data_id;
+
+
+--
+-- Name: bulb_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE bulb_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    base citext,
+    kind citext,
+    quantity bigint,
+    wattage bigint
+);
+
+
+ALTER TABLE bulb_component OWNER TO doodle;
+
+--
+-- Name: bulb_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE bulb_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE bulb_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: bulb_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE bulb_component_pk_seq OWNED BY bulb_component.component_data_id;
+
+
+--
+-- Name: category; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE category (
+    id text NOT NULL,
+    category_primary citext NOT NULL,
+    secondary citext,
+    tertiary citext
+);
+
+
+ALTER TABLE category OWNER TO doodle;
+
+--
+-- Name: category_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE category_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    primary_category product_category_type,
+    secondary_category citext,
+    tertiary_category citext
+);
+
+
+ALTER TABLE category_component OWNER TO doodle;
+
+--
+-- Name: category_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE category_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE category_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: category_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE category_component_pk_seq OWNED BY category_component.component_data_id;
+
+
+--
+-- Name: collection; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE collection (
+    id integer NOT NULL,
+    manufacturer_id integer,
+    description citext,
+    designed_by citext,
+    collection_name citext
+);
+
+
+ALTER TABLE collection OWNER TO doodle;
+
+--
+-- Name: collection_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE collection_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    collection_id integer
+);
+
+
+ALTER TABLE collection_component OWNER TO doodle;
+
+--
+-- Name: collection_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE collection_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE collection_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: collection_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE collection_component_pk_seq OWNED BY collection_component.component_data_id;
+
+
+--
+-- Name: collection_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE collection_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE collection_pk_seq OWNER TO doodle;
+
+--
+-- Name: collection_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE collection_pk_seq OWNED BY collection.id;
+
+
+--
+-- Name: com_col_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE com_col_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    col double precision,
+    com double precision
+);
+
+
+ALTER TABLE com_col_component OWNER TO doodle;
+
+--
+-- Name: com_col_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE com_col_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE com_col_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: com_col_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE com_col_component_pk_seq OWNED BY com_col_component.component_data_id;
+
+
+--
+-- Name: component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE component (
+    id integer NOT NULL,
+    component_name citext,
+    class_name citext,
+    table_name citext,
+    parent_name character varying,
+    description citext
+);
+
+
+ALTER TABLE component OWNER TO doodle;
+
+--
+-- Name: component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE component_pk_seq OWNER TO doodle;
+
+--
+-- Name: component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE component_pk_seq OWNED BY component.id;
+
+
+--
+-- Name: construction_information_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE construction_information_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    assembly_required boolean,
+    finish citext,
+    joinery_type citext,
+    material citext
+);
+
+
+ALTER TABLE construction_information_component OWNER TO doodle;
+
+--
+-- Name: construction_information_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE construction_information_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE construction_information_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: construction_information_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE construction_information_component_pk_seq OWNED BY construction_information_component.component_data_id;
+
+
+--
+-- Name: cushion_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE cushion_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer NOT NULL,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    cushion_depth double precision,
+    cushion_style citext,
+    fill citext,
+    quantity bigint
+);
+
+
+ALTER TABLE cushion_component OWNER TO doodle;
+
+--
+-- Name: cushion_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE cushion_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE cushion_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: cushion_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE cushion_component_pk_seq OWNED BY cushion_component.component_data_id;
+
+
+--
+-- Name: cushions_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE cushions_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    quantity bigint
+);
+
+
+ALTER TABLE cushions_component OWNER TO doodle;
+
+--
+-- Name: cushions_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE cushions_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE cushions_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: cushions_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE cushions_component_pk_seq OWNED BY cushions_component.component_data_id;
+
+
+--
+-- Name: description_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE description_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    primary_description citext,
+    alternate citext,
+    designer citext,
+    retail citext
+);
+
+
+ALTER TABLE description_component OWNER TO doodle;
+
+--
+-- Name: description_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE description_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE description_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: description_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE description_component_pk_seq OWNED BY description_component.component_data_id;
+
+
+--
+-- Name: door_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE door_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer NOT NULL,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    depth double precision,
+    opening double precision,
+    quantity bigint
+);
+
+
+ALTER TABLE door_component OWNER TO doodle;
+
+--
+-- Name: door_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE door_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE door_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: door_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE door_component_pk_seq OWNED BY door_component.component_data_id;
+
+
+--
+-- Name: doors_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE doors_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    quantity bigint
+);
+
+
+ALTER TABLE doors_component OWNER TO doodle;
+
+--
+-- Name: doors_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE doors_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE doors_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: doors_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE doors_component_pk_seq OWNED BY doors_component.component_data_id;
+
+
+--
+-- Name: drawer_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE drawer_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer NOT NULL,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    drawer_depth double precision,
+    quantity bigint
+);
+
+
+ALTER TABLE drawer_component OWNER TO doodle;
+
+--
+-- Name: drawer_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE drawer_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE drawer_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: drawer_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE drawer_component_pk_seq OWNED BY drawer_component.component_data_id;
+
+
+--
+-- Name: drawers_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE drawers_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    quantity bigint
+);
+
+
+ALTER TABLE drawers_component OWNER TO doodle;
+
+--
+-- Name: drawers_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE drawers_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE drawers_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: drawers_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE drawers_component_pk_seq OWNED BY drawers_component.component_data_id;
+
+
+--
+-- Name: durability_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE durability_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    flammability citext,
+    martindale citext,
+    wyzenbeek citext
+);
+
+
+ALTER TABLE durability_component OWNER TO doodle;
+
+--
+-- Name: durability_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE durability_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE durability_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: durability_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE durability_component_pk_seq OWNED BY durability_component.component_data_id;
+
+
+--
+-- Name: electrical_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE electrical_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    exterior_use boolean,
+    switch_type citext,
+    voltage double precision
+);
+
+
+ALTER TABLE electrical_component OWNER TO doodle;
+
+--
+-- Name: electrical_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE electrical_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE electrical_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: electrical_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE electrical_component_pk_seq OWNED BY electrical_component.component_data_id;
+
+
+--
+-- Name: event; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE event (
+    id integer NOT NULL,
+    api_key citext,
+    event_datetime timestamp without time zone,
+    event_name citext,
+    message citext,
+    object_id integer,
+    object_kind citext
+);
+
+
+ALTER TABLE event OWNER TO doodle;
+
+--
+-- Name: event_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE event_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE event_pk_seq OWNER TO doodle;
+
+--
+-- Name: event_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE event_pk_seq OWNED BY event.id;
+
+
+--
+-- Name: moment; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE moment (
+    id integer NOT NULL,
+    resource_name citext,
+    resource_action citext,
+    created_by_api_key citext,
+    date_created timestamp without time zone,
+    ip citext
+);
+
+
+ALTER TABLE moment OWNER TO doodle;
+
+--
+-- Name: moment_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE moment_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE moment_pk_seq OWNER TO doodle;
+
+--
+-- Name: moment_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE moment_pk_seq OWNED BY moment.id;
+
+
+--
+-- Name: feature_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE feature_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer NOT NULL,
+    parent_name character varying,
+    description citext
+);
+
+
+ALTER TABLE feature_component OWNER TO doodle;
+
+--
+-- Name: feature_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE feature_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE feature_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: feature_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE feature_component_pk_seq OWNED BY feature_component.component_data_id;
+
+
+--
+-- Name: fiber_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE fiber_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    construction fiber_construction_type,
+    pile citext
+);
+
+
+ALTER TABLE fiber_component OWNER TO doodle;
+
+--
+-- Name: fiber_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE fiber_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE fiber_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: fiber_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE fiber_component_pk_seq OWNED BY fiber_component.component_data_id;
+
+
+--
+-- Name: flame_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE flame_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    burner_capacity double precision,
+    burning_time double precision,
+    fuel_type citext,
+    heat_output double precision,
+    minimum_room_size double precision
+);
+
+
+ALTER TABLE flame_component OWNER TO doodle;
+
+--
+-- Name: flame_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE flame_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE flame_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: flame_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE flame_component_pk_seq OWNED BY flame_component.component_data_id;
+
+
+--
+-- Name: footboard_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE footboard_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    footboard_depth double precision,
+    floor_clearance double precision
+);
+
+
+ALTER TABLE footboard_component OWNER TO doodle;
+
+--
+-- Name: footboard_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE footboard_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE footboard_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: footboard_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE footboard_component_pk_seq OWNED BY footboard_component.component_data_id;
+
+
+--
+-- Name: footrest_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE footrest_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    height double precision
+);
+
+
+ALTER TABLE footrest_component OWNER TO doodle;
+
+--
+-- Name: footrest_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE footrest_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE footrest_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: footrest_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE footrest_component_pk_seq OWNED BY footrest_component.component_data_id;
+
+
+--
+-- Name: frame_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE frame_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    height double precision,
+    back_rail_height double precision
+);
+
+
+ALTER TABLE frame_component OWNER TO doodle;
+
+--
+-- Name: frame_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE frame_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE frame_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: frame_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE frame_component_pk_seq OWNED BY frame_component.component_data_id;
+
+
+--
+-- Name: glass_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE glass_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    kind citext
+);
+
+
+ALTER TABLE glass_component OWNER TO doodle;
+
+--
+-- Name: glass_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE glass_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE glass_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: glass_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE glass_component_pk_seq OWNED BY glass_component.component_data_id;
+
+
+--
+-- Name: headboard_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE headboard_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    headboard_depth double precision,
+    floor_clearance double precision
+);
+
+
+ALTER TABLE headboard_component OWNER TO doodle;
+
+--
+-- Name: headboard_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE headboard_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE headboard_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: headboard_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE headboard_component_pk_seq OWNED BY headboard_component.component_data_id;
+
+
+--
+-- Name: identity_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE identity_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    product_name citext,
+    alternate_name citext,
+    sku citext,
+    source_url citext,
+    upc citext
+);
+
+
+ALTER TABLE identity_component OWNER TO doodle;
+
+--
+-- Name: identity_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE identity_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE identity_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: identity_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE identity_component_pk_seq OWNED BY identity_component.component_data_id;
+
+
+--
+-- Name: image_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE image_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer NOT NULL,
+    parent_name character varying,
+    caption citext,
+    description citext,
+    category image_category_type,
+    default_image boolean,
+    full_size citext,
+    large_size citext,
+    medium_size citext,
+    thumbnail_size citext
+);
+
+
+ALTER TABLE image_component OWNER TO doodle;
+
+--
+-- Name: image_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE image_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE image_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: image_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE image_component_pk_seq OWNED BY image_component.component_data_id;
+
+
+--
+-- Name: images_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE images_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying
+);
+
+
+ALTER TABLE images_component OWNER TO doodle;
+
+--
+-- Name: images_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE images_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE images_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: images_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE images_component_pk_seq OWNED BY images_component.component_data_id;
+
+
+--
+-- Name: instruction_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE instruction_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    cleaning_directions citext,
+    installation_directions citext
+);
+
+
+ALTER TABLE instruction_component OWNER TO doodle;
+
+--
+-- Name: instructions_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE instructions_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE instructions_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: instructions_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE instructions_component_pk_seq OWNED BY instruction_component.component_data_id;
+
+
+--
+-- Name: interior_dimension_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE interior_dimension_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    interior_depth double precision
+);
+
+
+ALTER TABLE interior_dimension_component OWNER TO doodle;
+
+--
+-- Name: interior_dimension_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE interior_dimension_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE interior_dimension_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: interior_dimension_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE interior_dimension_component_pk_seq OWNED BY interior_dimension_component.component_data_id;
+
+
+--
+-- Name: keyword_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE keyword_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    keywords citext[]
+);
+
+
+ALTER TABLE keyword_component OWNER TO doodle;
+
+--
+-- Name: keyword_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE keyword_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE keyword_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: keyword_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE keyword_component_pk_seq OWNED BY keyword_component.component_data_id;
+
+
+--
+-- Name: leather_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE leather_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    finish citext,
+    hide_size double precision,
+    kind citext,
+    pattern_number citext
+);
+
+
+ALTER TABLE leather_component OWNER TO doodle;
+
+--
+-- Name: leather_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE leather_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE leather_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: leather_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE leather_component_pk_seq OWNED BY leather_component.component_data_id;
+
+
+--
+-- Name: manufacturer; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE manufacturer (
+    id integer NOT NULL,
+    manufacturer_name citext,
+    active boolean,
+    internal boolean DEFAULT FALSE,
+    bio citext,
+    date_added timestamp with time zone,
+    date_updated timestamp with time zone,
+    updated_by_api_key citext,
+    date_profile_complete timestamp with time zone,
+    email citext,
+    featured boolean,
+    legal citext,
+    logo_url citext,
+    restock_fee double precision,
+    return_period bigint,
+    returnable boolean,
+    street_address_1 citext,
+    street_address_2 citext,
+    city citext,
+    address_state citext,
+    province citext,
+    zipcode citext,
+    country citext,
+    phone citext,
+    phone_extension citext,
+    facebook_url citext,
+    google_plus_url citext,
+    linkedin_url citext,
+    pinterest_url citext,
+    twitter_url citext,
+    url citext
+);
+
+
+ALTER TABLE manufacturer OWNER TO doodle;
+
+--
+-- Name: manufacturer_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE manufacturer_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    manufacturer_id integer
+);
+
+
+ALTER TABLE manufacturer_component OWNER TO doodle;
+
+--
+-- Name: manufacturer_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE manufacturer_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE manufacturer_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: manufacturer_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE manufacturer_component_pk_seq OWNED BY manufacturer_component.component_data_id;
+
+
+--
+-- Name: manufacturer_image; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE manufacturer_image (
+    id integer NOT NULL,
+    manufacturer_id integer,
+    caption citext,
+    manufacturer_image_default boolean,
+    url citext
+);
+
+
+ALTER TABLE manufacturer_image OWNER TO doodle;
+
+--
+-- Name: manufacturer_image_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE manufacturer_image_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE manufacturer_image_pk_seq OWNER TO doodle;
+
+--
+-- Name: manufacturer_image_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE manufacturer_image_pk_seq OWNED BY manufacturer_image.id;
+
+
+--
+-- Name: manufacturer_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE manufacturer_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE manufacturer_pk_seq OWNER TO doodle;
+
+--
+-- Name: manufacturer_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE manufacturer_pk_seq OWNED BY manufacturer.id;
+
+
+--
+-- Name: multi_value; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE multi_value (
+    id integer NOT NULL,
+    component citext,
+    label citext,
+    value_type multi_value_type
+);
+
+
+ALTER TABLE multi_value OWNER TO doodle;
+
+--
+-- Name: multi_value_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE multi_value_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE multi_value_pk_seq OWNER TO doodle;
+
+--
+-- Name: multi_value_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE multi_value_pk_seq OWNED BY multi_value.id;
+
+
+--
+-- Name: multi_values; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE multi_values (
+    id integer NOT NULL,
+    multi_value_id integer NOT NULL,
+    product_id integer NOT NULL
+);
+
+
+ALTER TABLE multi_values OWNER TO doodle;
+
+--
+-- Name: multi_values_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE multi_values_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE multi_values_pk_seq OWNER TO doodle;
+
+--
+-- Name: multi_values_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE multi_values_pk_seq OWNED BY multi_values.id;
+
+
+--
+-- Name: option; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE option (
+    id integer NOT NULL,
+    option_set_id integer,
+    option_name citext,
+    option_number citext,
+    description citext,
+    option_default boolean,
+    image citext,
+    kind citext(255),
+    surcharge bigint
+);
+
+
+ALTER TABLE option OWNER TO doodle;
+
+--
+-- Name: option_sets_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE option_sets_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying
+);
+
+
+ALTER TABLE option_sets_component OWNER TO doodle;
+
+--
+-- Name: option_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE option_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE option_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: option_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE option_component_pk_seq OWNED BY option_sets_component.component_data_id;
+
+
+--
+-- Name: option_hardware; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE option_hardware (
+    id integer NOT NULL,
+    option_id integer,
+    height double precision,
+    width double precision,
+    option_hardware_depth double precision,
+    diameter double precision,
+    finish citext
+);
+
+
+ALTER TABLE option_hardware OWNER TO doodle;
+
+--
+-- Name: option_hardware_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE option_hardware_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE option_hardware_pk_seq OWNER TO doodle;
+
+--
+-- Name: option_hardware_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE option_hardware_pk_seq OWNED BY option_hardware.id;
+
+
+--
+-- Name: option_leather; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE option_leather (
+    id integer NOT NULL,
+    option_id integer,
+    average_thickness double precision,
+    cleaning_instructions citext,
+    finish citext,
+    flammability citext,
+    hide_size double precision,
+    leather_type citext,
+    pattern_number citext,
+    performance citext
+);
+
+
+ALTER TABLE option_leather OWNER TO doodle;
+
+--
+-- Name: option_leather_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE option_leather_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE option_leather_pk_seq OWNER TO doodle;
+
+--
+-- Name: option_leather_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE option_leather_pk_seq OWNED BY option_leather.id;
+
+
+--
+-- Name: option_nailhead; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE option_nailhead (
+    id integer NOT NULL,
+    option_id integer,
+    height double precision,
+    width double precision,
+    option_nailhead_depth double precision,
+    diameter double precision,
+    finish citext
+);
+
+
+ALTER TABLE option_nailhead OWNER TO doodle;
+
+--
+-- Name: option_nailhead_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE option_nailhead_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE option_nailhead_pk_seq OWNER TO doodle;
+
+--
+-- Name: option_nailhead_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE option_nailhead_pk_seq OWNED BY option_nailhead.id;
+
+
+--
+-- Name: option_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE option_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE option_pk_seq OWNER TO doodle;
+
+--
+-- Name: option_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE option_pk_seq OWNED BY option.id;
+
+
+--
+-- Name: option_set; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE option_set (
+    id integer NOT NULL,
+    manufacturer_id integer,
+    option_set_name citext,
+    kind option_set_set_type
+);
+
+
+ALTER TABLE option_set OWNER TO doodle;
+
+--
+-- Name: option_set_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE option_set_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer NOT NULL,
+    parent_name character varying,
+    option_set_id integer
+);
+
+
+ALTER TABLE option_set_component OWNER TO doodle;
+
+--
+-- Name: option_set_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE option_set_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE option_set_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: option_set_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE option_set_component_pk_seq OWNED BY option_set_component.component_data_id;
+
+
+--
+-- Name: option_set_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE option_set_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE option_set_pk_seq OWNER TO doodle;
+
+--
+-- Name: option_set_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE option_set_pk_seq OWNED BY option_set.id;
+
+
+--
+-- Name: option_textile; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE option_textile (
+    id integer NOT NULL,
+    option_id integer,
+    cleaning_instructions citext,
+    color citext,
+    design_type citext,
+    direction citext,
+    flammability citext,
+    grade citext,
+    horizontal_repeat double precision,
+    martindale citext,
+    option_content citext,
+    option_scale citext,
+    option_usage citext,
+    pattern_number citext,
+    treatment citext,
+    vertical_repeat double precision,
+    weave_type citext,
+    width double precision,
+    wyzenbeek citext
+);
+
+
+ALTER TABLE option_textile OWNER TO doodle;
+
+--
+-- Name: option_textile_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE option_textile_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE option_textile_pk_seq OWNER TO doodle;
+
+--
+-- Name: option_textile_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE option_textile_pk_seq OWNED BY option_textile.id;
+
+
+--
+-- Name: option_trim; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE option_trim (
+    id integer NOT NULL,
+    option_id integer,
+    height double precision,
+    width double precision,
+    option_trim_depth double precision,
+    color citext,
+    content citext,
+    diameter double precision,
+    trim_type citext
+);
+
+
+ALTER TABLE option_trim OWNER TO doodle;
+
+--
+-- Name: option_trim_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE option_trim_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE option_trim_pk_seq OWNER TO doodle;
+
+--
+-- Name: option_trim_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE option_trim_pk_seq OWNED BY option_trim.id;
+
+
+--
+-- Name: ordering_information_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE ordering_information_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    discontinued boolean,
+    force_multiples bigint,
+    lead_time bigint,
+    lead_time_unit lead_time_unit_type,
+    minimum_quantity bigint,
+    quick_ship boolean,
+    stock double precision,
+    unit ordering_information_unit_types,
+    warranty citext
+);
+
+
+ALTER TABLE ordering_information_component OWNER TO doodle;
+
+--
+-- Name: ordering_information_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE ordering_information_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE ordering_information_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: ordering_information_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE ordering_information_component_pk_seq OWNED BY ordering_information_component.component_data_id;
+
+
+--
+-- Name: overall_dimension_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE overall_dimension_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    width double precision,
+    height double precision,
+    overall_depth double precision,
+    diameter double precision
+);
+
+
+ALTER TABLE overall_dimension_component OWNER TO doodle;
+
+--
+-- Name: overall_dimensions_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE overall_dimensions_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE overall_dimensions_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: overall_dimensions_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE overall_dimensions_component_pk_seq OWNED BY overall_dimension_component.component_data_id;
+
+
+--
+-- Name: pattern_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE pattern_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    direction citext,
+    horizontal_repeat double precision,
+    pattern_number citext,
+    pattern_scale citext,
+    vertical_repeat double precision
+);
+
+
+ALTER TABLE pattern_component OWNER TO doodle;
+
+--
+-- Name: pattern_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE pattern_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE pattern_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: pattern_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE pattern_component_pk_seq OWNED BY pattern_component.component_data_id;
+
+
+--
+-- Name: pedestal_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE pedestal_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    pedestal_depth double precision,
+    diameter double precision
+);
+
+
+ALTER TABLE pedestal_component OWNER TO doodle;
+
+--
+-- Name: pedestal_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE pedestal_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE pedestal_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: pedestal_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE pedestal_component_pk_seq OWNED BY pedestal_component.component_data_id;
+
+
+--
+-- Name: pillow_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE pillow_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer NOT NULL,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    thickness double precision,
+    quantity bigint
+);
+
+
+ALTER TABLE pillow_component OWNER TO doodle;
+
+--
+-- Name: pillow_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE pillow_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE pillow_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: pillow_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE pillow_component_pk_seq OWNED BY pillow_component.component_data_id;
+
+
+--
+-- Name: pillows_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE pillows_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    quantity bigint
+);
+
+
+ALTER TABLE pillows_component OWNER TO doodle;
+
+--
+-- Name: pillows_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE pillows_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE pillows_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: pillows_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE pillows_component_pk_seq OWNED BY pillows_component.component_data_id;
+
+
+--
+-- Name: pricing_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE pricing_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    dealer_price bigint,
+    minimum_internet_price bigint,
+    msrp bigint,
+    trade_price bigint,
+    wholesale bigint
+);
+
+
+ALTER TABLE pricing_component OWNER TO doodle;
+
+--
+-- Name: pricing_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE pricing_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE pricing_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: pricing_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE pricing_component_pk_seq OWNED BY pricing_component.component_data_id;
+
+
+--
+-- Name: product_entity; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE product_entity (
+    id integer NOT NULL,
+    assemblage_id integer NOT NULL
+);
+
+
+ALTER TABLE product_entity OWNER TO doodle;
+
+--
+-- Name: product_entity_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE product_entity_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE product_entity_pk_seq OWNER TO doodle;
+
+--
+-- Name: product_entity_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE product_entity_pk_seq OWNED BY product_entity.id;
+
+
+--
+-- Name: promotional_tag_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE promotional_tag_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    best_seller boolean,
+    discontinued boolean,
+    limited_stock boolean,
+    new_product boolean
+);
+
+
+ALTER TABLE promotional_tag_component OWNER TO doodle;
+
+--
+-- Name: promotional_tags_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE promotional_tags_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE promotional_tags_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: promotional_tags_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE promotional_tags_component_pk_seq OWNED BY promotional_tag_component.component_data_id;
+
+
+--
+-- Name: sales_channel; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE sales_channel (
+    id integer NOT NULL,
+    api_key_id integer,
+    visible boolean,
+    sales_channel_name citext,
+    bio citext,
+    logo_url citext,
+    email citext,
+    street_address_1 citext,
+    street_address_2 citext,
+    city citext,
+    address_state citext,
+    zipcode citext,
+    phone citext,
+    phone_extension citext,
+    facebook_url citext,
+    google_plus_url citext,
+    linkedin_url citext,
+    pinterest_url citext,
+    twitter_url citext,
+    url citext,
+    isolated_image boolean,
+    other_image boolean,
+    setting_image boolean
+);
+
+
+ALTER TABLE sales_channel OWNER TO doodle;
+
+--
+-- Name: sales_channel_image; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE sales_channel_image (
+    id integer NOT NULL,
+    sales_channel_id integer,
+    caption citext,
+    url citext
+);
+
+
+ALTER TABLE sales_channel_image OWNER TO doodle;
+
+--
+-- Name: sales_channel_image_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE sales_channel_image_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE sales_channel_image_pk_seq OWNER TO doodle;
+
+--
+-- Name: sales_channel_image_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE sales_channel_image_pk_seq OWNED BY sales_channel_image.id;
+
+
+--
+-- Name: sales_channel_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE sales_channel_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE sales_channel_pk_seq OWNER TO doodle;
+
+--
+-- Name: sales_channel_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE sales_channel_pk_seq OWNED BY sales_channel.id;
+
+
+--
+-- Name: sales_channel_preference; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE sales_channel_preference (
+    id integer NOT NULL,
+    manufacturer_id integer,
+    sales_channel_id integer,
+    active boolean,
+    description_description sales_channel_description_preference_type,
+    identity_name sales_channel_name_preference_type,
+    pricing_dealer_price boolean,
+    pricing_minimum_internet_price boolean,
+    pricing_msrp boolean,
+    pricing_trade_price boolean,
+    pricing_wholesale boolean
+);
+
+
+ALTER TABLE sales_channel_preference OWNER TO doodle;
+
+--
+-- Name: sales_channel_preference_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE sales_channel_preference_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE sales_channel_preference_pk_seq OWNER TO doodle;
+
+--
+-- Name: sales_channel_preference_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE sales_channel_preference_pk_seq OWNED BY sales_channel_preference.id;
+
+
+--
+-- Name: sales_channel_product; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE sales_channel_product (
+    sales_channel_id integer NOT NULL,
+    product_id integer NOT NULL
+);
+
+
+ALTER TABLE sales_channel_product OWNER TO doodle;
+
+--
+-- Name: seat_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE seat_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    seat_depth double precision,
+    construction citext
+);
+
+
+ALTER TABLE seat_component OWNER TO doodle;
+
+--
+-- Name: seat_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE seat_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE seat_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: seat_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE seat_component_pk_seq OWNED BY seat_component.component_data_id;
+
+
+--
+-- Name: shade_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE shade_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    height double precision,
+    width double precision,
+    shade_depth double precision,
+    diameter double precision,
+    material citext,
+    quantity bigint,
+    kind citext
+);
+
+
+ALTER TABLE shade_component OWNER TO doodle;
+
+--
+-- Name: shade_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE shade_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE shade_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: shade_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE shade_component_pk_seq OWNED BY shade_component.component_data_id;
+
+
+--
+-- Name: shelf_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE shelf_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer NOT NULL,
+    parent_name character varying,
+    width double precision,
+    shelf_depth double precision,
+    quantity bigint,
+    thickness double precision
+);
+
+
+ALTER TABLE shelf_component OWNER TO doodle;
+
+--
+-- Name: shelf_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE shelf_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE shelf_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: shelf_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE shelf_component_pk_seq OWNED BY shelf_component.component_data_id;
+
+
+--
+-- Name: shelves_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE shelves_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    quantity bigint
+);
+
+
+ALTER TABLE shelves_component OWNER TO doodle;
+
+--
+-- Name: shelves_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE shelves_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE shelves_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: shelves_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE shelves_component_pk_seq OWNED BY shelves_component.component_data_id;
+
+
+--
+-- Name: shipping_information_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE shipping_information_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    country_of_origin citext,
+    drop_ship boolean,
+    freight boolean,
+    shipping_notes citext,
+    ships_from citext,
+    standard boolean,
+    volume double precision,
+    white_glove boolean
+);
+
+
+ALTER TABLE shipping_information_component OWNER TO doodle;
+
+--
+-- Name: shipping_information_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE shipping_information_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE shipping_information_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: shipping_information_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE shipping_information_component_pk_seq OWNED BY shipping_information_component.component_data_id;
+
+
+--
+-- Name: side_rail_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE side_rail_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    floor_clearance double precision,
+    side_rail_length double precision
+);
+
+
+ALTER TABLE side_rail_component OWNER TO doodle;
+
+--
+-- Name: side_rail_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE side_rail_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE side_rail_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: side_rail_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE side_rail_component_pk_seq OWNED BY side_rail_component.component_data_id;
+
+
+--
+-- Name: suspension_point_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE suspension_point_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    support_type citext,
+    canopy_height double precision,
+    canopy_width double precision,
+    canopy_depth double precision,
+    canopy_diameter double precision,
+    chain_length double precision,
+    maximum_hanging_length double precision,
+    minimum_hanging_length double precision,
+    wire_length double precision
+);
+
+
+ALTER TABLE suspension_point_component OWNER TO doodle;
+
+--
+-- Name: suspension_point_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE suspension_point_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE suspension_point_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: suspension_point_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE suspension_point_component_pk_seq OWNED BY suspension_point_component.component_data_id;
+
+
+--
+-- Name: table_leaf_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE table_leaf_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer NOT NULL,
+    parent_name character varying,
+    width double precision,
+    leaf_depth double precision,
+    quantity bigint
+);
+
+
+ALTER TABLE table_leaf_component OWNER TO doodle;
+
+--
+-- Name: table_leaf_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE table_leaf_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE table_leaf_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: table_leaf_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE table_leaf_component_pk_seq OWNED BY table_leaf_component.component_data_id;
+
+
+--
+-- Name: table_leaves_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE table_leaves_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    quantity bigint
+);
+
+
+ALTER TABLE table_leaves_component OWNER TO doodle;
+
+--
+-- Name: table_leaves_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE table_leaves_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE table_leaves_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: table_leaves_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE table_leaves_component_pk_seq OWNED BY table_leaves_component.component_data_id;
+
+
+--
+-- Name: textile_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE textile_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    content citext,
+    grade citext,
+    treatment citext,
+    width double precision
+);
+
+
+ALTER TABLE textile_component OWNER TO doodle;
+
+--
+-- Name: textile_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE textile_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE textile_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: textile_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE textile_component_pk_seq OWNED BY textile_component.component_data_id;
+
+
+--
+-- Name: visibility_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE visibility_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    active boolean DEFAULT FALSE,
+    meets_posting_requirements boolean
+);
+
+
+ALTER TABLE visibility_component OWNER TO doodle;
+
+--
+-- Name: visibility_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE visibility_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE visibility_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: visibility_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE visibility_component_pk_seq OWNED BY visibility_component.component_data_id;
+
+
+--
+-- Name: weight_component; Type: TABLE; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE TABLE weight_component (
+    component_data_id integer NOT NULL,
+    product_id integer NOT NULL,
+    parent_id integer,
+    parent_name character varying,
+    weight double precision
+);
+
+
+ALTER TABLE weight_component OWNER TO doodle;
+
+--
+-- Name: weight_component_pk_seq; Type: SEQUENCE; Schema: public; Owner: doodle
+--
+
+CREATE SEQUENCE weight_component_pk_seq
+START WITH 1
+INCREMENT BY 1
+NO MINVALUE
+NO MAXVALUE
+CACHE 1;
+
+
+ALTER TABLE weight_component_pk_seq OWNER TO doodle;
+
+--
+-- Name: weight_component_pk_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doodle
+--
+
+ALTER SEQUENCE weight_component_pk_seq OWNED BY weight_component.component_data_id;
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY api_key ALTER COLUMN id SET DEFAULT nextval('api_key_pk_seq'::regclass);
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY export ALTER COLUMN id SET DEFAULT nextval('export_pk_seq'::regclass);
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY export_mapping ALTER COLUMN id SET DEFAULT nextval('export_mapping_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY api_log ALTER COLUMN id SET DEFAULT nextval('api_log_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY arm_component ALTER COLUMN component_data_id SET DEFAULT nextval('arm_component_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY assemblage ALTER COLUMN id SET DEFAULT nextval('assemblage_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY audit_component ALTER COLUMN component_data_id SET DEFAULT nextval('audit_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY base_component ALTER COLUMN component_data_id SET DEFAULT nextval('base_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY box_component ALTER COLUMN component_data_id SET DEFAULT nextval('box_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY bulb_component ALTER COLUMN component_data_id SET DEFAULT nextval('bulb_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY category_component ALTER COLUMN component_data_id SET DEFAULT nextval('category_component_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY collection ALTER COLUMN id SET DEFAULT nextval('collection_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY collection_component ALTER COLUMN component_data_id SET DEFAULT nextval('collection_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY com_col_component ALTER COLUMN component_data_id SET DEFAULT nextval('com_col_component_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY component ALTER COLUMN id SET DEFAULT nextval('component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY construction_information_component ALTER COLUMN component_data_id SET DEFAULT nextval('construction_information_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY cushion_component ALTER COLUMN component_data_id SET DEFAULT nextval('cushion_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY cushions_component ALTER COLUMN component_data_id SET DEFAULT nextval('cushions_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY description_component ALTER COLUMN component_data_id SET DEFAULT nextval('description_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY door_component ALTER COLUMN component_data_id SET DEFAULT nextval('door_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY doors_component ALTER COLUMN component_data_id SET DEFAULT nextval('doors_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY drawer_component ALTER COLUMN component_data_id SET DEFAULT nextval('drawer_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY drawers_component ALTER COLUMN component_data_id SET DEFAULT nextval('drawers_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY durability_component ALTER COLUMN component_data_id SET DEFAULT nextval('durability_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY electrical_component ALTER COLUMN component_data_id SET DEFAULT nextval('electrical_component_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY event ALTER COLUMN id SET DEFAULT nextval('event_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY moment ALTER COLUMN id SET DEFAULT nextval('moment_pk_seq'::regclass);
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY feature_component ALTER COLUMN component_data_id SET DEFAULT nextval('feature_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY fiber_component ALTER COLUMN component_data_id SET DEFAULT nextval('fiber_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY flame_component ALTER COLUMN component_data_id SET DEFAULT nextval('flame_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY footboard_component ALTER COLUMN component_data_id SET DEFAULT nextval('footboard_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY footrest_component ALTER COLUMN component_data_id SET DEFAULT nextval('footrest_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY frame_component ALTER COLUMN component_data_id SET DEFAULT nextval('frame_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY glass_component ALTER COLUMN component_data_id SET DEFAULT nextval('glass_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY headboard_component ALTER COLUMN component_data_id SET DEFAULT nextval('headboard_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY identity_component ALTER COLUMN component_data_id SET DEFAULT nextval('identity_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY image_component ALTER COLUMN component_data_id SET DEFAULT nextval('image_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY images_component ALTER COLUMN component_data_id SET DEFAULT nextval('images_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY instruction_component ALTER COLUMN component_data_id SET DEFAULT nextval('instructions_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY interior_dimension_component ALTER COLUMN component_data_id SET DEFAULT nextval('interior_dimension_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY keyword_component ALTER COLUMN component_data_id SET DEFAULT nextval('keyword_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY leather_component ALTER COLUMN component_data_id SET DEFAULT nextval('leather_component_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY manufacturer ALTER COLUMN id SET DEFAULT nextval('manufacturer_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY manufacturer_component ALTER COLUMN component_data_id SET DEFAULT nextval('manufacturer_component_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY manufacturer_image ALTER COLUMN id SET DEFAULT nextval('manufacturer_image_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY multi_value ALTER COLUMN id SET DEFAULT nextval('multi_value_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY multi_values ALTER COLUMN id SET DEFAULT nextval('multi_values_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option ALTER COLUMN id SET DEFAULT nextval('option_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_hardware ALTER COLUMN id SET DEFAULT nextval('option_hardware_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_leather ALTER COLUMN id SET DEFAULT nextval('option_leather_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_nailhead ALTER COLUMN id SET DEFAULT nextval('option_nailhead_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_set ALTER COLUMN id SET DEFAULT nextval('option_set_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_set_component ALTER COLUMN component_data_id SET DEFAULT nextval('option_set_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_sets_component ALTER COLUMN component_data_id SET DEFAULT nextval('option_component_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_textile ALTER COLUMN id SET DEFAULT nextval('option_textile_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_trim ALTER COLUMN id SET DEFAULT nextval('option_trim_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY ordering_information_component ALTER COLUMN component_data_id SET DEFAULT nextval('ordering_information_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY overall_dimension_component ALTER COLUMN component_data_id SET DEFAULT nextval('overall_dimensions_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY pattern_component ALTER COLUMN component_data_id SET DEFAULT nextval('pattern_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY pedestal_component ALTER COLUMN component_data_id SET DEFAULT nextval('pedestal_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY pillow_component ALTER COLUMN component_data_id SET DEFAULT nextval('pillow_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY pillows_component ALTER COLUMN component_data_id SET DEFAULT nextval('pillows_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY pricing_component ALTER COLUMN component_data_id SET DEFAULT nextval('pricing_component_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY product_entity ALTER COLUMN id SET DEFAULT nextval('product_entity_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY promotional_tag_component ALTER COLUMN component_data_id SET DEFAULT nextval('promotional_tags_component_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY sales_channel ALTER COLUMN id SET DEFAULT nextval('sales_channel_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY sales_channel_image ALTER COLUMN id SET DEFAULT nextval('sales_channel_image_pk_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY sales_channel_preference ALTER COLUMN id SET DEFAULT nextval('sales_channel_preference_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY seat_component ALTER COLUMN component_data_id SET DEFAULT nextval('seat_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY shade_component ALTER COLUMN component_data_id SET DEFAULT nextval('shade_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY shelf_component ALTER COLUMN component_data_id SET DEFAULT nextval('shelf_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY shelves_component ALTER COLUMN component_data_id SET DEFAULT nextval('shelves_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY shipping_information_component ALTER COLUMN component_data_id SET DEFAULT nextval('shipping_information_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY side_rail_component ALTER COLUMN component_data_id SET DEFAULT nextval('side_rail_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY suspension_point_component ALTER COLUMN component_data_id SET DEFAULT nextval('suspension_point_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY table_leaf_component ALTER COLUMN component_data_id SET DEFAULT nextval('table_leaf_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY table_leaves_component ALTER COLUMN component_data_id SET DEFAULT nextval('table_leaves_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY textile_component ALTER COLUMN component_data_id SET DEFAULT nextval('textile_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY visibility_component ALTER COLUMN component_data_id SET DEFAULT nextval('visibility_component_pk_seq'::regclass);
+
+
+--
+-- Name: component_data_id; Type: DEFAULT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY weight_component ALTER COLUMN component_data_id SET DEFAULT nextval('weight_component_pk_seq'::regclass);
+
+
+--
+-- Name: export_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY export
+ADD CONSTRAINT export_id_pkey PRIMARY KEY (id);
+
+--
+-- Name: export_mapping_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY export_mapping
+ADD CONSTRAINT export_mapping_id_pkey PRIMARY KEY (id);
+
+--
+-- Name: api_key_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY api_key
+ADD CONSTRAINT api_key_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: api_key_private_uq; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY api_key
+ADD CONSTRAINT api_key_private_uq UNIQUE (private);
+
+
+--
+-- Name: api_key_public_uq; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY api_key
+ADD CONSTRAINT api_key_public_uq UNIQUE (public);
+
+
+--
+-- Name: api_log_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY api_log
+ADD CONSTRAINT api_log_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: arm_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY arm_component
+ADD CONSTRAINT arm_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: assemblage_components_assemblage_id_component_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY assemblage_components
+ADD CONSTRAINT assemblage_components_assemblage_id_component_id_pkey PRIMARY KEY (assemblage_id, component_id);
+
+
+--
+-- Name: assemblage_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY assemblage
+ADD CONSTRAINT assemblage_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: audit_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY audit_component
+ADD CONSTRAINT audit_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: base_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY base_component
+ADD CONSTRAINT base_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: box_component_product_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY box_component
+ADD CONSTRAINT box_component_product_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: bulb_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY bulb_component
+ADD CONSTRAINT bulb_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: category_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY category_component
+ADD CONSTRAINT category_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: category_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY category
+ADD CONSTRAINT category_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: collection_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY collection_component
+ADD CONSTRAINT collection_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: collection_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY collection
+ADD CONSTRAINT collection_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: com_col_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY com_col_component
+ADD CONSTRAINT com_col_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: component_component_name_key; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY component
+ADD CONSTRAINT component_component_name_key UNIQUE (component_name);
+
+
+--
+-- Name: component_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY component
+ADD CONSTRAINT component_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: construction_information_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY construction_information_component
+ADD CONSTRAINT construction_information_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: cushion_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY cushion_component
+ADD CONSTRAINT cushion_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: cushions_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY cushions_component
+ADD CONSTRAINT cushions_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: description_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY description_component
+ADD CONSTRAINT description_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: door_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY door_component
+ADD CONSTRAINT door_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: doors_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY doors_component
+ADD CONSTRAINT doors_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: drawer_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY drawer_component
+ADD CONSTRAINT drawer_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: drawers_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY drawers_component
+ADD CONSTRAINT drawers_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: durability_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY durability_component
+ADD CONSTRAINT durability_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: electrical_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY electrical_component
+ADD CONSTRAINT electrical_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: event_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY event
+ADD CONSTRAINT event_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: moment_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY moment
+ADD CONSTRAINT moment_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: feature_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY feature_component
+ADD CONSTRAINT feature_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: fiber_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY fiber_component
+ADD CONSTRAINT fiber_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: flame_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY flame_component
+ADD CONSTRAINT flame_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: footboard_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY footboard_component
+ADD CONSTRAINT footboard_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: footrest_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY footrest_component
+ADD CONSTRAINT footrest_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: frame_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY frame_component
+ADD CONSTRAINT frame_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: glass_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY glass_component
+ADD CONSTRAINT glass_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: headboard_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY headboard_component
+ADD CONSTRAINT headboard_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: identity_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY identity_component
+ADD CONSTRAINT identity_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: image_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY image_component
+ADD CONSTRAINT image_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: images_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY images_component
+ADD CONSTRAINT images_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: instructions_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY instruction_component
+ADD CONSTRAINT instructions_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: interior_dimension_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY interior_dimension_component
+ADD CONSTRAINT interior_dimension_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: keyword_component_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY keyword_component
+ADD CONSTRAINT keyword_component_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: leather_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY leather_component
+ADD CONSTRAINT leather_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: manufacturer_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY manufacturer_component
+ADD CONSTRAINT manufacturer_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: manufacturer_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY manufacturer
+ADD CONSTRAINT manufacturer_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: manufacturer_image_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY manufacturer_image
+ADD CONSTRAINT manufacturer_image_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: multi_value_id_idx; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY multi_value
+ADD CONSTRAINT multi_value_id_idx PRIMARY KEY (id);
+
+
+--
+-- Name: multi_values_id_idx; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY multi_values
+ADD CONSTRAINT multi_values_id_idx PRIMARY KEY (id);
+
+
+--
+-- Name: option_hardware_option_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY option_hardware
+ADD CONSTRAINT option_hardware_option_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: option_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY option
+ADD CONSTRAINT option_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: option_leather_option_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY option_leather
+ADD CONSTRAINT option_leather_option_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: option_nailhead_option_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY option_nailhead
+ADD CONSTRAINT option_nailhead_option_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: option_set_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY option_set_component
+ADD CONSTRAINT option_set_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: option_set_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY option_set
+ADD CONSTRAINT option_set_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: option_sets_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY option_sets_component
+ADD CONSTRAINT option_sets_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: option_textile_option_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY option_textile
+ADD CONSTRAINT option_textile_option_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: option_trim_option_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY option_trim
+ADD CONSTRAINT option_trim_option_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ordering_information_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY ordering_information_component
+ADD CONSTRAINT ordering_information_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: overall_dimension_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY overall_dimension_component
+ADD CONSTRAINT overall_dimension_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: pattern_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY pattern_component
+ADD CONSTRAINT pattern_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: pedestal_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY pedestal_component
+ADD CONSTRAINT pedestal_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: pillow_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY pillow_component
+ADD CONSTRAINT pillow_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: pillows_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY pillows_component
+ADD CONSTRAINT pillows_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: pricing_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY pricing_component
+ADD CONSTRAINT pricing_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: product_entity_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY product_entity
+ADD CONSTRAINT product_entity_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: promotional_tag_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY promotional_tag_component
+ADD CONSTRAINT promotional_tag_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: sales_channel_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY sales_channel
+ADD CONSTRAINT sales_channel_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sales_channel_image_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY sales_channel_image
+ADD CONSTRAINT sales_channel_image_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sales_channel_preference_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY sales_channel_preference
+ADD CONSTRAINT sales_channel_preference_id_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sales_channel_product_sales_channel_id_product_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY sales_channel_product
+ADD CONSTRAINT sales_channel_product_sales_channel_id_product_id_pkey PRIMARY KEY (sales_channel_id, product_id);
+
+
+--
+-- Name: seat_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY seat_component
+ADD CONSTRAINT seat_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: shade_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY shade_component
+ADD CONSTRAINT shade_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: shelf_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY shelf_component
+ADD CONSTRAINT shelf_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: shelves_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY shelves_component
+ADD CONSTRAINT shelves_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: shipping_information_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY shipping_information_component
+ADD CONSTRAINT shipping_information_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: side_rail_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY side_rail_component
+ADD CONSTRAINT side_rail_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: suspension_point_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY suspension_point_component
+ADD CONSTRAINT suspension_point_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: table_leaf_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY table_leaf_component
+ADD CONSTRAINT table_leaf_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: table_leaves_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY table_leaves_component
+ADD CONSTRAINT table_leaves_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: textile_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY textile_component
+ADD CONSTRAINT textile_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: visibility_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY visibility_component
+ADD CONSTRAINT visibility_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: weight_component_component_data_id_pkey; Type: CONSTRAINT; Schema: public; Owner: doodle; Tablespace:
+--
+
+ALTER TABLE ONLY weight_component
+ADD CONSTRAINT weight_component_component_data_id_pkey PRIMARY KEY (component_data_id);
+
+
+--
+-- Name: api_key_private_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX api_key_private_idx ON api_key USING btree (private);
+
+
+--
+-- Name: api_key_public_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX api_key_public_idx ON api_key USING btree (public);
+
+
+--
+-- Name: arm_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX arm_component_product_id_idx ON arm_component USING btree (product_id);
+
+
+--
+-- Name: audit_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX audit_component_product_id_idx ON audit_component USING btree (product_id);
+
+
+--
+-- Name: base_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX base_component_product_id_idx ON base_component USING btree (product_id);
+
+
+--
+-- Name: box_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX box_component_product_id_idx ON box_component USING btree (product_id);
+
+
+--
+-- Name: bulb_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX bulb_component_product_id_idx ON bulb_component USING btree (product_id);
+
+
+--
+-- Name: category_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX category_component_product_id_idx ON category_component USING btree (product_id);
+
+
+--
+-- Name: collection_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX collection_component_product_id_idx ON collection_component USING btree (product_id);
+
+
+--
+-- Name: com_col_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX com_col_component_product_id_idx ON com_col_component USING btree (product_id);
+
+
+--
+-- Name: construction_information_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX construction_information_component_product_id_idx ON construction_information_component USING btree (product_id);
+
+
+--
+-- Name: cushion_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX cushion_component_product_id_idx ON cushion_component USING btree (product_id);
+
+
+--
+-- Name: cushions_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX cushions_component_product_id_idx ON cushions_component USING btree (product_id);
+
+
+--
+-- Name: description_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX description_component_product_id_idx ON description_component USING btree (product_id);
+
+
+--
+-- Name: door_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX door_component_product_id_idx ON door_component USING btree (product_id);
+
+
+--
+-- Name: doors_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX doors_component_product_id_idx ON doors_component USING btree (product_id);
+
+
+--
+-- Name: drawer_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX drawer_component_product_id_idx ON drawer_component USING btree (product_id);
+
+
+--
+-- Name: drawers_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX drawers_component_product_id_idx ON drawers_component USING btree (product_id);
+
+
+--
+-- Name: durability_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX durability_component_product_id_idx ON durability_component USING btree (product_id);
+
+
+--
+-- Name: electrical_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX electrical_component_product_id_idx ON electrical_component USING btree (product_id);
+
+
+--
+-- Name: fiber_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX fiber_component_product_id_idx ON fiber_component USING btree (product_id);
+
+
+--
+-- Name: flame_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX flame_component_product_id_idx ON flame_component USING btree (product_id);
+
+
+--
+-- Name: footboard_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX footboard_component_product_id_idx ON footboard_component USING btree (product_id);
+
+
+--
+-- Name: footrest_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX footrest_component_product_id_idx ON footrest_component USING btree (product_id);
+
+
+--
+-- Name: frame_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX frame_component_product_id_idx ON frame_component USING btree (product_id);
+
+
+--
+-- Name: glass_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX glass_component_product_id_idx ON glass_component USING btree (product_id);
+
+
+--
+-- Name: headboard_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX headboard_component_product_id_idx ON headboard_component USING btree (product_id);
+
+
+--
+-- Name: identity_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX identity_component_product_id_idx ON identity_component USING btree (product_id);
+
+
+--
+-- Name: image_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX image_component_product_id_idx ON image_component USING btree (product_id);
+
+
+--
+-- Name: images_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX images_component_product_id_idx ON images_component USING btree (product_id);
+
+
+--
+-- Name: instruction_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX instruction_component_product_id_idx ON instruction_component USING btree (product_id);
+
+
+--
+-- Name: interior_dimension_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX interior_dimension_component_product_id_idx ON interior_dimension_component USING btree (product_id);
+
+
+--
+-- Name: keyword_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX keyword_component_product_id_idx ON keyword_component USING btree (product_id);
+
+
+--
+-- Name: leather_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX leather_component_product_id_idx ON leather_component USING btree (product_id);
+
+
+--
+-- Name: manufacturer_component_manufacturer_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX manufacturer_component_manufacturer_id_idx ON manufacturer_component USING btree (manufacturer_id);
+
+
+--
+-- Name: manufacturer_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX manufacturer_component_product_id_idx ON manufacturer_component USING btree (product_id);
+
+
+--
+-- Name: manufacturer_image_manufacturer_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX manufacturer_image_manufacturer_id_idx ON manufacturer_image USING btree (manufacturer_id);
+
+
+--
+-- Name: option_hardware_option_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX option_hardware_option_id_idx ON option_hardware USING btree (option_id);
+
+
+--
+-- Name: option_leather_option_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX option_leather_option_id_idx ON option_leather USING btree (option_id);
+
+
+--
+-- Name: option_nailhead_option_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX option_nailhead_option_id_idx ON option_nailhead USING btree (option_id);
+
+
+--
+-- Name: option_option_set_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX option_option_set_id_idx ON option USING btree (option_set_id);
+
+
+--
+-- Name: option_set_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX option_set_component_product_id_idx ON option_set_component USING btree (product_id);
+
+
+--
+-- Name: option_sets_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX option_sets_component_product_id_idx ON option_sets_component USING btree (product_id);
+
+
+--
+-- Name: option_textile_option_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX option_textile_option_id_idx ON option_textile USING btree (option_id);
+
+
+--
+-- Name: option_trim_option_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX option_trim_option_id_idx ON option_trim USING btree (option_id);
+
+
+--
+-- Name: ordering_information_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX ordering_information_component_product_id_idx ON ordering_information_component USING btree (product_id);
+
+
+--
+-- Name: overall_dimension_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX overall_dimension_component_product_id_idx ON overall_dimension_component USING btree (product_id);
+
+
+--
+-- Name: pattern_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX pattern_component_product_id_idx ON pattern_component USING btree (product_id);
+
+
+--
+-- Name: pedestal_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX pedestal_component_product_id_idx ON pedestal_component USING btree (product_id);
+
+
+--
+-- Name: pillow_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX pillow_component_product_id_idx ON pillow_component USING btree (product_id);
+
+
+--
+-- Name: pillows_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX pillows_component_product_id_idx ON pillows_component USING btree (product_id);
+
+
+--
+-- Name: pricing_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX pricing_component_product_id_idx ON pricing_component USING btree (product_id);
+
+
+--
+-- Name: promotional_tag_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX promotional_tag_component_product_id_idx ON promotional_tag_component USING btree (product_id);
+
+
+--
+-- Name: sales_channel_api_key_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX sales_channel_api_key_id_idx ON sales_channel USING btree (api_key_id);
+
+
+--
+-- Name: sales_channel_image_sales_channel_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX sales_channel_image_sales_channel_id_idx ON sales_channel_image USING btree (sales_channel_id);
+
+
+--
+-- Name: sales_channel_preference_manufacturer_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX sales_channel_preference_manufacturer_id_idx ON sales_channel_preference USING btree (manufacturer_id);
+
+
+--
+-- Name: sales_channel_preference_sales_channel_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX sales_channel_preference_sales_channel_id_idx ON sales_channel_preference USING btree (sales_channel_id);
+
+
+--
+-- Name: sales_channel_product_product_id_sales_channel_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX sales_channel_product_product_id_sales_channel_id_idx ON sales_channel_product USING btree (product_id, sales_channel_id);
+
+
+--
+-- Name: seat_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX seat_component_product_id_idx ON seat_component USING btree (product_id);
+
+
+--
+-- Name: shade_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX shade_component_product_id_idx ON shade_component USING btree (product_id);
+
+
+--
+-- Name: shelf_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX shelf_component_product_id_idx ON shelf_component USING btree (product_id);
+
+
+--
+-- Name: shelves_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX shelves_component_product_id_idx ON shelves_component USING btree (product_id);
+
+
+--
+-- Name: shipping_information_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX shipping_information_component_product_id_idx ON shipping_information_component USING btree (product_id);
+
+
+--
+-- Name: side_rail_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX side_rail_component_product_id_idx ON side_rail_component USING btree (product_id);
+
+
+--
+-- Name: suspension_point_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX suspension_point_component_product_id_idx ON suspension_point_component USING btree (product_id);
+
+
+--
+-- Name: table_leaf_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE INDEX table_leaf_component_product_id_idx ON table_leaf_component USING btree (product_id);
+
+
+--
+-- Name: table_leaves_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX table_leaves_component_product_id_idx ON table_leaves_component USING btree (product_id);
+
+
+--
+-- Name: textile_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX textile_component_product_id_idx ON textile_component USING btree (product_id);
+
+
+--
+-- Name: visibility_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX visibility_component_product_id_idx ON visibility_component USING btree (product_id);
+
+
+--
+-- Name: weight_component_product_id_idx; Type: INDEX; Schema: public; Owner: doodle; Tablespace:
+--
+
+CREATE UNIQUE INDEX weight_component_product_id_idx ON weight_component USING btree (product_id);
+
+
+--
+-- Name: api_key___manufacturer_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY api_key
+ADD CONSTRAINT api_key___manufacturer_id_fk FOREIGN KEY (manufacturer_id) REFERENCES manufacturer(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: api_key___sales_channel_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY api_key
+ADD CONSTRAINT api_key___sales_channel_id_fk FOREIGN KEY (sales_channel_id) REFERENCES sales_channel(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: api_log___public_key_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY api_log
+ADD CONSTRAINT api_log___public_key_fk FOREIGN KEY (public_key) REFERENCES api_key(public) ON UPDATE CASCADE ON DELETE CASCADE;
+--
+-- Name: export___mapping_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY export
+ADD CONSTRAINT export___mapping_id_fk FOREIGN KEY (mapping_id) REFERENCES export_mapping(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: arm_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY arm_component
+ADD CONSTRAINT arm_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: assemblage_assemblage_name_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY assemblage
+ADD CONSTRAINT assemblage_assemblage_name_fk FOREIGN KEY (assemblage_name) REFERENCES category(id) ON DELETE CASCADE;
+
+
+--
+-- Name: assemblage_components___assemblage_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY assemblage_components
+ADD CONSTRAINT assemblage_components___assemblage_id_fk FOREIGN KEY (assemblage_id) REFERENCES assemblage(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: assemblage_components___component_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY assemblage_components
+ADD CONSTRAINT assemblage_components___component_id_fk FOREIGN KEY (component_id) REFERENCES component(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: audit_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY audit_component
+ADD CONSTRAINT audit_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: audit_component___updated_by_api_key_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY audit_component
+ADD CONSTRAINT audit_component___updated_by_api_key_fk FOREIGN KEY (updated_by_api_key) REFERENCES api_key(public) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: base_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY base_component
+ADD CONSTRAINT base_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: box_component___parent_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY box_component
+ADD CONSTRAINT box_component___parent_id_fk FOREIGN KEY (parent_id) REFERENCES shipping_information_component(component_data_id) ON DELETE CASCADE;
+
+
+--
+-- Name: box_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY box_component
+ADD CONSTRAINT box_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON DELETE CASCADE;
+
+
+--
+-- Name: bulb_component___product_id_key; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY bulb_component
+ADD CONSTRAINT bulb_component___product_id_key FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: category_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY category_component
+ADD CONSTRAINT category_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: category_component___secondary_category_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY category_component
+ADD CONSTRAINT category_component___secondary_category_fk FOREIGN KEY (secondary_category) REFERENCES category(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: category_component___tertiary_category_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY category_component
+ADD CONSTRAINT category_component___tertiary_category_fk FOREIGN KEY (tertiary_category) REFERENCES category(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: collection___manufacturer_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY collection
+ADD CONSTRAINT collection___manufacturer_id_fk FOREIGN KEY (manufacturer_id) REFERENCES manufacturer(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: collection_component___collection_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY collection_component
+ADD CONSTRAINT collection_component___collection_id_fk FOREIGN KEY (collection_id) REFERENCES collection(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: collection_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY collection_component
+ADD CONSTRAINT collection_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: com_col_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY com_col_component
+ADD CONSTRAINT com_col_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: construction_information_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY construction_information_component
+ADD CONSTRAINT construction_information_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: cushion_component___parent_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY cushion_component
+ADD CONSTRAINT cushion_component___parent_id_fk FOREIGN KEY (parent_id) REFERENCES cushions_component(component_data_id) ON DELETE CASCADE;
+
+
+--
+-- Name: cushion_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY cushion_component
+ADD CONSTRAINT cushion_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: cushions_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY cushions_component
+ADD CONSTRAINT cushions_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: description_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY description_component
+ADD CONSTRAINT description_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: door_component___parent_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY door_component
+ADD CONSTRAINT door_component___parent_id_fk FOREIGN KEY (parent_id) REFERENCES doors_component(component_data_id) ON DELETE CASCADE;
+
+
+--
+-- Name: door_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY door_component
+ADD CONSTRAINT door_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: doors_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY doors_component
+ADD CONSTRAINT doors_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: drawer_component___parent_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY drawer_component
+ADD CONSTRAINT drawer_component___parent_id_fk FOREIGN KEY (parent_id) REFERENCES drawers_component(component_data_id) ON DELETE CASCADE;
+
+
+--
+-- Name: drawer_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY drawer_component
+ADD CONSTRAINT drawer_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: drawers_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY drawers_component
+ADD CONSTRAINT drawers_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: durability_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY durability_component
+ADD CONSTRAINT durability_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: electrical_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY electrical_component
+ADD CONSTRAINT electrical_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: event___api_key_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY event
+ADD CONSTRAINT event___api_key_fk FOREIGN KEY (api_key) REFERENCES api_key(public) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: moment___api_key_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY moment
+ADD CONSTRAINT moment___api_key_fk FOREIGN KEY (created_by_api_key) REFERENCES api_key(public) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: feature_component___parent_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY feature_component
+ADD CONSTRAINT feature_component___parent_id_fk FOREIGN KEY (parent_id) REFERENCES description_component(component_data_id) ON DELETE CASCADE;
+
+
+--
+-- Name: feature_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY feature_component
+ADD CONSTRAINT feature_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fiber_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY fiber_component
+ADD CONSTRAINT fiber_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: flame_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY flame_component
+ADD CONSTRAINT flame_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: footboard_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY footboard_component
+ADD CONSTRAINT footboard_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: footrest_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY footrest_component
+ADD CONSTRAINT footrest_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: frame_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY frame_component
+ADD CONSTRAINT frame_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: glass_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY glass_component
+ADD CONSTRAINT glass_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: headboard_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY headboard_component
+ADD CONSTRAINT headboard_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: identity_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY identity_component
+ADD CONSTRAINT identity_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: image_component___parent_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY image_component
+ADD CONSTRAINT image_component___parent_id_fk FOREIGN KEY (parent_id) REFERENCES images_component(component_data_id) ON DELETE CASCADE;
+
+
+--
+-- Name: image_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY image_component
+ADD CONSTRAINT image_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: images_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY images_component
+ADD CONSTRAINT images_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: instruction_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY instruction_component
+ADD CONSTRAINT instruction_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: interior_dimension_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY interior_dimension_component
+ADD CONSTRAINT interior_dimension_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: keyword_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY keyword_component
+ADD CONSTRAINT keyword_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: leather_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY leather_component
+ADD CONSTRAINT leather_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: manufacturer_component___manufacturer_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY manufacturer_component
+ADD CONSTRAINT manufacturer_component___manufacturer_id_fk FOREIGN KEY (manufacturer_id) REFERENCES manufacturer(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: manufacturer_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY manufacturer_component
+ADD CONSTRAINT manufacturer_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: manufacturer_image___manufacturer_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY manufacturer_image
+ADD CONSTRAINT manufacturer_image___manufacturer_id_fk FOREIGN KEY (manufacturer_id) REFERENCES manufacturer(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: multi_value___component_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY multi_value
+ADD CONSTRAINT multi_value___component_fk FOREIGN KEY (component) REFERENCES component(component_name) ON DELETE CASCADE;
+
+
+--
+-- Name: multi_values___multi_value_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY multi_values
+ADD CONSTRAINT multi_values___multi_value_id_fk FOREIGN KEY (multi_value_id) REFERENCES multi_value(id) ON DELETE CASCADE;
+
+
+--
+-- Name: multi_values___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY multi_values
+ADD CONSTRAINT multi_values___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON DELETE CASCADE;
+
+
+--
+-- Name: option___option_set_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option
+ADD CONSTRAINT option___option_set_id_fk FOREIGN KEY (option_set_id) REFERENCES option_set(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: option_hardware___option_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_hardware
+ADD CONSTRAINT option_hardware___option_id_fk FOREIGN KEY (option_id) REFERENCES option(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: option_leather___option_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_leather
+ADD CONSTRAINT option_leather___option_id_fk FOREIGN KEY (option_id) REFERENCES option(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: option_nailhead___option_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_nailhead
+ADD CONSTRAINT option_nailhead___option_id_fk FOREIGN KEY (option_id) REFERENCES option(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: option_set___manufacturer_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_set
+ADD CONSTRAINT option_set___manufacturer_id_fk FOREIGN KEY (manufacturer_id) REFERENCES manufacturer(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: option_set_component___option_set_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_set_component
+ADD CONSTRAINT option_set_component___option_set_id_fk FOREIGN KEY (option_set_id) REFERENCES option_set(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: option_set_component___parent_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_set_component
+ADD CONSTRAINT option_set_component___parent_id_fk FOREIGN KEY (parent_id) REFERENCES option_sets_component(component_data_id) ON DELETE CASCADE;
+
+
+--
+-- Name: option_set_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_set_component
+ADD CONSTRAINT option_set_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: option_sets_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_sets_component
+ADD CONSTRAINT option_sets_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: option_textile___option_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_textile
+ADD CONSTRAINT option_textile___option_id_fk FOREIGN KEY (option_id) REFERENCES option(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: option_trim___option_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY option_trim
+ADD CONSTRAINT option_trim___option_id_fk FOREIGN KEY (option_id) REFERENCES option(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: ordering_information_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY ordering_information_component
+ADD CONSTRAINT ordering_information_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: overall_dimension_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY overall_dimension_component
+ADD CONSTRAINT overall_dimension_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: pattern_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY pattern_component
+ADD CONSTRAINT pattern_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: pedestal_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY pedestal_component
+ADD CONSTRAINT pedestal_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: pillow_component___parent_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY pillow_component
+ADD CONSTRAINT pillow_component___parent_id_fk FOREIGN KEY (parent_id) REFERENCES pillows_component(component_data_id) ON DELETE CASCADE;
+
+
+--
+-- Name: pillow_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY pillow_component
+ADD CONSTRAINT pillow_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: pillows_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY pillows_component
+ADD CONSTRAINT pillows_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: pricing_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY pricing_component
+ADD CONSTRAINT pricing_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: product_entity___assemblage_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY product_entity
+ADD CONSTRAINT product_entity___assemblage_id_fk FOREIGN KEY (assemblage_id) REFERENCES assemblage(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: promotional_tag_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY promotional_tag_component
+ADD CONSTRAINT promotional_tag_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: sales_channel_image___sales_channel_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY sales_channel_image
+ADD CONSTRAINT sales_channel_image___sales_channel_id_fk FOREIGN KEY (sales_channel_id) REFERENCES sales_channel(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: sales_channel_preference___manufacturer_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY sales_channel_preference
+ADD CONSTRAINT sales_channel_preference___manufacturer_id_fk FOREIGN KEY (manufacturer_id) REFERENCES manufacturer(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: sales_channel_preference___sales_channel_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY sales_channel_preference
+ADD CONSTRAINT sales_channel_preference___sales_channel_id_fk FOREIGN KEY (sales_channel_id) REFERENCES sales_channel(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: sales_channel_product___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY sales_channel_product
+ADD CONSTRAINT sales_channel_product___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: sales_channel_product___sales_channel_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY sales_channel_product
+ADD CONSTRAINT sales_channel_product___sales_channel_id_fk FOREIGN KEY (sales_channel_id) REFERENCES sales_channel(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: seat_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY seat_component
+ADD CONSTRAINT seat_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: shade_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY shade_component
+ADD CONSTRAINT shade_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: shelf_component___parent_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY shelf_component
+ADD CONSTRAINT shelf_component___parent_id_fk FOREIGN KEY (parent_id) REFERENCES shelves_component(component_data_id) ON DELETE CASCADE;
+
+
+--
+-- Name: shelf_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY shelf_component
+ADD CONSTRAINT shelf_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: shelves_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY shelves_component
+ADD CONSTRAINT shelves_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: shipping_information_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY shipping_information_component
+ADD CONSTRAINT shipping_information_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: side_rail_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY side_rail_component
+ADD CONSTRAINT side_rail_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: suspension_point_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY suspension_point_component
+ADD CONSTRAINT suspension_point_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: table_leaf_component___parent_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY table_leaf_component
+ADD CONSTRAINT table_leaf_component___parent_id_fk FOREIGN KEY (parent_id) REFERENCES table_leaves_component(component_data_id) ON DELETE CASCADE;
+
+
+--
+-- Name: table_leaf_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY table_leaf_component
+ADD CONSTRAINT table_leaf_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: table_leaves_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY table_leaves_component
+ADD CONSTRAINT table_leaves_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: textile_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY textile_component
+ADD CONSTRAINT textile_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: visibility_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY visibility_component
+ADD CONSTRAINT visibility_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: weight_component___product_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: doodle
+--
+
+ALTER TABLE ONLY weight_component
+ADD CONSTRAINT weight_component___product_id_fk FOREIGN KEY (product_id) REFERENCES product_entity(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: public; Type: ACL; Schema: -; Owner: ccastle
+--
+
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT ALL ON SCHEMA public TO doodle;
+GRANT ALL ON SCHEMA public TO PUBLIC;
+
+
+--
+-- Name: api_key; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE api_key FROM PUBLIC;
+REVOKE ALL ON TABLE api_key FROM doodle;
+GRANT ALL ON TABLE api_key TO doodle;
+GRANT SELECT ON TABLE api_key TO PUBLIC;
+
+
+--
+-- Name: api_key_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE api_key_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE api_key_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE api_key_pk_seq TO doodle;
+
+
+--
+-- Name: export; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE export FROM PUBLIC;
+REVOKE ALL ON TABLE export FROM doodle;
+GRANT ALL ON TABLE export TO doodle;
+GRANT SELECT ON TABLE export TO PUBLIC;
+
+
+--
+-- Name: export_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE export_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE export_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE export_pk_seq TO doodle;
+
+
+--
+-- Name: export_mapping; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE export_mapping FROM PUBLIC;
+REVOKE ALL ON TABLE export_mapping FROM doodle;
+GRANT ALL ON TABLE export_mapping TO doodle;
+GRANT SELECT ON TABLE export_mapping TO PUBLIC;
+
+
+--
+-- Name: export_mapping_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE export_mapping_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE export_mapping_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE export_mapping_pk_seq TO doodle;
+
+
+--
+-- Name: api_log; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE api_log FROM PUBLIC;
+REVOKE ALL ON TABLE api_log FROM doodle;
+GRANT ALL ON TABLE api_log TO doodle;
+GRANT SELECT ON TABLE api_log TO PUBLIC;
+
+
+--
+-- Name: api_log_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE api_log_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE api_log_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE api_log_pk_seq TO doodle;
+
+
+--
+-- Name: arm_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE arm_component FROM PUBLIC;
+REVOKE ALL ON TABLE arm_component FROM doodle;
+GRANT ALL ON TABLE arm_component TO doodle;
+GRANT SELECT ON TABLE arm_component TO PUBLIC;
+
+
+--
+-- Name: arm_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE arm_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE arm_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE arm_component_pk_seq TO doodle;
+
+
+--
+-- Name: assemblage; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE assemblage FROM PUBLIC;
+REVOKE ALL ON TABLE assemblage FROM doodle;
+GRANT ALL ON TABLE assemblage TO doodle;
+GRANT SELECT ON TABLE assemblage TO PUBLIC;
+
+
+--
+-- Name: assemblage_components; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE assemblage_components FROM PUBLIC;
+REVOKE ALL ON TABLE assemblage_components FROM doodle;
+GRANT ALL ON TABLE assemblage_components TO doodle;
+GRANT SELECT ON TABLE assemblage_components TO PUBLIC;
+
+
+--
+-- Name: assemblage_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE assemblage_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE assemblage_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE assemblage_pk_seq TO doodle;
+
+
+--
+-- Name: audit_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE audit_component FROM PUBLIC;
+REVOKE ALL ON TABLE audit_component FROM doodle;
+GRANT ALL ON TABLE audit_component TO doodle;
+GRANT SELECT ON TABLE audit_component TO PUBLIC;
+
+
+--
+-- Name: audit_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE audit_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE audit_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE audit_component_pk_seq TO doodle;
+
+
+--
+-- Name: base_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE base_component FROM PUBLIC;
+REVOKE ALL ON TABLE base_component FROM doodle;
+GRANT ALL ON TABLE base_component TO doodle;
+GRANT SELECT ON TABLE base_component TO PUBLIC;
+
+
+--
+-- Name: base_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE base_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE base_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE base_component_pk_seq TO doodle;
+
+
+--
+-- Name: box_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE box_component FROM PUBLIC;
+REVOKE ALL ON TABLE box_component FROM doodle;
+GRANT ALL ON TABLE box_component TO doodle;
+GRANT SELECT ON TABLE box_component TO PUBLIC;
+
+
+--
+-- Name: bulb_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE bulb_component FROM PUBLIC;
+REVOKE ALL ON TABLE bulb_component FROM doodle;
+GRANT ALL ON TABLE bulb_component TO doodle;
+GRANT SELECT ON TABLE bulb_component TO PUBLIC;
+
+
+--
+-- Name: bulb_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE bulb_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE bulb_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE bulb_component_pk_seq TO doodle;
+
+
+--
+-- Name: category; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE category FROM PUBLIC;
+REVOKE ALL ON TABLE category FROM doodle;
+GRANT ALL ON TABLE category TO doodle;
+GRANT SELECT ON TABLE category TO PUBLIC;
+
+
+--
+-- Name: category_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE category_component FROM PUBLIC;
+REVOKE ALL ON TABLE category_component FROM doodle;
+GRANT ALL ON TABLE category_component TO doodle;
+GRANT SELECT ON TABLE category_component TO PUBLIC;
+
+
+--
+-- Name: category_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE category_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE category_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE category_component_pk_seq TO doodle;
+
+
+--
+-- Name: collection; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE collection FROM PUBLIC;
+REVOKE ALL ON TABLE collection FROM doodle;
+GRANT ALL ON TABLE collection TO doodle;
+GRANT SELECT ON TABLE collection TO PUBLIC;
+
+
+--
+-- Name: collection_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE collection_component FROM PUBLIC;
+REVOKE ALL ON TABLE collection_component FROM doodle;
+GRANT ALL ON TABLE collection_component TO doodle;
+GRANT SELECT ON TABLE collection_component TO PUBLIC;
+
+
+--
+-- Name: collection_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE collection_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE collection_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE collection_component_pk_seq TO doodle;
+
+
+--
+-- Name: collection_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE collection_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE collection_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE collection_pk_seq TO doodle;
+
+
+--
+-- Name: com_col_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE com_col_component FROM PUBLIC;
+REVOKE ALL ON TABLE com_col_component FROM doodle;
+GRANT ALL ON TABLE com_col_component TO doodle;
+GRANT SELECT ON TABLE com_col_component TO PUBLIC;
+
+
+--
+-- Name: component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE component FROM PUBLIC;
+REVOKE ALL ON TABLE component FROM doodle;
+GRANT ALL ON TABLE component TO doodle;
+GRANT SELECT ON TABLE component TO PUBLIC;
+
+
+--
+-- Name: component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE component_pk_seq TO doodle;
+
+
+--
+-- Name: construction_information_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE construction_information_component FROM PUBLIC;
+REVOKE ALL ON TABLE construction_information_component FROM doodle;
+GRANT ALL ON TABLE construction_information_component TO doodle;
+GRANT SELECT ON TABLE construction_information_component TO PUBLIC;
+
+
+--
+-- Name: construction_information_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE construction_information_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE construction_information_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE construction_information_component_pk_seq TO doodle;
+
+
+--
+-- Name: cushion_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE cushion_component FROM PUBLIC;
+REVOKE ALL ON TABLE cushion_component FROM doodle;
+GRANT ALL ON TABLE cushion_component TO doodle;
+GRANT SELECT ON TABLE cushion_component TO PUBLIC;
+
+
+--
+-- Name: cushion_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE cushion_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE cushion_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE cushion_component_pk_seq TO doodle;
+
+
+--
+-- Name: cushions_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE cushions_component FROM PUBLIC;
+REVOKE ALL ON TABLE cushions_component FROM doodle;
+GRANT ALL ON TABLE cushions_component TO doodle;
+GRANT SELECT ON TABLE cushions_component TO PUBLIC;
+
+
+--
+-- Name: cushions_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE cushions_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE cushions_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE cushions_component_pk_seq TO doodle;
+
+
+--
+-- Name: description_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE description_component FROM PUBLIC;
+REVOKE ALL ON TABLE description_component FROM doodle;
+GRANT ALL ON TABLE description_component TO doodle;
+GRANT SELECT ON TABLE description_component TO PUBLIC;
+
+
+--
+-- Name: description_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE description_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE description_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE description_component_pk_seq TO doodle;
+
+
+--
+-- Name: door_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE door_component FROM PUBLIC;
+REVOKE ALL ON TABLE door_component FROM doodle;
+GRANT ALL ON TABLE door_component TO doodle;
+GRANT SELECT ON TABLE door_component TO PUBLIC;
+
+
+--
+-- Name: door_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE door_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE door_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE door_component_pk_seq TO doodle;
+
+
+--
+-- Name: doors_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE doors_component FROM PUBLIC;
+REVOKE ALL ON TABLE doors_component FROM doodle;
+GRANT ALL ON TABLE doors_component TO doodle;
+GRANT SELECT ON TABLE doors_component TO PUBLIC;
+
+
+--
+-- Name: doors_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE doors_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE doors_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE doors_component_pk_seq TO doodle;
+
+
+--
+-- Name: drawer_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE drawer_component FROM PUBLIC;
+REVOKE ALL ON TABLE drawer_component FROM doodle;
+GRANT ALL ON TABLE drawer_component TO doodle;
+GRANT SELECT ON TABLE drawer_component TO PUBLIC;
+
+
+--
+-- Name: drawer_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE drawer_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE drawer_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE drawer_component_pk_seq TO doodle;
+
+
+--
+-- Name: drawers_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE drawers_component FROM PUBLIC;
+REVOKE ALL ON TABLE drawers_component FROM doodle;
+GRANT ALL ON TABLE drawers_component TO doodle;
+GRANT SELECT ON TABLE drawers_component TO PUBLIC;
+
+
+--
+-- Name: drawers_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE drawers_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE drawers_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE drawers_component_pk_seq TO doodle;
+
+
+--
+-- Name: durability_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE durability_component FROM PUBLIC;
+REVOKE ALL ON TABLE durability_component FROM doodle;
+GRANT ALL ON TABLE durability_component TO doodle;
+GRANT SELECT ON TABLE durability_component TO PUBLIC;
+
+
+--
+-- Name: durability_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE durability_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE durability_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE durability_component_pk_seq TO doodle;
+
+
+--
+-- Name: electrical_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE electrical_component FROM PUBLIC;
+REVOKE ALL ON TABLE electrical_component FROM doodle;
+GRANT ALL ON TABLE electrical_component TO doodle;
+GRANT SELECT ON TABLE electrical_component TO PUBLIC;
+
+
+--
+-- Name: electrical_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE electrical_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE electrical_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE electrical_component_pk_seq TO doodle;
+
+
+--
+-- Name: event; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE event FROM PUBLIC;
+REVOKE ALL ON TABLE event FROM doodle;
+GRANT ALL ON TABLE event TO doodle;
+GRANT SELECT ON TABLE event TO PUBLIC;
+
+
+--
+-- Name: moment; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE moment FROM PUBLIC;
+REVOKE ALL ON TABLE moment FROM doodle;
+GRANT ALL ON TABLE moment TO doodle;
+GRANT SELECT ON TABLE moment TO PUBLIC;
+
+--
+-- Name: feature_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE feature_component FROM PUBLIC;
+REVOKE ALL ON TABLE feature_component FROM doodle;
+GRANT ALL ON TABLE feature_component TO doodle;
+GRANT SELECT ON TABLE feature_component TO PUBLIC;
+
+
+--
+-- Name: fiber_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE fiber_component FROM PUBLIC;
+REVOKE ALL ON TABLE fiber_component FROM doodle;
+GRANT ALL ON TABLE fiber_component TO doodle;
+GRANT SELECT ON TABLE fiber_component TO PUBLIC;
+
+
+--
+-- Name: fiber_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE fiber_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE fiber_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE fiber_component_pk_seq TO doodle;
+
+
+--
+-- Name: flame_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE flame_component FROM PUBLIC;
+REVOKE ALL ON TABLE flame_component FROM doodle;
+GRANT ALL ON TABLE flame_component TO doodle;
+GRANT SELECT ON TABLE flame_component TO PUBLIC;
+
+
+--
+-- Name: flame_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE flame_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE flame_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE flame_component_pk_seq TO doodle;
+
+
+--
+-- Name: footboard_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE footboard_component FROM PUBLIC;
+REVOKE ALL ON TABLE footboard_component FROM doodle;
+GRANT ALL ON TABLE footboard_component TO doodle;
+GRANT SELECT ON TABLE footboard_component TO PUBLIC;
+
+
+--
+-- Name: footboard_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE footboard_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE footboard_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE footboard_component_pk_seq TO doodle;
+
+
+--
+-- Name: footrest_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE footrest_component FROM PUBLIC;
+REVOKE ALL ON TABLE footrest_component FROM doodle;
+GRANT ALL ON TABLE footrest_component TO doodle;
+GRANT SELECT ON TABLE footrest_component TO PUBLIC;
+
+
+--
+-- Name: footrest_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE footrest_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE footrest_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE footrest_component_pk_seq TO doodle;
+
+
+--
+-- Name: frame_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE frame_component FROM PUBLIC;
+REVOKE ALL ON TABLE frame_component FROM doodle;
+GRANT ALL ON TABLE frame_component TO doodle;
+GRANT SELECT ON TABLE frame_component TO PUBLIC;
+
+
+--
+-- Name: frame_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE frame_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE frame_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE frame_component_pk_seq TO doodle;
+
+
+--
+-- Name: glass_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE glass_component FROM PUBLIC;
+REVOKE ALL ON TABLE glass_component FROM doodle;
+GRANT ALL ON TABLE glass_component TO doodle;
+GRANT SELECT ON TABLE glass_component TO PUBLIC;
+
+
+--
+-- Name: glass_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE glass_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE glass_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE glass_component_pk_seq TO doodle;
+
+
+--
+-- Name: headboard_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE headboard_component FROM PUBLIC;
+REVOKE ALL ON TABLE headboard_component FROM doodle;
+GRANT ALL ON TABLE headboard_component TO doodle;
+GRANT SELECT ON TABLE headboard_component TO PUBLIC;
+
+
+--
+-- Name: headboard_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE headboard_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE headboard_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE headboard_component_pk_seq TO doodle;
+
+
+--
+-- Name: identity_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE identity_component FROM PUBLIC;
+REVOKE ALL ON TABLE identity_component FROM doodle;
+GRANT ALL ON TABLE identity_component TO doodle;
+GRANT SELECT ON TABLE identity_component TO PUBLIC;
+
+
+--
+-- Name: identity_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE identity_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE identity_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE identity_component_pk_seq TO doodle;
+
+
+--
+-- Name: image_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE image_component FROM PUBLIC;
+REVOKE ALL ON TABLE image_component FROM doodle;
+GRANT ALL ON TABLE image_component TO doodle;
+GRANT SELECT ON TABLE image_component TO PUBLIC;
+
+
+--
+-- Name: image_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE image_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE image_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE image_component_pk_seq TO doodle;
+
+
+--
+-- Name: images_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE images_component FROM PUBLIC;
+REVOKE ALL ON TABLE images_component FROM doodle;
+GRANT ALL ON TABLE images_component TO doodle;
+GRANT SELECT ON TABLE images_component TO PUBLIC;
+
+
+--
+-- Name: images_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE images_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE images_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE images_component_pk_seq TO doodle;
+
+
+--
+-- Name: instruction_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE instruction_component FROM PUBLIC;
+REVOKE ALL ON TABLE instruction_component FROM doodle;
+GRANT ALL ON TABLE instruction_component TO doodle;
+GRANT SELECT ON TABLE instruction_component TO PUBLIC;
+
+
+--
+-- Name: instructions_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE instructions_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE instructions_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE instructions_component_pk_seq TO doodle;
+
+
+--
+-- Name: interior_dimension_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE interior_dimension_component FROM PUBLIC;
+REVOKE ALL ON TABLE interior_dimension_component FROM doodle;
+GRANT ALL ON TABLE interior_dimension_component TO doodle;
+GRANT SELECT ON TABLE interior_dimension_component TO PUBLIC;
+
+
+--
+-- Name: interior_dimension_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE interior_dimension_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE interior_dimension_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE interior_dimension_component_pk_seq TO doodle;
+
+
+--
+-- Name: keyword_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE keyword_component FROM PUBLIC;
+REVOKE ALL ON TABLE keyword_component FROM doodle;
+GRANT ALL ON TABLE keyword_component TO doodle;
+GRANT SELECT ON TABLE keyword_component TO PUBLIC;
+
+
+--
+-- Name: leather_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE leather_component FROM PUBLIC;
+REVOKE ALL ON TABLE leather_component FROM doodle;
+GRANT ALL ON TABLE leather_component TO doodle;
+GRANT SELECT ON TABLE leather_component TO PUBLIC;
+
+
+--
+-- Name: leather_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE leather_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE leather_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE leather_component_pk_seq TO doodle;
+
+
+--
+-- Name: manufacturer; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE manufacturer FROM PUBLIC;
+REVOKE ALL ON TABLE manufacturer FROM doodle;
+GRANT ALL ON TABLE manufacturer TO doodle;
+GRANT SELECT ON TABLE manufacturer TO PUBLIC;
+
+
+--
+-- Name: manufacturer_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE manufacturer_component FROM PUBLIC;
+REVOKE ALL ON TABLE manufacturer_component FROM doodle;
+GRANT ALL ON TABLE manufacturer_component TO doodle;
+GRANT SELECT ON TABLE manufacturer_component TO PUBLIC;
+
+
+--
+-- Name: manufacturer_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE manufacturer_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE manufacturer_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE manufacturer_component_pk_seq TO doodle;
+
+
+--
+-- Name: manufacturer_image; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE manufacturer_image FROM PUBLIC;
+REVOKE ALL ON TABLE manufacturer_image FROM doodle;
+GRANT ALL ON TABLE manufacturer_image TO doodle;
+GRANT SELECT ON TABLE manufacturer_image TO PUBLIC;
+
+
+--
+-- Name: manufacturer_image_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE manufacturer_image_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE manufacturer_image_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE manufacturer_image_pk_seq TO doodle;
+
+
+--
+-- Name: manufacturer_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE manufacturer_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE manufacturer_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE manufacturer_pk_seq TO doodle;
+
+
+--
+-- Name: multi_value; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE multi_value FROM PUBLIC;
+REVOKE ALL ON TABLE multi_value FROM doodle;
+GRANT ALL ON TABLE multi_value TO doodle;
+GRANT SELECT ON TABLE multi_value TO PUBLIC;
+
+
+--
+-- Name: multi_values; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE multi_values FROM PUBLIC;
+REVOKE ALL ON TABLE multi_values FROM doodle;
+GRANT ALL ON TABLE multi_values TO doodle;
+GRANT SELECT ON TABLE multi_values TO PUBLIC;
+
+
+--
+-- Name: option; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE option FROM PUBLIC;
+REVOKE ALL ON TABLE option FROM doodle;
+GRANT ALL ON TABLE option TO doodle;
+GRANT SELECT ON TABLE option TO PUBLIC;
+
+
+--
+-- Name: option_sets_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE option_sets_component FROM PUBLIC;
+REVOKE ALL ON TABLE option_sets_component FROM doodle;
+GRANT ALL ON TABLE option_sets_component TO doodle;
+GRANT SELECT ON TABLE option_sets_component TO PUBLIC;
+
+
+--
+-- Name: option_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE option_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE option_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE option_component_pk_seq TO doodle;
+
+
+--
+-- Name: option_hardware; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE option_hardware FROM PUBLIC;
+REVOKE ALL ON TABLE option_hardware FROM doodle;
+GRANT ALL ON TABLE option_hardware TO doodle;
+GRANT SELECT ON TABLE option_hardware TO PUBLIC;
+
+
+--
+-- Name: option_leather; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE option_leather FROM PUBLIC;
+REVOKE ALL ON TABLE option_leather FROM doodle;
+GRANT ALL ON TABLE option_leather TO doodle;
+GRANT SELECT ON TABLE option_leather TO PUBLIC;
+
+
+--
+-- Name: option_nailhead; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE option_nailhead FROM PUBLIC;
+REVOKE ALL ON TABLE option_nailhead FROM doodle;
+GRANT ALL ON TABLE option_nailhead TO doodle;
+GRANT SELECT ON TABLE option_nailhead TO PUBLIC;
+
+
+--
+-- Name: option_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE option_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE option_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE option_pk_seq TO doodle;
+
+
+--
+-- Name: option_set; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE option_set FROM PUBLIC;
+REVOKE ALL ON TABLE option_set FROM doodle;
+GRANT ALL ON TABLE option_set TO doodle;
+GRANT SELECT ON TABLE option_set TO PUBLIC;
+
+
+--
+-- Name: option_set_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE option_set_component FROM PUBLIC;
+REVOKE ALL ON TABLE option_set_component FROM doodle;
+GRANT ALL ON TABLE option_set_component TO doodle;
+GRANT SELECT ON TABLE option_set_component TO PUBLIC;
+
+
+--
+-- Name: option_set_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE option_set_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE option_set_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE option_set_component_pk_seq TO doodle;
+
+
+--
+-- Name: option_set_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE option_set_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE option_set_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE option_set_pk_seq TO doodle;
+
+
+--
+-- Name: option_textile; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE option_textile FROM PUBLIC;
+REVOKE ALL ON TABLE option_textile FROM doodle;
+GRANT ALL ON TABLE option_textile TO doodle;
+GRANT SELECT ON TABLE option_textile TO PUBLIC;
+
+
+--
+-- Name: option_trim; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE option_trim FROM PUBLIC;
+REVOKE ALL ON TABLE option_trim FROM doodle;
+GRANT ALL ON TABLE option_trim TO doodle;
+GRANT SELECT ON TABLE option_trim TO PUBLIC;
+
+
+--
+-- Name: ordering_information_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE ordering_information_component FROM PUBLIC;
+REVOKE ALL ON TABLE ordering_information_component FROM doodle;
+GRANT ALL ON TABLE ordering_information_component TO doodle;
+GRANT SELECT ON TABLE ordering_information_component TO PUBLIC;
+
+
+--
+-- Name: ordering_information_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE ordering_information_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE ordering_information_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE ordering_information_component_pk_seq TO doodle;
+
+
+--
+-- Name: overall_dimension_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE overall_dimension_component FROM PUBLIC;
+REVOKE ALL ON TABLE overall_dimension_component FROM doodle;
+GRANT ALL ON TABLE overall_dimension_component TO doodle;
+GRANT SELECT ON TABLE overall_dimension_component TO PUBLIC;
+
+
+--
+-- Name: overall_dimensions_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE overall_dimensions_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE overall_dimensions_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE overall_dimensions_component_pk_seq TO doodle;
+
+
+--
+-- Name: pattern_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE pattern_component FROM PUBLIC;
+REVOKE ALL ON TABLE pattern_component FROM doodle;
+GRANT ALL ON TABLE pattern_component TO doodle;
+GRANT SELECT ON TABLE pattern_component TO PUBLIC;
+
+
+--
+-- Name: pattern_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE pattern_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE pattern_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE pattern_component_pk_seq TO doodle;
+
+
+--
+-- Name: pedestal_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE pedestal_component FROM PUBLIC;
+REVOKE ALL ON TABLE pedestal_component FROM doodle;
+GRANT ALL ON TABLE pedestal_component TO doodle;
+GRANT SELECT ON TABLE pedestal_component TO PUBLIC;
+
+
+--
+-- Name: pedestal_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE pedestal_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE pedestal_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE pedestal_component_pk_seq TO doodle;
+
+
+--
+-- Name: pillow_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE pillow_component FROM PUBLIC;
+REVOKE ALL ON TABLE pillow_component FROM doodle;
+GRANT ALL ON TABLE pillow_component TO doodle;
+GRANT SELECT ON TABLE pillow_component TO PUBLIC;
+
+
+--
+-- Name: pillow_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE pillow_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE pillow_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE pillow_component_pk_seq TO doodle;
+
+
+--
+-- Name: pillows_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE pillows_component FROM PUBLIC;
+REVOKE ALL ON TABLE pillows_component FROM doodle;
+GRANT ALL ON TABLE pillows_component TO doodle;
+GRANT SELECT ON TABLE pillows_component TO PUBLIC;
+
+
+--
+-- Name: pillows_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE pillows_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE pillows_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE pillows_component_pk_seq TO doodle;
+
+
+--
+-- Name: pricing_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE pricing_component FROM PUBLIC;
+REVOKE ALL ON TABLE pricing_component FROM doodle;
+GRANT ALL ON TABLE pricing_component TO doodle;
+GRANT SELECT ON TABLE pricing_component TO PUBLIC;
+
+
+--
+-- Name: pricing_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE pricing_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE pricing_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE pricing_component_pk_seq TO doodle;
+
+
+--
+-- Name: product_entity; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE product_entity FROM PUBLIC;
+REVOKE ALL ON TABLE product_entity FROM doodle;
+GRANT ALL ON TABLE product_entity TO doodle;
+GRANT SELECT ON TABLE product_entity TO PUBLIC;
+
+
+--
+-- Name: product_entity_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE product_entity_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE product_entity_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE product_entity_pk_seq TO doodle;
+
+
+--
+-- Name: promotional_tag_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE promotional_tag_component FROM PUBLIC;
+REVOKE ALL ON TABLE promotional_tag_component FROM doodle;
+GRANT ALL ON TABLE promotional_tag_component TO doodle;
+GRANT SELECT ON TABLE promotional_tag_component TO PUBLIC;
+
+
+--
+-- Name: promotional_tags_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE promotional_tags_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE promotional_tags_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE promotional_tags_component_pk_seq TO doodle;
+
+
+--
+-- Name: sales_channel; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE sales_channel FROM PUBLIC;
+REVOKE ALL ON TABLE sales_channel FROM doodle;
+GRANT ALL ON TABLE sales_channel TO doodle;
+GRANT SELECT ON TABLE sales_channel TO PUBLIC;
+
+
+--
+-- Name: sales_channel_image; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE sales_channel_image FROM PUBLIC;
+REVOKE ALL ON TABLE sales_channel_image FROM doodle;
+GRANT ALL ON TABLE sales_channel_image TO doodle;
+GRANT SELECT ON TABLE sales_channel_image TO PUBLIC;
+
+
+--
+-- Name: sales_channel_image_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE sales_channel_image_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE sales_channel_image_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE sales_channel_image_pk_seq TO doodle;
+
+
+--
+-- Name: sales_channel_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE sales_channel_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE sales_channel_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE sales_channel_pk_seq TO doodle;
+
+
+--
+-- Name: sales_channel_preference; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE sales_channel_preference FROM PUBLIC;
+REVOKE ALL ON TABLE sales_channel_preference FROM doodle;
+GRANT ALL ON TABLE sales_channel_preference TO doodle;
+GRANT SELECT ON TABLE sales_channel_preference TO PUBLIC;
+
+
+--
+-- Name: sales_channel_preference_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE sales_channel_preference_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE sales_channel_preference_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE sales_channel_preference_pk_seq TO doodle;
+
+
+--
+-- Name: sales_channel_product; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE sales_channel_product FROM PUBLIC;
+REVOKE ALL ON TABLE sales_channel_product FROM doodle;
+GRANT ALL ON TABLE sales_channel_product TO doodle;
+GRANT SELECT ON TABLE sales_channel_product TO PUBLIC;
+
+
+--
+-- Name: seat_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE seat_component FROM PUBLIC;
+REVOKE ALL ON TABLE seat_component FROM doodle;
+GRANT ALL ON TABLE seat_component TO doodle;
+GRANT SELECT ON TABLE seat_component TO PUBLIC;
+
+
+--
+-- Name: seat_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE seat_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE seat_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE seat_component_pk_seq TO doodle;
+
+
+--
+-- Name: shade_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE shade_component FROM PUBLIC;
+REVOKE ALL ON TABLE shade_component FROM doodle;
+GRANT ALL ON TABLE shade_component TO doodle;
+GRANT SELECT ON TABLE shade_component TO PUBLIC;
+
+
+--
+-- Name: shade_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE shade_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE shade_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE shade_component_pk_seq TO doodle;
+
+
+--
+-- Name: shelf_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE shelf_component FROM PUBLIC;
+REVOKE ALL ON TABLE shelf_component FROM doodle;
+GRANT ALL ON TABLE shelf_component TO doodle;
+GRANT SELECT ON TABLE shelf_component TO PUBLIC;
+
+
+--
+-- Name: shelf_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE shelf_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE shelf_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE shelf_component_pk_seq TO doodle;
+
+
+--
+-- Name: shelves_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE shelves_component FROM PUBLIC;
+REVOKE ALL ON TABLE shelves_component FROM doodle;
+GRANT ALL ON TABLE shelves_component TO doodle;
+GRANT SELECT ON TABLE shelves_component TO PUBLIC;
+
+
+--
+-- Name: shelves_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE shelves_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE shelves_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE shelves_component_pk_seq TO doodle;
+
+
+--
+-- Name: shipping_information_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE shipping_information_component FROM PUBLIC;
+REVOKE ALL ON TABLE shipping_information_component FROM doodle;
+GRANT ALL ON TABLE shipping_information_component TO doodle;
+GRANT SELECT ON TABLE shipping_information_component TO PUBLIC;
+
+
+--
+-- Name: shipping_information_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE shipping_information_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE shipping_information_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE shipping_information_component_pk_seq TO doodle;
+
+
+--
+-- Name: side_rail_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE side_rail_component FROM PUBLIC;
+REVOKE ALL ON TABLE side_rail_component FROM doodle;
+GRANT ALL ON TABLE side_rail_component TO doodle;
+GRANT SELECT ON TABLE side_rail_component TO PUBLIC;
+
+
+--
+-- Name: side_rail_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE side_rail_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE side_rail_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE side_rail_component_pk_seq TO doodle;
+
+
+--
+-- Name: suspension_point_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE suspension_point_component FROM PUBLIC;
+REVOKE ALL ON TABLE suspension_point_component FROM doodle;
+GRANT ALL ON TABLE suspension_point_component TO doodle;
+GRANT SELECT ON TABLE suspension_point_component TO PUBLIC;
+
+
+--
+-- Name: suspension_point_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE suspension_point_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE suspension_point_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE suspension_point_component_pk_seq TO doodle;
+
+
+--
+-- Name: table_leaf_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE table_leaf_component FROM PUBLIC;
+REVOKE ALL ON TABLE table_leaf_component FROM doodle;
+GRANT ALL ON TABLE table_leaf_component TO doodle;
+GRANT SELECT ON TABLE table_leaf_component TO PUBLIC;
+
+
+--
+-- Name: table_leaf_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE table_leaf_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE table_leaf_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE table_leaf_component_pk_seq TO doodle;
+
+
+--
+-- Name: table_leaves_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE table_leaves_component FROM PUBLIC;
+REVOKE ALL ON TABLE table_leaves_component FROM doodle;
+GRANT ALL ON TABLE table_leaves_component TO doodle;
+GRANT SELECT ON TABLE table_leaves_component TO PUBLIC;
+
+
+--
+-- Name: table_leaves_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE table_leaves_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE table_leaves_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE table_leaves_component_pk_seq TO doodle;
+
+
+--
+-- Name: textile_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE textile_component FROM PUBLIC;
+REVOKE ALL ON TABLE textile_component FROM doodle;
+GRANT ALL ON TABLE textile_component TO doodle;
+GRANT SELECT ON TABLE textile_component TO PUBLIC;
+
+
+--
+-- Name: textile_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE textile_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE textile_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE textile_component_pk_seq TO doodle;
+
+
+--
+-- Name: visibility_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE visibility_component FROM PUBLIC;
+REVOKE ALL ON TABLE visibility_component FROM doodle;
+GRANT ALL ON TABLE visibility_component TO doodle;
+GRANT SELECT ON TABLE visibility_component TO PUBLIC;
+
+
+--
+-- Name: visibility_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE visibility_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE visibility_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE visibility_component_pk_seq TO doodle;
+
+
+--
+-- Name: weight_component; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON TABLE weight_component FROM PUBLIC;
+REVOKE ALL ON TABLE weight_component FROM doodle;
+GRANT ALL ON TABLE weight_component TO doodle;
+GRANT SELECT ON TABLE weight_component TO PUBLIC;
+
+
+--
+-- Name: weight_component_pk_seq; Type: ACL; Schema: public; Owner: doodle
+--
+
+REVOKE ALL ON SEQUENCE weight_component_pk_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE weight_component_pk_seq FROM doodle;
+GRANT ALL ON SEQUENCE weight_component_pk_seq TO doodle;
+
+
+--
+-- PostgreSQL database dump complete
+--

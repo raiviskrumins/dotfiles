@@ -1,0 +1,11 @@
+proc = require 'process'
+path = require 'path'
+
+cwd = proc.cwd()
+cwd_path = "file://#{ cwd }"
+
+exports.paths =
+  cwd: cwd_path
+  js: path.join cwd_path, "js"
+  html: path.join cwd_path, "html"
+  css: path.join cwd_path, "css"

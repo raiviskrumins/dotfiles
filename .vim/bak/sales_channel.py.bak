@@ -1,0 +1,168 @@
+from flask import (
+    Blueprint,
+    jsonify,
+    render_template,
+    request
+)
+from amber_portal.lib import get_current_user
+from .auth import authenticated, good_standing
+
+from amber_portal.lib.utils import amber_api_connection
+from amber_lib import query
+from amber_portal.forms.channel import PreferencesForm
+
+sales_view = Blueprint(
+    'sales_view',
+    __name__,
+    template_folder='templates'
+)
+
+current_user = get_current_user()
+
+
+@sales_view.route('/sales-channels', methods=['GET'])
+@authenticated
+@good_standing
+def sales_channels():
+    api_conn = amber_api_connection()
+    channels = api_conn.SalesChannel.query()
+
+    api_conn.Manufacturer.retrieve(current_user.manufacturer_id)
+    statuses = {}
+
+    for channel in channels:
+        statuses[channel.pk()] = False
+        where = query.Predicate(
+            'sales_channel_id',
+            query.equal(channel.id)
+        )
+        preference = api_conn.SalesChannelPreference.query(
+            filtering=where
+        )
+        if not preference:
+            preference = None
+        else:
+            preference = preference[0]
+            statuses[channel.pk()] = preference.active
+
+    return render_template('sales/channel_list.jinja2', channels=channels, statuses=statuses)
+
+
+@sales_view.route('/sales-channels/<int:sc_id>', methods=['GET'])
+@authenticated
+@good_standing
+def sales_detail(sc_id):
+    api_conn = amber_api_connection()
+    channel = api_conn.SalesChannel.retrieve(sc_id)
+    api_conn.Manufacturer(current_user.manufacturer_id)
+
+    images = []
+    if channel.isolated_image:
+        images.append('White Background')
+    if channel.setting_image:
+        images.append('In Setting')
+    if channel.other_image:
+        images.append('Other')
+
+    return render_template(
+        'sales/detail.jinja2',
+        channel=channel,
+        images=images
+    )
+
+
+@sales_view.route('/sales-channels/confirm/<int:sc_id>', methods=['GET'])
+@authenticated
+@good_standing
+def confirm_visibility(sc_id):
+    data = request.args
+
+    if data['action'] == 'turnoff':
+        return render_template(
+            'sales/confirm_modal.jinja2',
+            sales_channel=sc_id
+        )
+    else:
+        return sales_preferences(sc_id, action=data['action'])
+
+
+@sales_view.route('/sales-channels/visibility/<int:sc_id>', methods=['PUT'])
+@authenticated
+@good_standing
+def set_visibility(sc_id):
+    api_conn = amber_api_connection()
+    set_visible = request.json['set_visible']
+    result = {'success': False}
+
+    if set_visible:
+        mfr = api_conn.Manufacturer.retrieve(current_user.manufacturer_id)
+        mfr.relate(api_conn.SalesChannel.retrieve(sc_id))
+        result = {'success': True}
+    else:
+        mfr = api_conn.Manufacturer.retrieve(current_user.manufacturer_id)
+        mfr.unrelate(api_conn.SalesChannel.retrieve(sc_id))
+
+        where = query.Predicate('sales_channel_id', query.equal(sc_id))
+        preference = api_conn.SalesChannelPreference.query(filtering=where)
+        if preference:
+            preference = preference[0]
+            preference.active = False
+            preference.save()
+        result = {'success': True}
+
+    return jsonify(result)
+
+
+@sales_view.route(
+    '/sales-channels/<int:sc_id>/preferences',
+    methods=['POST', 'GET']
+)
+@authenticated
+@good_standing
+def sales_preferences(sc_id, action='save'):
+    api_conn = amber_api_connection()
+    channel = api_conn.SalesChannel.retrieve(sc_id)
+
+    manufacturer = api_conn.Manufacturer.retrieve(current_user.manufacturer_id)
+    images = []
+    if channel.isolated_image:
+        images.append('White Background')
+    if channel.setting_image:
+        images.append('In Setting')
+    if channel.other_image:
+        images.append('Other')
+
+    where = query.Predicate('sales_channel_id', query.equal(sc_id))
+    preference = api_conn.SalesChannelPreference.query(filtering=where)
+    if preference:
+        preference = preference[0]
+    else:
+        preference = api_conn.SalesChannelPreference
+
+    form = PreferencesForm(**preference.to_dict())
+
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            if preference and preference.is_valid():
+                preference.from_dict(form.data)
+                preference.active = True
+                preference.save()
+            else:
+                pref = api_conn.SalesChannelPreference.from_dict(form.data)
+                pref.manufacturer_id = manufacturer.pk()
+                pref.sales_channel_id = sc_id
+                pref.save()
+
+            return jsonify({'success': True, 'manu': manufacturer.to_dict()})
+        else:
+            if 'action' in request.json and request.json['action'] == 'turnon':
+                action = 'turnon'
+
+    return render_template(
+        'sales/preferences_modal.jinja2',
+        channel=channel,
+        preference=preference,
+        images=images,
+        form=form,
+        action=action
+    )

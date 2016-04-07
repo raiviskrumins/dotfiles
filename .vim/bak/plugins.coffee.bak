@@ -1,0 +1,86 @@
+plugins = (($) ->
+  console.log Sammy
+  Modals = (app) ->
+    @.get '#/modal/:resource', (ctx) ->
+      @.getModal @.params['resource']
+
+    hideOnEsc = (e) ->
+      if e.which == 27
+        $('.modal').modal 'hide'
+
+    @.helpers
+      getModal: (url) ->
+        $.ajax url,
+          type: 'GET'
+        .done (result) =>
+          @.displayModal result, url
+
+      displayModal: (html, name) ->
+        if not name
+          name = $(html).attr 'id'
+
+        if $('.modal').length <= 0
+          $(html).appendTo 'body'
+        else
+          html = $(html).find('.modal-dialog').html()
+          $('.modal-dialog').html html
+
+        # Setup events
+        $('.modal').on 'show.bs.modal', =>
+          @.trigger ["modal", name, "show"].join(".")
+
+        $('.modal').on 'shown.bs.modal', =>
+          @.trigger ["modal", name, "shown"].join(".")
+
+        $('.modal').on 'hide.bs.modal', =>
+          @.trigger ["modal", name, "hide"].join(".")
+
+        $('.modal').on 'hidden.bs.modal', =>
+          @.trigger ["modal", name, "hidden"].join(".")
+          window.location.hash = '#/'
+          $(@).remove()
+
+        $('body').on 'keydown', hideOnEsc
+        $('.modal').modal 'show'
+
+  Forms = (app) ->
+    @.use(Modals)
+
+    @.post '#/submit/:resource', (ctx) ->
+      submitForm.apply @, [@.target, @.params['resource']]
+      return false
+
+    submitForm = (formElement, url) ->
+      context = @
+
+      form = $(formElement)
+      raw_data = form.serializeArray()
+      form_data = {}
+
+
+      _.map raw_data, (key_value) ->
+        form_data[key_value.name] = key_value.value
+
+      type = form.attr 'method'
+
+      $.ajax url,
+        type: type,
+        contentType: 'application/json',
+        data: JSON.stringify form_data,
+      .done (result) ->
+        context.displayModal(result)
+
+  FixModalButtonColors = (app) ->
+    switch window.location.pathname
+      when '/channel-manager' then type = 'info'
+      when '/discover' then type = 'success'
+      else type = 'primary'
+
+    @.bind 'modal.subscribe-modal.show', ->
+      $('.modal').find('input[type=submit]').addClass 'btn-' + type
+
+    @.bind 'modal.emailSuccess.show', ->
+      $('.modal').find('input[type=submit]').addClass 'btn-' + type
+
+  return {Modals: Modals, Forms: Forms, FixModalButtonColors: FixModalButtonColors}
+) jQuery

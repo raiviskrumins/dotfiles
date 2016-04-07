@@ -1,0 +1,425 @@
+package database
+
+import (
+	"database/sql"
+	"reflect"
+	"strconv"
+	"strings"
+
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"gopkg.in/mgo.v2/bson"
+)
+
+type Rows interface {
+	Scan(...interface{}) error
+	Columns() ([]string, error)
+}
+
+type QueryParams struct {
+	Clauses []Clause
+	Limit   int
+	Offset  int
+}
+
+// NewQueryParams will create a new QueryParams pointer using the provided
+// limit, offset, and clauses.
+func NewQueryParams(limit, offset int, clauses ...Clause) (*QueryParams, oops.Error) {
+	p := new(QueryParams)
+	p.Limit = limit
+	p.Offset = offset
+	p.Clauses = clauses
+
+	// TODO: refector this shit
+	return p, oops.ServerError("Shit", "Happens")
+}
+
+// Clause is a struct for containing information necessary for representing a
+// WHERE-clause SQL statement; namely, a key, operand and value. Note that while
+// the Key and Operand must be strings, Value can be of any interface as it will
+// be properly (and safely!) inserted into the SQL.
+type Clause struct {
+	Key     string      `json;"key"`
+	Operand string      `json:"operand"`
+	Value   interface{} `json:"value"`
+}
+
+// Error will indicate whether the current Clause instance is valid and available
+// to be convered into a SQL string. A Clause is valid if it has non-empty Key and
+// Operand values, as well as an operand which is one of the many possible types.
+func (c Clause) ValidationError() oops.Error {
+	if len(c.Key) == 0 || len(c.Operand) == 0 {
+		return oops.ServerError("", "Must provide a non-empty Key and Operand")
+	}
+
+	if strings.Contains(c.Key, " ") {
+		return oops.ServerError("", "Clause must not have a Key containing spaces", c)
+	}
+
+	kind := reflect.ValueOf(c.Value).Kind()
+	if kind >= reflect.Complex64 && kind != reflect.String {
+		return oops.ServerError("", "Clause must only have simple types for its Value", c)
+	}
+
+	validOperands := []string{
+		"=",
+		"!=",
+		"<>",
+		">=",
+		">",
+		"<=",
+		"<",
+		"in",
+		"IN",
+		"&",
+		"|",
+		"~",
+		"<<",
+		">>",
+		"#",
+		"is",
+		"IS",
+		"is not",
+		"IS NOT"}
+
+	for _, op := range validOperands {
+		// Using strings.EqualFold to deal with casing differences.
+		if c.Operand == op {
+			return nil
+		}
+	}
+
+	return oops.ServerError("", "invalid Clause.Operand provided")
+}
+
+// SQL will attempt to return the current Clause instance as a SQL WHERE-statement.
+// The SQL statement will make use of the Postgres positional parameters for injecting
+// the Clause.Value attribute into the statement.
+func (c Clause) SQL(index int) (string, oops.Error) {
+	err := c.ValidationError()
+	if err != nil {
+		return "", err
+	}
+
+	sql := lib.Join(" ", c.Key, c.Operand, lib.Join("", "$", strconv.Itoa(index)))
+	return sql, nil
+}
+
+// whereClauseSQL will accept a positional-parameter offset index and a variable
+// number of Clause instances, and will return the SQL WHERE-statement, a slice
+// of the parameter values, and an error (if one occurred).
+func whereClauseSQL(offset int, clauses ...Clause) (string, []interface{}, oops.Error) {
+	if len(clauses) == 0 {
+		return "", nil, nil
+	}
+
+	var whereClauses []string
+	var whereParams []interface{}
+
+	sql := "WHERE"
+
+	for i, clause := range clauses {
+		clauseSQL, err := clause.SQL(offset + i + 1)
+		if err != nil {
+			return "", nil, err
+		}
+
+		whereClauses = append(whereClauses, clauseSQL)
+		whereParams = append(whereParams, clause.Value)
+	}
+
+	// TODO: refactor to allow for other comparitors besides "AND".
+	whereSQL := lib.Join(" AND ", whereClauses...)
+	sql = lib.Join(" ", sql, whereSQL)
+
+	return sql, whereParams, nil
+}
+
+// CountQuery takes a DB, a table name, and a QueryParams pointer, and will return
+// the number of rows in the database using the provided information.
+func CountQuery(db DBConnection, tableName string, qParams *QueryParams) (int, oops.Error) {
+	if qParams == nil {
+		return 0, oops.ServerError("", "Must provide query parameters for table.", tableName)
+	}
+
+	sql := lib.Join(" ", "SELECT COUNT(*) FROM", tableName)
+
+	where, whereParams, e := whereClauseSQL(0, qParams.Clauses...)
+	if e != nil {
+		return 0, e
+	}
+	sql = lib.Join(" ", sql, where)
+
+	var count int
+	err := db.QueryRow(sql, whereParams...).Scan(&count)
+	if err != nil {
+		return 0, oops.ServerError("", "Failed to Scan a QueryRow correctly.", err)
+	}
+
+	return count, nil
+}
+
+// SelectQuery takes a DB, a comma separated string of columns, a table name, and a string of clauses and returns
+// a pointer to rows in the DB for the constructed query.
+func SelectQuery(db DBConnection, columns string, tableName string, qParams *QueryParams) (*sql.Rows, oops.Error) {
+	if qParams == nil {
+		return nil, oops.ServerError("", "Must provide non-nil QueryParams pointer.", tableName, columns)
+	}
+
+	sql := lib.Join(" ", "SELECT", columns, "FROM", tableName)
+
+	where, whereParams, e := whereClauseSQL(0, qParams.Clauses...)
+	if e != nil {
+		return nil, e
+	}
+	sql = lib.Join(" ", sql, where)
+
+	if qParams.Limit > 0 {
+		sql = lib.Join(" ", sql, "LIMIT", strconv.Itoa(qParams.Limit))
+	}
+
+	if qParams.Offset > 0 {
+		sql = lib.Join(" ", sql, "OFFSET", strconv.Itoa(qParams.Offset))
+	}
+
+	rows, err := db.Query(sql, whereParams...)
+	if err != nil {
+		return nil, oops.ServerError("", "Failed to Query the database.", err)
+	}
+	return rows, nil
+}
+
+func Upsert(db DBConnection, exists bool, subject lib.Iterable, tableName string, params *QueryParams) oops.Error {
+	var err oops.Error
+	if exists {
+		err = UpdateQuery(db, subject, tableName, params)
+	} else {
+		_, err = InsertQuery(db, subject, tableName)
+	}
+	return err
+}
+
+func InsertQuery(db DBConnection, subject lib.Iterable, tableName string) (interface{}, oops.Error) {
+	var columns []string
+	var placeHolders []string
+	var values []interface{}
+	var primaryField int64
+	var primaryKeyName string
+	index := 0
+	for iter := subject.NewIterator(); iter.Next(); {
+		field := iter.Item()
+		tag := field.Tag()
+		if tag.Get("primary") != "true" {
+			//get column names to set
+			if tag.Get("list_sub_field") == "" && tag.Get("object_sub_field") == "" {
+				columns = append(columns, field.ColumnName())
+
+				//get placeholders for values
+				placeHolders = append(placeHolders, "$"+strconv.Itoa(index+1))
+
+				//get values to set
+				fieldVal, err := field.Addr().(lib.Field).Value()
+				if err != nil {
+					return nil, oops.ServerError("", err, field, tag)
+				}
+				values = append(values, fieldVal)
+
+				index++
+			}
+		} else {
+			primaryKeyName = tag.Get("db")
+			if primaryKeyName == "" {
+				primaryKeyName = tag.Get("json")
+			}
+		}
+	}
+
+	queryString := lib.Join(
+		" ",
+		"INSERT INTO",
+		tableName,
+		lib.Join("", "(", lib.Join(", ", columns...), ")"),
+		"VALUES",
+		lib.Join("", "(", lib.Join(", ", placeHolders...), ")"),
+		"RETURNING",
+		primaryKeyName)
+	err := db.QueryRow(queryString, values...).Scan(&primaryField)
+	if err != nil {
+		return nil, oops.ServerError("", "Failed to scan a QueryRow.", err, queryString, values)
+	}
+
+	return primaryField, nil
+}
+
+func UpdateQuery(db DBConnection, subject lib.Iterable, tableName string, qParams *QueryParams) oops.Error {
+	if qParams == nil {
+		return oops.ServerError("", "Must provide non-nil QueryParams pointer.")
+	}
+
+	if len(qParams.Clauses) == 0 {
+		return oops.ServerError("", "Must specify at least one clause.", tableName)
+	}
+
+	var columns []string
+	var placeHolders []string
+	var values []interface{}
+	index := 0
+
+	for iter := subject.NewIterator(); iter.Next(); {
+		field := iter.Item()
+		tag := field.Tag()
+		if tag.Get("primary") != "true" {
+			//get column names to set
+			if tag.Get("list_sub_field") == "" && tag.Get("object_sub_field") == "" {
+				columns = append(columns, field.ColumnName())
+
+				//get placeholders for values
+				placeHolders = append(placeHolders, "$"+strconv.Itoa(index+1))
+
+				//get values to set
+				fieldVal, err := field.Addr().(lib.Field).Value()
+				if err != nil {
+					return oops.ServerError("", err, field, tag)
+				}
+				values = append(values, fieldVal)
+
+				index++
+			}
+		}
+	}
+
+	columnsSQL := lib.Join("", "(", lib.Join(",", columns...), ")")
+	valuesSQL := lib.Join("", "(", lib.Join(",", placeHolders...), ")")
+
+	sql := lib.Join(" ", "UPDATE", tableName, "SET", columnsSQL, "=", valuesSQL)
+
+	where, whereParams, e := whereClauseSQL(len(placeHolders), qParams.Clauses...)
+	if e != nil {
+		return e
+	}
+	sql = lib.Join(" ", sql, where)
+
+	for _, val := range whereParams {
+		values = append(values, val)
+	}
+
+	_, err := db.Exec(sql, values...)
+	if err != nil {
+		return oops.ServerError("Database could not insert object.", err, sql, values)
+	}
+	return nil
+}
+
+func DeleteQuery(db DBConnection, tableName string, qParams *QueryParams) oops.Error {
+	if qParams == nil {
+		return oops.ServerError("", "Must provide a non-nil QueryParams pointer.", tableName)
+	}
+
+	if len(qParams.Clauses) == 0 {
+		return oops.ServerError("", "Must specify at least one Clause.", tableName)
+	}
+
+	where, whereParams, e := whereClauseSQL(0, qParams.Clauses...)
+	if e != nil {
+		return e
+	}
+
+	sql := lib.Join(" ", "DELETE FROM", tableName, where)
+
+	_, err := db.Exec(sql, whereParams...)
+	if err != nil {
+		return oops.ServerError("", "Database could not delete object", err, sql, whereParams)
+	}
+	return nil
+}
+
+func Columns(subject lib.Iterable, excludes []string) string {
+	columnNames := subject.ColumnNames()
+	for _, exception := range excludes {
+		for i, column := range columnNames {
+			if column == exception {
+				columnNames = append(columnNames[:i], columnNames[i+1:]...)
+				break
+			}
+		}
+	}
+	return lib.Join(", ", columnNames...)
+}
+
+func ScanRows(destination interface{}, rows *sql.Rows) (interface{}, oops.Error) {
+	defer rows.Close()
+
+	totalScanned := 0
+	for rows.Next() {
+		err := Scan(destination, rows)
+		if err != nil {
+			return destination, err
+		}
+		totalScanned++
+	}
+	err := rows.Err()
+	if err != nil {
+		return nil, oops.ServerError("", "SQL Row error.", err)
+	}
+	if totalScanned == 0 {
+		return nil, oops.NotFound("No results found.", "No rows were available to be scanned into the destination.")
+	}
+	return destination, nil
+}
+
+// Scan stores data from the DB and into the destination struct.
+func Scan(destination interface{}, rows *sql.Rows) oops.Error {
+	var fields []interface{}
+
+	for iter := destination.(lib.Iterable).NewIterator(); iter.Next(); {
+		val := iter.Item()
+		tag := val.Tag()
+		if tag.Get("list_sub_field") == "" && tag.Get("object_sub_field") == "" {
+			// Field is not a slice sub-field
+			columnName := tag.Get("db")
+			if columnName == "" {
+				columnName = tag.Get("json")
+			}
+			fields = append(fields, val.Addr())
+		}
+	}
+
+	err := rows.Scan(fields...)
+	if err != nil {
+		return oops.ServerError("", "Could not scan the row into the provided destination interface.", err)
+	}
+
+	return nil
+}
+
+// MongoRemoveProduct is a helper function for removing a product from the mongo cache based on ID
+func MongoRemoveProduct(context AppContext, productID int64) oops.Error {
+	mSession, e := context.MongoDB.Open()
+	if e != nil {
+		return e
+	}
+	defer mSession.Close()
+
+	c := mSession.DB("api").C("product_cache")
+	err := c.Remove(bson.M{"ID": productID})
+	if err != nil {
+		return oops.ServerError("", "Could not remove product from MongoDB.", err, productID)
+	}
+	return nil
+}
+
+// MongoInsertProduct is a helper function for inserting a product into the mongo cache
+func MongoInsertProduct(context AppContext, productID int64, prodJSON string) oops.Error {
+	mSession, e := context.MongoDB.Open()
+	if e != nil {
+		return e
+	}
+	defer mSession.Close()
+
+	c := mSession.DB("api").C("product_cache")
+	err := c.Insert(map[string]interface{}{"ID": productID, "value": prodJSON})
+	if err != nil {
+		return oops.ServerError("", "Could not insert product into MongoDB.", err, productID, prodJSON)
+	}
+	return nil
+}

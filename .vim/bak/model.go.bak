@@ -1,0 +1,127 @@
+package models
+
+import (
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+)
+
+type Model interface {
+	lib.Iterable
+	TableName() string
+	FormSchema() *form.Schema
+}
+
+func ResToTableName(resName string) (string, oops.Error) {
+	tableName := resName[0 : len(resName)-1]
+	_, err := Factory(tableName)
+	if err != nil {
+		return "", err
+	} else {
+		return tableName, nil
+	}
+}
+
+func Factory(name string) (Model, oops.Error) {
+	var obj Model
+
+	switch name {
+	case "api_key":
+		obj = new(APIKey)
+	case "collection":
+		obj = new(Collection)
+	case "event":
+		obj = new(Event)
+	case "manufacturer":
+		obj = new(Manufacturer)
+	case "manufacturer_image":
+		obj = new(ManufacturerImage)
+	case "option_set":
+		obj = new(OptionSet)
+		validOptionSetTypes := []string{
+			"finish",
+			"hardware",
+			"leather",
+			"nailhead",
+			"textile",
+			"trim",
+		}
+		obj.(*OptionSet).Kind.AcceptedTerms = validOptionSetTypes
+	case "sales_channel":
+		obj = new(SalesChannel)
+	case "sales_channel_preference":
+		obj = new(SalesChannelPreference)
+		validNameTypes := []string{
+			"name",
+			"alternate_name"}
+		obj.(*SalesChannelPreference).IdentityName.AcceptedTerms = validNameTypes
+
+		validDescriptionTypes := []string{
+			"description",
+			"alternate_description"}
+
+		obj.(*SalesChannelPreference).DescriptionDescription.AcceptedTerms = validDescriptionTypes
+	case "option":
+		obj = new(Option)
+	case "option_finish":
+		opt := new(Option)
+		opt.Kind.Set("finish")
+		var e oops.Error
+		opt.ExtendedData, e = CreateOptionType("finish", 0)
+		if e != nil {
+			return nil, e
+		}
+		obj = opt
+	case "option_hardware":
+		opt := new(Option)
+		opt.Kind.Set("hardware")
+		var e oops.Error
+		opt.ExtendedData, e = CreateOptionType("hardware", 0)
+		if e != nil {
+			return nil, e
+		}
+		obj = opt
+	case "option_nailhead":
+		opt := new(Option)
+		opt.Kind.Set("nailhead")
+		var e oops.Error
+		opt.ExtendedData, e = CreateOptionType("nailhead", 0)
+		if e != nil {
+			return nil, e
+		}
+		obj = opt
+	case "option_leather":
+		opt := new(Option)
+		opt.Kind.Set("leather")
+		var e oops.Error
+		opt.ExtendedData, e = CreateOptionType("leather", 0)
+		if e != nil {
+			return nil, e
+		}
+		obj = opt
+	case "option_textile":
+		opt := new(Option)
+		opt.Kind.Set("textile")
+		var e oops.Error
+		opt.ExtendedData, e = CreateOptionType("textile", 0)
+		if e != nil {
+			return nil, e
+		}
+		obj = opt
+	case "option_trim":
+		opt := new(Option)
+		opt.Kind.Set("trim")
+		var e oops.Error
+		opt.ExtendedData, e = CreateOptionType("trim", 0)
+		if e != nil {
+			return nil, e
+		}
+		obj = opt
+	case "product":
+		obj = new(AEProduct)
+	default:
+		return nil, oops.ServerError("", "No model exists.", name)
+	}
+
+	return obj, nil
+}

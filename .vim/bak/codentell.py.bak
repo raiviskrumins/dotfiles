@@ -1,0 +1,162 @@
+# ... stuff ...
+
+def update_user_account_view():
+    pass
+
+def save_profile_view():
+    pass
+
+# ... stuff ...
+
+
+# maybe place this in a settings.py or __init__.py
+amberlib.config.update({
+    "retries": 0,                   # How many times to rety on 502-504 errors.
+    "retry_frequency": 5000         # (in miliseconds) time between retries.
+
+    "host": "http://example.com",
+    "port": 8080
+})
+
+
+
+########################################
+"""
+Flow:
+
+    amberlib
+        -> default_settings
+        -> context
+            -> model
+            -> collection
+                -> models
+                    -> model
+
+    Context:
+        API host & port
+        Retry settings
+        Public & Private keys
+
+    Model:
+        Model data (like ID, name, width, depth, image, etc)
+        Save method
+        Update method
+        fromJSON, toJSON
+        fromDict, toDict
+
+    Collection:
+        len of collection
+        inherits from list
+        first = collection[0]
+        last = collection[-1]
+
+        Set the chuncking amount, up to 500. As a param?
+
+        next() grabs next grouping
+        prev () grabs previous grouping
+        first()
+        last()
+
+        default limit = 500.
+        default offset = 0.
+"""
+#######################################
+
+
+
+def product_details(prod_id):
+    client = get_current_user()
+
+    ctx = amberlib.Context(client.public, client.private)
+
+    collection = ctx.Products().retrieve()
+    collection = ctx.Products(limit=500, offset=2).retrieve()
+
+    prod = ctx.Products(id=prod_id).retrieve()
+
+    render_template("/prod_details.py", product=prod)
+
+
+
+
+
+def prod_listing():
+    client = get_current_user()
+    ctx = amberlib.Context(client.public, client.private)
+
+    # No ID specified. Retrieve collection.
+    collection = ctx.Products.all(limit=100)
+
+
+
+    # len(collection) vs collection.length or collection.count ? Or how about collection.chunk?
+    print(len(collection)) == 15032340
+
+    prods = []
+    """
+    while collection.next():
+        prods.append(*collection)
+    """
+    # OR
+
+    prods = collection
+
+
+    first = collection[0]
+    last = collection[-1]
+
+
+    render_template(
+        "prod_listing.py",
+        products=prods,
+        bounds=[first, last],
+        total=len(collection)
+    )
+
+
+@get_current_user_client
+def create_prod(client):
+    if form.is_valid():
+        data = form.get_data() # Assume data is a 1:1 dictionary
+
+        prod = amberlib.Context(client.pbulic, client.private).Products.retrieve(id)
+        prod.stuff = "whatever"
+        prod.save()
+
+        prod = amberlib.Context(client.pbulic, client.private).Products.save(data)
+
+        # wishlist: update does not make an API call.
+
+        redirect_request("complete.py", product=prod)
+    render_template("create_prod.py")
+
+
+@get_current_user_client
+def update_ordering_info(client):
+    if form.is_valid():
+        data = form.get_data()
+
+        # Two ways to update sub/components...
+
+        # Create new instance of the component and save.
+        ctx = amberlib.Context(client.public, client.private)
+        ctx.OrderingInfo.retrieve(data["id"]).update(data).save()
+
+        # Or, update on product and do a full product update:
+
+        oi = ctx.OrderingInfo().update(data)
+
+        prod = ctx.Products.retrieve(data["product_id"])
+        prod.ordering_info = oi
+        prod.save()
+
+
+        prod.identity.name = "new name"
+        typeof(prod.identity) == amberlib.models.IdentityComponent
+        prod.save()
+
+        render_template("updated.py")
+
+    # Having a status with every return?
+    # Give a list of prod Ids and get back a list of products.
+    # Documentation and testing are high list items.

@@ -1,0 +1,75 @@
+html,
+body {
+    margin: 0px;
+    padding: 0px;
+    height: 100%;
+    font-size: 10px;
+}
+
+#wrapper {
+    margin: 0;
+    height: 100%;
+}
+
+#sidebar {
+    background-color: #f9f9f9;
+    height: 100%;
+}
+
+#sidebar ul {
+    padding: 0;
+    margin: 0;
+}
+
+#sidebar ul li {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    padding: 0.5em;
+    font-weight: bold;
+    color: #232323;
+    font-size: 1.8em;
+    vertical-align: middle;
+}
+
+#sidebar ul li:not(.logo):not(.add-feed) {
+    border-top: 1px solid #cccccc;
+}
+
+#sidebar ul li:not(.logo):not(.add-feed):last-child {
+    border-bottom: 1px solid #cccccc;
+}
+
+#sidebar .count {
+    text-align: center;
+    -webkit-border-radius: 3px;
+    -moz-border-radius: 3px;
+    border-radius: 3px;
+    border: 1px solid grey;
+}
+
+#sidebar .logo {
+    text-align: center;
+    font-weight: bold;
+    font-size: 4em;
+    vertical-align: middle;
+}
+
+#sidebar .logo img {
+    height: 0.5em;
+    vertical-align: middle;
+}
+
+#sidebar .add-feed {
+    vertical-align: middle;
+    padding-bottom: 1em;
+}
+
+#sidebar .add-feed img {
+    height: 0.6em;
+}
+
+#content {
+    height: 100%;
+    background-color: green;
+}

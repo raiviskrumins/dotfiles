@@ -1,0 +1,67 @@
+package es
+
+import (
+	"strconv"
+	"testing"
+
+	"github.com/AmberEngine/api/models"
+	"github.com/stretchr/testify/assert"
+)
+
+// TestupdateSearchProduct tests that no errors are returned when updating the ES index.
+func TestupdateSearchProduct(t *testing.T) {
+	sp := models.SearchProduct{}
+	sp.ID = "1"
+	sp.Name = "Test Product"
+	sp.ManufacturerSKU = "1337"
+	sp.Description = "Perfect"
+	sp.ManufacturerName = "ACME"
+	sp.ManufacturerID = "42"
+	sp.ManufacturerActive = "true"
+	sp.Active = "true"
+	sp.MeetsPostingRequirements = "true"
+	sp.Category = "casegood"
+
+	assert.NoError(t, updateSearchProduct(TestCtx, sp))
+}
+
+// TestCreateSearchProduct tests that a new SearchProduct is created with the correct information.
+func TestCreateSearchProduct(t *testing.T) {
+	prod, e := models.RetrieveProduct(TestCtx, 43)
+	if !assert.NoError(t, e) {
+		e.Log()
+		return
+	}
+
+	sp, e := createSearchProduct(prod)
+	assert.NoError(t, e)
+	assert.EqualValues(t, sp.ID, strconv.Itoa(int(prod.ID.Int64)))
+}
+
+// TestUpdateProduct tests that no errors are returned when updating the ES index.
+func TestUpdateProduct(t *testing.T) {
+	prod, e := models.RetrieveProduct(TestCtx, 43)
+	if !assert.NoError(t, e) {
+		return
+	}
+
+	e = UpdateProduct(TestCtx, prod)
+	assert.NoError(t, e)
+}
+
+// TestDeleteProduct tests that no errors are returned when removing an item from the ES index.
+func TestDeleteProduct(t *testing.T) {
+	prod, e := models.RetrieveProduct(TestCtx, 43)
+	if !assert.NoError(t, e) {
+		return
+	}
+
+	e = UpdateProduct(TestCtx, prod)
+	if !assert.NoError(t, e) {
+		return
+	}
+
+	e = DeleteProduct(TestCtx, int(prod.ID.Int64))
+	assert.NoError(t, e)
+
+}

@@ -1,0 +1,64 @@
+package form
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestNew_NoFunc(t *testing.T) {
+	m := New("name", "label", "kind")
+	if assert.NotNil(t, m) {
+		assert.Equal(t, "name", m.JSONName)
+		assert.Equal(t, "label", m.Label)
+		assert.Equal(t, "kind", m.Kind)
+	}
+}
+
+func TestNew_HasFunc(t *testing.T) {
+	fn := func(m *Schema) {
+		m.Units = "not default"
+	}
+
+	m := New("name", "label", "kind", fn)
+	if assert.NotNil(t, m) {
+		assert.Equal(t, "name", m.JSONName)
+		assert.Equal(t, "label", m.Label)
+		assert.Equal(t, "kind", m.Kind)
+		assert.Equal(t, "not default", m.Units)
+	}
+}
+
+func TestNotRequired(t *testing.T) {
+	m := new(Schema)
+	m.Required = true
+
+	NotRequired()(m)
+
+	if assert.NotNil(t, m) {
+		assert.False(t, m.Required)
+	}
+}
+
+func TestChoice(t *testing.T) {
+	m := new(Schema)
+	m.Choices = nil
+
+	Choice("key", "label")(m)
+
+	if assert.NotNil(t, m) && assert.True(t, len(m.Choices) == 1) {
+		assert.Equal(t, "key", m.Choices[0].Key)
+		assert.Equal(t, "label", m.Choices[0].Label)
+	}
+}
+
+func TestUnits(t *testing.T) {
+	m := new(Schema)
+	m.Units = ""
+
+	Units("feet")(m)
+
+	if assert.NotNil(t, m) {
+		assert.Equal(t, "feet", m.Units)
+	}
+}

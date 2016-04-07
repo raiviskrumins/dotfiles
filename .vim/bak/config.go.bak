@@ -1,0 +1,235 @@
+package config
+
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+)
+
+type conf struct {
+	Data map[string]interface{}
+}
+
+var instantiated *conf = nil
+var once sync.Once
+
+var ConfigPath = ""
+var ConfigName = "config"
+var LocalExt = "local"
+var FileExt = "json"
+
+// config will return a pointer to a new conf struct instance, which will have
+// its Data attribute populated based on the JSON config app & local files.
+func config() *conf {
+	// Don't understand this? Check out this link: http://marcio.io/2015/07/singleton-pattern-in-go/
+	once.Do(func() {
+		instantiated = new(conf)
+
+		appJSON, localJSON := readConfigs()
+		appData := make(map[string]interface{})
+		localData := make(map[string]interface{})
+
+		err := json.Unmarshal(appJSON, &appData)
+		if err != nil {
+			panic(err)
+		}
+
+		if len(localJSON) > 0 {
+			err = json.Unmarshal(localJSON, &localData)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		instantiated.Data = merge(appData, localData)
+	})
+
+	return instantiated
+}
+
+// Use the current working directory as the configeration path.
+func UseCWD() {
+	pwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	ConfigPath = pwd
+}
+
+// Override application and local settings with any command-line arguments.
+// Arguments are specified in the following manner:
+//
+//   go run main.go -config <setting1>=<value1> -config <setting2>=<value2>
+//
+// Where <setting1> and <setting2> are JSON key-paths, and <value1> and <value2>
+// are strings to be interpreted for the values of the settings.
+func UseProgArgs() {
+	args := os.Args
+	if len(args) <= 2 {
+		return
+	}
+
+	cmdArgs := args[1:]
+
+	for i, arg := range cmdArgs {
+		if arg == "-config" && len(cmdArgs) > i+1 {
+			keyPair := cmdArgs[i+1]
+			if !strings.Contains(keyPair, "=") {
+				continue
+			}
+
+			split := strings.Split(keyPair, "=")
+			keys := strings.Split(split[0], ".")
+			value := split[1]
+
+			// Ensure data exists at location of keys.
+			currVal := Get(keys...)
+
+			switch currVal.(type) {
+			case bool:
+				if b, err := strconv.ParseBool(value); err == nil {
+					Set(b, keys...)
+				} else {
+					panic(
+						fmt.Sprintf(
+							"Could not parse: \"%v\" as bool.",
+							value,
+						),
+					)
+				}
+			case float64:
+				if f, err := strconv.ParseFloat(value, 64); err == nil {
+					Set(f, keys...)
+				} else {
+					panic(
+						fmt.Sprintf(
+							"Could not parse: \"%v\" as float64.",
+							value,
+						),
+					)
+				}
+			case string:
+				Set(value, keys...)
+			}
+		}
+	}
+}
+
+// merge will merge a 'from' map into an 'into' map, returning the resulting
+// merged map.
+func merge(into map[string]interface{}, from map[string]interface{}) map[string]interface{} {
+	for key, val := range from {
+		if casted, ok := val.(map[string]interface{}); ok {
+			into[key] = merge(into[key].(map[string]interface{}), casted)
+		} else {
+			into[key] = val
+		}
+	}
+
+	return into
+}
+
+// readConfigs will read the app JSON config, and optionally a local JSON config,
+// and return slices of the file's JSON data.
+func readConfigs() ([]byte, []byte) {
+	appPath := filepath.Join(ConfigPath, fmt.Sprintf("%s.%s", ConfigName, FileExt))
+	localPath := filepath.Join(ConfigPath, fmt.Sprintf("%s.%s.%s", ConfigName, LocalExt, FileExt))
+
+	var (
+		appJSON   []byte
+		localJSON []byte
+	)
+
+	if _, err := os.Stat(appPath); err != nil {
+		panic(err)
+	}
+
+	if bites, err := ioutil.ReadFile(appPath); err != nil {
+		panic(err)
+	} else {
+		appJSON = bites
+	}
+
+	if _, err := os.Stat(localPath); err == nil {
+		if bites, err := ioutil.ReadFile(localPath); err != nil {
+			panic(err)
+		} else {
+			localJSON = bites
+		}
+	}
+
+	return appJSON, localJSON
+}
+
+// Get will return the specified element.
+func Get(keys ...string) interface{} {
+	var data map[string]interface{}
+	var val interface{}
+
+	cfg := config()
+	data = cfg.Data
+
+	for _, name := range keys {
+		var ok bool
+		if val, ok = data[name]; ok {
+			if valSlice, isSlice := val.(map[string]interface{}); isSlice {
+				data = valSlice
+			}
+		} else {
+			panic(fmt.Sprintf("Could not locate config key: '%s' from keys: %s", name, keys))
+		}
+	}
+
+	return val
+}
+
+// Set the specified value at the end of the provided path.
+func Set(value interface{}, path ...string) {
+	cfg := config()
+	data := cfg.Data
+	for len(path) > 0 {
+		if len(path) > 1 {
+			if _, ok := data[path[0]]; !ok {
+				panic(
+					fmt.Sprintf(
+						"Could not set value: \"%v\" into setting: %s",
+						value,
+						strings.Join(path, "."),
+					),
+				)
+			}
+
+			data = data[path[0]].(map[string]interface{})
+			path = path[1:]
+		} else {
+			data[path[0]] = value
+			path = []string{}
+		}
+
+	}
+}
+
+// Bool will return the specified element, casted as a bool.
+func Bool(keys ...string) bool {
+	return Get(keys...).(bool)
+}
+
+// int will return the specified element, casted as a int.
+func Int(keys ...string) int {
+	return int(Get(keys...).(float64))
+}
+
+// Float will return the specified element, casted as a float64.
+func Float(keys ...string) float64 {
+	return Get(keys...).(float64)
+}
+
+// String will return the specified element, casted as a string.
+func String(keys ...string) string {
+	return Get(keys...).(string)
+}

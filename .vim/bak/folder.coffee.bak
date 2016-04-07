@@ -1,0 +1,485 @@
+# folder.coffee manages most aspects of the Folder section. There is a reference
+# of add to folder in product.coffee
+#
+# UI COMPONENTS:
+# --------------
+# .js-create-folder : This will call the local discover api and make a folder.
+#
+# .js-create-folder-modal : This will show the create a folder modal.
+#
+# .js-add-product-to-folder : This will actuall add a product to a folder.
+#
+# .js-show-add-product-to-folder : This will show the add product to folder modal.
+#
+# .js-delete-product : This begins the delete product from folder chain.
+#
+# .js-delete-folder-modal : Show the delete folder modal.
+#
+# .js-delete-folder : This begines the delete folder chain.
+#
+# .js-edit-folder : This submits the edited folder information.
+#
+# .js-show-edit-folder : This displays the edit folder modal.
+#
+# .js-reset-folders-all : This will reset the search and filters in a folder.
+
+product_cache = []
+
+
+$(document).ready ->
+
+  # Capture and halt pressing the enter key when creating a folder.
+  enterPressedAddFolder = (e) ->
+    if e.keyCode == 13
+      e.preventDefault()
+      createFolder()
+
+  showButtons = (e) ->
+    $('.edit-folder-btn',e.currentTarget).show()
+
+  hideButtons = (e) ->
+    $('.edit-folder-btn',e.currentTarget).hide()
+
+  # This is a utility function to manage adding modals to the DOM.
+  addToModal = (data) ->
+    modal = $(data)
+    if $('body').hasClass 'modal-open'
+      $('.modal .modal-dialog').replaceWith modal.html()
+    else
+      modal.appendTo('body').modal('show')
+
+  # Show create folder modal.
+  createFolderModal = (e) ->
+    $(e.currentTarget).blur()
+    e.preventDefault()
+    url = $(e.currentTarget).data 'ref'
+
+    $.ajax url,
+      type: 'GET'
+      success: (result) ->
+        addToModal(result)
+
+  # Grab data from addFolderForm and AJAX to create a new folder.
+  createFolder = (e) ->
+    raw_data = $('#addFolderForm').serializeArray()
+    form_data = {}
+
+    _.map raw_data, (key_value) ->
+      form_data[key_value.name] = key_value.value
+
+    $.ajax
+      url: $('#addFolderForm').attr 'action'
+      type: 'POST'
+      data: JSON.stringify(form_data)
+      cache: false
+      contentType: 'application/json'
+      processData: false
+      success: (result) ->
+        window.location.assign '/folders'
+
+
+  # Show the add to product modal. This should work from anywhere.
+  showAddProductToFolderModal = (e) ->
+    $(e.currentTarget).blur()
+    e.preventDefault()
+    url = $(e.currentTarget).data 'ref'
+    product_id = $(e.currentTarget).data 'product-id'
+
+    $.ajax url,
+      type: 'GET'
+      success: (result) ->
+        addToModal(result)
+        $('#product_id').val(product_id)
+
+  # Get select value if it's not 0 then enable the button
+  checkAddProduct = (e) ->
+    current_val = e.val()
+    if current_val == '0' or current_val == ''
+      return false
+    else
+      return true
+
+  # Collect information to add product to a folder.
+  addProductToFolder = (e) ->
+    e.stopPropagation()
+    e.preventDefault()
+
+    if checkAddProduct($('#new_folder')) or checkAddProduct($('select#folders'))
+      $('#modalFooterError').remove()
+      action_url = $('#addProductToFolderForm').attr 'action'
+
+      form_data = _.object _.map $('input, select', '#addProductToFolderForm'), (row) ->
+        return [$(row).attr('id'), $(row).val()]
+
+      $.ajax
+        url: action_url
+        type: 'POST'
+        data: JSON.stringify(form_data)
+        cache: false
+        contentType: 'application/json'
+        processData: false
+        success: (result) ->
+          modal = $(result)
+          if $('body').hasClass 'modal-open'
+            $('.modal .modal-dialog').replaceWith modal.html()
+          else
+            modal.appendTo('body').modal('show')
+    else
+      $('#modalFooterError').text('Please select a folder or enter a new folder name.')
+
+  # Gets the confirmation modal for deleting a product from a folder.
+  confirmDeleteModal = (e) ->
+    $(e.currentTarget).blur()
+    folder_id = $(e.currentTarget).data 'folder-id'
+    product_id = $(e.currentTarget).data 'product-id'
+    action_url = $(e.currentTarget).data 'action-url'
+
+    $.ajax action_url,
+      type: 'GET'
+      success: (result) ->
+        addToModal(result)
+        $('#deleteProductFromFolder').data 'folder-id', folder_id
+        $('#deleteProductFromFolder').data 'product-id', product_id
+
+  # Delete a product from a folder.
+  deleteProductFromFolder = (e) ->
+    folder_id = $('#deleteProductFromFolder').data 'folder-id'
+    product_id = $('#deleteProductFromFolder').data 'product-id'
+    action_url = $(e.currentTarget).data 'action-url'
+
+    $.ajax
+      url: action_url
+      type: 'DELETE'
+      cache: false
+      contentType: 'application/json'
+      processData: false
+      success: (result) ->
+        $(".count-folder-id-#{folder_id}").each (e) ->
+          $(@).text($(@).text() - 1)
+
+        $("##{folder_id}-#{product_id}").parent
+        $("##{folder_id}-#{product_id}").remove()
+
+        # Remove the deleted product from the product_cache
+        product_cache = product_cache.not("##{folder_id}-#{product_id}")
+
+        reflowProducts()
+
+
+  # Manage the border for selecting a cover image in the edit folder modal.
+  selectFolderCoverImage = (e) ->
+    $('ul.cover-images-list li').removeClass 'active'
+    $(e.currentTarget).parent().addClass 'active'
+    cover_image_url = $(e.currentTarget).attr 'src'
+    $('#cover_image').val cover_image_url
+
+  # Submit chages from the Edit Folder modal.
+  updateFolder = (e) ->
+    e.preventDefault()
+    folder_id = $('#saveEditFolderBtn').data 'folder-id'
+    action_url = $(e.currentTarget).data 'action-url'
+
+    raw_data = $('#editFolderForm').serializeArray()
+    form_data = {}
+
+    _.map raw_data, (key_value) ->
+      form_data[key_value.name] = key_value.value
+
+    $.ajax
+      url: action_url
+      type: 'POST'
+      data: JSON.stringify(form_data)
+      cache: false
+      contentType: 'application/json'
+      processData: false
+      success: (result) ->
+        window.location.reload()
+
+  # Delete the specified folder.
+  deleteFolder = (e) ->
+    folder_id = $('#deleteFolder').data 'folder-id'
+    action_url = $(e.currentTarget).data 'action-url'
+
+    $.ajax
+      url: action_url
+      type: 'DELETE'
+      cache: false
+      contentType: 'application/json'
+      processData: false
+      success: (result) ->
+        window.location.assign '/folders'
+
+  # Confirm the deletion of a folder.
+  confirmDeleteFolderModal = (e) ->
+    folder_id = $(e.currentTarget).data 'folder-id'
+    action_url = $(e.currentTarget).data 'action-url'
+
+    $.ajax action_url,
+      type: 'GET'
+      success: (result) ->
+        addToModal(result)
+        $('#deleteFolder').data 'folder-id', folder_id
+
+
+  # Show the edit folder modal.
+  editFolderModal = (e) ->
+    e.preventDefault()
+    $(e.currentTarget).blur()
+    folder_id = $(e.currentTarget).data 'folder-id'
+    action_url = $(e.currentTarget).data 'action-url'
+
+    $.ajax action_url,
+      type: 'GET'
+      success: (result) ->
+        addToModal(result)
+
+  # Sort product listing
+  sortProducts = (e) ->
+    product_list = $ '.product-list'
+    products = product_list.children('div.product-container')
+
+    sort_type = $(e.currentTarget).val()
+    if sort_type == 'date'
+      products_sorted = _.sortBy(products, (el) ->
+          return $(el).data 'date-added'
+        )
+      products_sorted.reverse()
+    else if sort_type == 'asc'
+      products_sorted = _.sortBy(products, (el) ->
+          return $(el).data 'product-name'
+        )
+    else if sort_type == 'desc'
+      products_sorted = _.sortBy(products, (el) ->
+          return $(el).data 'product-name'
+        )
+      products_sorted.reverse()
+    else
+      products_sorted = products
+
+    products.detach()
+    $(products_sorted).appendTo(product_list)
+    reflowProducts()
+
+  # This removes the padding elements from the list
+  removePadding = (e) ->
+    $(e).children('.clearfix').remove()
+
+  # Filter based on manufacturer + search
+  filterManufacturer = (e) ->
+    g.resetButtonStatus()
+    manufacturer_name = $(e.currentTarget).val()
+
+    product_list = $ '.product-list'
+    products = product_list.children('div.product-container:visible')
+    if products.length < 1
+      products = product_cache
+      $('#category').val('')
+
+    products_filtered = $(products).filter( (index) ->
+      el_manufacturer = $(this).data 'manufacturer'
+      return el_manufacturer.toLowerCase() == manufacturer_name.toLowerCase()
+      )
+
+    if manufacturer_name == ''
+      products_filtered = product_cache
+
+    products.detach()
+    removePadding(products_filtered)
+    $(products_filtered).appendTo(product_list)
+    reflowProducts()
+
+  # Filter based on manufacturer + search
+  filterCategory = (e) ->
+    g.resetButtonStatus()
+    category_name = $(e.currentTarget).val()
+
+    product_list = $ '.product-list'
+    products = product_list.children('div.product-container:visible')
+    if products.length < 1
+      products = product_cache
+      $('#manufacturer').val('')
+
+    products_filtered = $(products).filter( (index) ->
+      el_category = $(this).data 'category'
+      return el_category.toLowerCase() == category_name.toLowerCase()
+      )
+
+    if category_name == ''
+      products_filtered = product_cache
+
+    products.detach()
+    removePadding(products_filtered)
+    $(products_filtered).appendTo(product_list)
+    reflowProducts()
+
+
+  # This controls the X in the search fields.
+  valueSearch = (e) ->
+    value = $(e.currentTarget).val()
+    if value.length > 0
+      $('.js-clear-search').fadeIn()
+    else
+      $('.js-clear-search').fadeOut 100
+      $('.product-list .no-results').remove()
+      $('.no-results-folders').remove()
+
+  # Upon the search field going blank, reset the items.
+  clearSearch = (e) ->
+    if e
+      e.preventDefault()
+    $('#search, #folder-search').val ''
+    $('#search, #folder-search').trigger 'keyup'
+    $('#search, #folder-search').val ''
+
+    $('.js-clear-search').fadeOut 100
+    $('.product-list .no-results').remove()
+    $('.no-results-folders').remove()
+    product_list = $ '.product-list'
+    $(product_cache).appendTo(product_list)
+    reflowProducts()
+
+  # This will reset the products to the previously captured product list.
+  searchResetAll = (e) ->
+    clearSearch(e)
+    g.resetButtonStatus()
+    $('#manufacturer').val('')
+    $('#category').val('')
+    $('.product-list .no-results').remove()
+    product_list = $ '.product-list'
+    products = product_list.children('div.product-container')
+    products.detach()
+    new_products = product_cache
+    removePadding(new_products)
+
+    if new_products.length % 4 == 0
+      $(new_products).append('<div class="clearfix visible-lg-block"></div>')
+
+    if new_products.length % 3 == 0
+      $(new_products).append('<div class="clearfix visible-md-block"></div>')
+
+    $(new_products).appendTo(product_list)
+    reflowProducts()
+
+  # This handles the case when adding a product to a
+  # folder and not selecting anything.
+  toggleFoldersSelect = (e) ->
+    status = $(@).text()
+    if $('#new_folder').val()
+      $('#folders').prop 'disabled', status != 'on'
+    else
+      $('#folders').prop 'disabled', false
+
+  # Generic 'enter' press capture.
+  preventForm = (e) ->
+    if e.keyCode == 13
+      e.preventDefault()
+
+  # Show now results for search
+  showNoResultsFolders = (e) ->
+    search_term = $('#folder-search').val()
+    $('.no-results-folders').remove()
+    if $('.folder-row').length and $('.folders').children('.folder-row:visible').length < 1
+      if search_term.length > 0
+        $('.folders').append("<div class='col-md-12 no-results-folders'><h4 class='no-results-message'>No results were found for <em>#{search_term}</em>. Please try a different search.</h4></div>")
+      else if search_term == '' and ($('#manufacturer').val() or $('#category').val())
+        $('.folders').append("<div class='col-md-12 no-results-folders'><h4 class='no-results-message'>No results were found. Please try a different search.</h4></div>")
+
+  showNoResults = (e) ->
+    search_term = $('#search').val()
+    $('.no-results').remove()
+    if $('.product-list').length and $('.product-list').children('.product-container:visible').length < 1
+      if search_term.length > 0
+        $('.product-list').append("<div class='col-md-12 no-results'><h4 class='no-results-message'>No results were found for <em>#{search_term}</em>. Please try a different search.</h4></div>")
+      else if search_term == '' and ($('#no-products').length == 0 or ($('#manufacturer').val() or $('#category').val()))
+        $('.product-list').append("<div class='col-md-12 no-results'><h4 class='no-results-message'>No results were found. Please try a different search.</h4></div>")
+
+  resetAll = () ->
+    $('.toolbar .form-control').val('')
+    $('.toolbar .form-control#sort').val('asc')
+    searchResetAll()
+
+  reflowProducts = (e) ->
+    displayed_products = $('.product-list').children('.product-container:visible')
+    $('.clearfix', '.product-grid').remove()
+
+    if displayed_products.length > 0
+      $('.no-results').remove()
+
+    $.each displayed_products, (index, val) ->
+      if index > 0
+        if (index+1) % 4 == 0
+          $(displayed_products[index]).after('<div class="clearfix visible-lg-block"></div>')
+        if (index+1) % 3 == 0
+          $(displayed_products[index]).after('<div class="clearfix visible-md-block"></div>')
+
+    showNoResults()
+
+  # Create Folder Modal
+  $('body').on 'keypress', '#addFolderForm', enterPressedAddFolder
+  $('body').on 'click', '.js-create-folder', createFolder
+  $('.js-create-folder-modal').on 'click', createFolderModal
+
+  # Search Folder Form
+  $('body').on 'keypress', '#queryForm', preventForm
+  $('#folder-search').on '_after', showNoResultsFolders
+
+
+  # Show add product to folder modal
+  $('body').on 'click', '.js-add-product-to-folder', addProductToFolder
+  $('body').on 'keyup', '#new_folder', toggleFoldersSelect
+  $('.js-show-add-product-to-folder').on 'click', showAddProductToFolderModal
+  $('body').on 'click', '.js-show-add-product-to-folder', showAddProductToFolderModal
+  $('body').on 'keypress', '#addProductToFolder', preventForm
+
+  # Confirm Delete modal
+  $('body').on 'click', '.js-delete-product', deleteProductFromFolder
+
+  # Confirm Delete Folder
+  $('body').on 'click', '.js-delete-folder', deleteFolder
+  $('.js-show-remove-product-from-folder').on 'click', confirmDeleteModal
+
+  # Edit Folder
+  $('body').on 'click', 'ul.cover-images-list img', selectFolderCoverImage
+  $('body').on 'click', '.js-edit-folder', updateFolder
+  $('body').on 'click', '.js-delete-folder-modal', confirmDeleteFolderModal
+  $('body').on 'submit', '#editFolderForm', (e) -> e.preventDefault()
+  $('.js-show-edit-folder').on 'click', editFolderModal
+  $('.folder-row').on 'mouseenter', showButtons
+  $('.folder-row').on 'mouseleave', hideButtons
+
+  # Search
+  $('.form-control#search').on 'keyup', valueSearch
+  $('.form-control#folder-search').on 'keyup', valueSearch
+  $('.js-clear-search').on 'click', clearSearch
+  $('#search').on '_after', reflowProducts
+
+  if $('#no-products').length == 0
+    $('#search').hideseek {list: '.product-list', ignore: "#no-products, .no-results, button, .remove-product-btn"}
+   
+    # Filter
+    $('#manufacturer').on 'change', filterManufacturer
+    $('#category').on 'change', filterCategory
+    $('#sort').on 'change', sortProducts
+    
+  $('body').on 'click', g.resetButtonStatus
+  $('body').on 'keyup', g.resetButtonStatus
+
+
+  $('.js-reset-all').on 'click', resetAll
+
+  $('.js-reset-folders-all').on 'click', searchResetAll
+
+
+  if $('.product-list').length
+    product_list = $ '.product-list'
+    products = product_list.children('div.product-container')
+
+    product_cache = products
+
+  # Timer for alerts.
+  timer = setTimeout ( ->
+    $('.alert').alert('close')
+    ), 8000
+
+
+  return

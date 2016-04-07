@@ -1,0 +1,42 @@
+{% from 'macros.jinja2' import basic_field, radio_field %}
+
+<div class="modal fade" id="newOptionSetModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title">{% if set %}Edit {{set.name}}{% else %}New Option Set{% endif %}</h4>
+            </div>
+            <form method="POST" action="{% if set %}{{url_for('options_view.set_edit', set_id=set.id)}}{% else %}{{url_for('options_view.set_new')}}{% endif %}">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="{% if set %}col-md-12{% else %}col-md-7{% endif %}">
+                            {{basic_field(form.name)}}
+                            {% if not set %}
+                            <p><i>Click the button below to add option images to this set. After uploading images, you will be able to add details for each option.</i></p>
+                            <p>
+                                <a href="#" class="btn btn-info js-optionset-images">Upload Images</a>
+                                <input type="file" multiple id="optionset_images" name="optionset_images" data-path="{{url_for('options_view.upload')}}" accept="image/jpeg, image/jpg, image/png">
+                            </p>
+                            <div class="row image-listing"></div>
+                            {{form.images}}
+                            {% endif %}
+                        </div>
+                        {% if not set %}
+                        <div class="col-md-5">
+                            {{radio_field(form.set_type)}}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    {% if set %}
+                    <a href="{{url_for('options_view.set_confirm', set_id=set.id)}}" class="btn btn-danger pull-left js-confirm-optionset">Delete Option Set</a>
+                    {% endif %}
+                    <button class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <button class="btn btn-primary">{% if set %}Save{% else %}Continue{% endif %}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

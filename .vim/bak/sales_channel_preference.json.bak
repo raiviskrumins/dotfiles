@@ -1,0 +1,161 @@
+{
+    "instance": {
+        "id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "active": {
+            "type": "bool"
+        },
+        "description_description": {
+            "type": "string",
+            "nullable": true
+        },
+        "identity_name": {
+            "type": "string",
+            "nullable": true
+        },
+        "manufacturer_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "pricing_dealer_price": {
+            "type": "bool",
+            "nullable": true
+        },
+        "pricing_minimum_internet_price": {
+            "type": "bool",
+            "nullable": true
+        },
+        "pricing_msrp": {
+            "type": "bool",
+            "nullable": true
+        },
+        "pricing_trade_price": {
+            "type": "bool",
+            "nullable": true
+        },
+        "pricing_wholesale": {
+            "type": "bool",
+            "nullable": true
+        },
+        "sales_channel_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "_links": {
+            "type": "object",
+            "object": {
+                "self": {
+                    "type": "object",
+                    "object": {
+                        "href": {
+                            "type": "string",
+                            "regex": ".+"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "retrieve-sales-channel-preference": [
+        {
+            "id": 1,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "sales_channel_preference.json:instance"
+            }
+        },
+        {
+            "id": -1,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "create-sales-channel-preference": [
+        {
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661",
+                "datia": {
+                    "id": 0,
+                    "manufacturer_id": 620,
+                    "sales_channel_id": 10,
+                    "active": true,
+                    "description_description": "description",
+                    "identity_name": "name",
+                    "pricing_dealer_price": false,
+                    "pricing_minimum_internet_price": false,
+                    "pricing_msrp": false,
+                    "pricing_trade_price": false,
+                    "pricing_wholesale": true
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "sales_channel_preference.json:instance"
+            }
+        }
+    ],
+    "update-sales-channel-preference": [
+        {
+            "id": 1530,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661",
+                "data": {
+                    "id": 1530,
+                    "manufacturer_id": 614,
+                    "sales_channel_id": 8,
+                    "active": true,
+                    "description_description": "description",
+                    "identity_name": "name",
+                    "pricing_dealer_price": false,
+                    "pricing_minimum_internet_price": false,
+                    "pricing_msrp": false,
+                    "pricing_trade_price": false,
+                    "pricing_wholesale": true
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "sales_channel_preference.json:instance"
+            }
+        },
+        {
+            "id": -12,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661",
+                "data": {
+                    "id": 1530,
+                    "manufacturer_id": 614,
+                    "sales_channel_id": 8,
+                    "active": true,
+                    "description_description": "description",
+                    "identity_name": "name",
+                    "pricing_dealer_price": false,
+                    "pricing_minimum_internet_price": false,
+                    "pricing_msrp": false,
+                    "pricing_trade_price": false,
+                    "pricing_wholesale": true
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ]
+}

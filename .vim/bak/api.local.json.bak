@@ -1,0 +1,9 @@
+{
+    "sql": {
+        "password": "amber123",
+    },
+    "mongo": {
+        "password": "amber123"
+    },
+    "log-errors": true
+}

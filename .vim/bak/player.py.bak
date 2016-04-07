@@ -1,0 +1,25 @@
+import pygame
+
+
+class Manager:
+    def __init__(self, events, events):
+        self.entity = entity
+        self.input_events = events
+
+
+
+class Movement:
+    def __init__(self, player, events):
+        self.player = player
+
+    def down(self):
+        actions.Move(self.player, (0, 1))
+
+    def left(self):
+        actions.Move(self.player, (-1, 0))
+
+    def right(self):
+        actions.Move(self.player, (1, 0))
+
+    def up(self):
+        actions.Move(self.player, (0, -1))

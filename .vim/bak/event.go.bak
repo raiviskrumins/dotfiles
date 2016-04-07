@@ -1,0 +1,159 @@
+package models
+
+import (
+	"database/sql/driver"
+	"io"
+	"reflect"
+	"time"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/pqdb"
+)
+
+type Event struct {
+	ID         lib.IntField    `json:"id" primary:"true"`
+	Name       lib.StringField `db:"event_name" json:"name"`
+	Message    lib.StringField `json:"message"`
+	ObjectID   lib.IntField    `json:"object_id"`
+	ObjectType lib.StringField `json:"object_type"`
+	DateTime   lib.TimeField   `json:"date_time"`
+}
+
+func (ev Event) FormSchema() *form.Schema {
+	return nil
+}
+
+func (comp *Event) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(comp).Elem(), DataType: reflect.TypeOf(*comp), Current: -1}
+}
+
+func (comp *Event) ColumnNames() []string {
+	return lib.ColumnNames(comp.NewIterator())
+}
+
+func (comp *Event) Map() map[string]lib.IteratorItem {
+	return lib.Map(comp.NewIterator())
+}
+
+func (comp *Event) SetValue(newComp interface{}) {
+	lib.SetFields(comp, newComp)
+}
+
+func (event Event) TableName() string {
+	return "event"
+}
+
+func (event Event) FetchRelation(ctx *app.Context, primaryID driver.Value) (interface{}, oops.Error) {
+	// TODO: implement this
+	return nil, oops.NotImplemented("FetchRelation has not been implemented")
+}
+
+func CreateEvent(ctx *app.Context, body io.ReadCloser) (*Event, oops.Error) {
+	// TODO: implement this
+	return nil, oops.NotImplemented("CreateEvent has not been implemented.")
+
+	ptr, e := Factory("event")
+	if e != nil {
+		return nil, e
+	}
+	event := ptr.(*Event)
+
+	e = lib.DecodeJSON(body, event)
+	if e != nil {
+		return nil, e
+	}
+
+	event.DateTime.Time = time.Now()
+	pkID, e := pqdb.InsertQuery(ctx.DBConn, event, event.TableName())
+	if e != nil {
+		return nil, e
+	}
+
+	event.ID.Set(pkID.(int64))
+
+	return event, nil
+}
+
+func RetrieveEvent(ctx *app.Context, eventID int) (*Event, oops.Error) {
+	// TODO: implement this
+	return nil, oops.NotImplemented("RetrieveEvent has not been implemented")
+
+	ptr, e := Factory("event")
+	if e != nil {
+		return nil, e
+	}
+	event := ptr.(*Event)
+
+	columns := event.ColumnNames()
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"id", "=", eventID})
+	if e != nil {
+		return nil, e
+	}
+
+	rows, e := pqdb.SelectQuery(ctx.DBConn, lib.Join(",", columns...), event.TableName(), queryParams)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+
+	resultCount := 0
+	for rows.Next() {
+		e = pqdb.Scan(event, rows)
+		if e != nil {
+			return nil, e
+		}
+		resultCount++
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, oops.ServerError("", "Rows has an internal error.", err)
+	}
+
+	if resultCount == 0 {
+		return nil, oops.NotFound("Event not found", "No results were returned.", eventID)
+	}
+
+	return event, nil
+}
+
+func UpdateEvent(ctx *app.Context, eventID int, body io.ReadCloser) (*Event, oops.Error) {
+	// TODO: implement this
+	return nil, oops.NotImplemented("UpdateEvent has not been implemented")
+
+	event, e := RetrieveEvent(ctx, eventID)
+	if e != nil {
+		return nil, e
+	}
+
+	e = lib.DecodeJSON(body, event)
+	if e != nil {
+		return nil, e
+	}
+
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"id", "=", eventID})
+	if e != nil {
+		return nil, e
+	}
+
+	e = pqdb.UpdateQuery(ctx.DBConn, event, event.TableName(), queryParams)
+	return event, e
+}
+
+func DeleteEvent(ctx *app.Context, eventID int) oops.Error {
+	// TODO: implement this
+	return oops.NotImplemented("DeleteEvent has not been implemented")
+
+	queryParams, e := pqdb.NewQueryParams(0, 0, pqdb.Predicate{"id", "=", eventID})
+	if e != nil {
+		return e
+	}
+
+	e = pqdb.DeleteQuery(ctx.DBConn, "event", queryParams)
+	if e != nil {
+		return e
+	}
+	return nil
+}

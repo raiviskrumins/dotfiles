@@ -1,0 +1,11 @@
+class Controller:
+    is_human = False
+    entity = None
+
+
+class Player(Controller):
+    is_human = True
+    entity = None
+
+    def __init__(self, entity):
+        self.entity = entity

@@ -1,0 +1,127 @@
+"""
+The MIT License (MIT)
+
+Copyright (c) 2015 Curtis La Graff
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+"""
+import json
+import os
+
+
+class Storage:
+    class Basic:
+        @property
+        def json(self):
+            return self.__dict__
+
+        @json.setter
+        def json(self, dict_data):
+            self.__dict__.update(dict_data)
+
+    class PublicOnly(Basic):
+        @property
+        def json(self):
+            private_prepend = "_" + type(self).__name__ + "__"
+            public_properties = {}
+
+            for key in self.__dict__:
+                if key.startswith(private_prepend):
+                    continue
+                public_properties[key] = self.__dict__[key]
+
+            return public_properties
+
+    class Specified(Basic):
+        def __init__(self, *args):
+            self.__json_keys = []
+            for key in args:
+                self.__json_keys.append(key)
+
+        @property
+        def json(self):
+            json_data = {}
+            for key in self.__json_keys:
+                json_data[key] = self.__dict__[key]
+
+            return json_data
+
+    available = (Basic, PublicOnly, Specified)
+
+
+def encoder(instance):
+    if not issubclass(instance.__class__, Storage.available):
+        raise TypeError("Must be an instance of the jsonify.External class.")
+
+    json_dict = {
+        "module": instance.__module__,
+        "class": instance.__class__.__name__,
+        "json": instance.json
+    }
+    return json_dict
+
+
+def decoder(json_dict):
+    required_keys = ["class", "module", "json"]
+    if not all(key in json_dict.keys() for key in required_keys):
+        return json_dict
+
+    module_name = json_dict.get("module")
+    class_name = json_dict.get("class")
+    instance_data = json_dict.get("json")
+
+    loaded_class = getattr(
+        __import__(module_name),
+        class_name
+    )
+
+    if not issubclass(loaded_class, Storage.available):
+        raise TypeError(
+            "Can only load classes sub-classed from jsonify.External class."
+        )
+
+    instance = loaded_class()
+    instance.out.update(instance_data)
+
+    return instance
+
+
+def load(string):
+    return json.loads(string, object_hoock=decoder)
+
+
+def get(instance):
+    return json.dumps(instance, default=encoder)
+
+
+def write(file_path, data):
+    if not os.path.exists(os.path.abspath(os.path.join(file_path, os.pardir))):
+        raise IOError("Parent directory for file was not found.")
+
+    with open(file_path, "w") as file_:
+        return json.dump(data, file_, default=encoder)
+
+
+def read(file_path):
+    if not os.path.exists(os.path.abspath(file_path)):
+        raise IOError("JSON-file specified was not found at the given path!")
+
+    with open(file_path, "r") as file_:
+        return json.load(file_, object_hoock=decoder)

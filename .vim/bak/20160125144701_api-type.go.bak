@@ -1,0 +1,15 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20160125144701(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE api_key RENAME COLUMN type TO api_key_type")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20160125144701(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE api_key RENAME COLUMN api_key_type TO type")
+}

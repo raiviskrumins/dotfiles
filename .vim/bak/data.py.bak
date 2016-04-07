@@ -1,0 +1,20 @@
+import json
+
+
+class All(object):
+    def __get__(self, instance, owner):
+        instance_data = instance.__dict__
+        class_dict = owner.__dict__
+
+        data_dict = {
+            key: value for key, value in class_dict.iteritems()
+            if not hasattr(value, "__call__") and
+            key not in ["__module__", "__main__", "__doc__", "json"]
+        }
+
+        data_dict.update(instance_data)
+        print("Test")
+        return json.dumps(data_dict)
+
+    def __set__(self, instance, value):
+        pass

@@ -1,0 +1,2144 @@
+{
+    "options": {
+        "start_row": 1,
+        "start_col": 1,
+        "active_sheet": 0
+    },
+    "tabs": [
+        {
+            "name": "Product",
+            "data": {
+                "single_cell": true
+            },
+            "columns": [
+                {
+                    "name": "Product ID",
+                    "columns": [
+                        {
+                            "name": "ID",
+                            "data": {
+                                "keys": [
+                                    "id"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Collection",
+                    "columns": [
+                        {
+                            "name": "Name",
+                            "data": {
+                                "keys": [
+                                    "collection",
+                                    "collection",
+                                    "name"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Promotional Tags",
+                    "columns": [
+                        {
+                            "name": "New",
+                            "data": {
+                                "keys": [
+                                    "promotional_tag",
+                                    "new_product"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Best Seller",
+                            "data": {
+                                "keys": [
+                                    "promotional_tag",
+                                    "best_seller"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Limited Stock",
+                            "data": {
+                                "keys": [
+                                    "promotional_tag",
+                                    "limited_stock"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Discontinued",
+                            "data": {
+                                "keys": [
+                                    "promotional_tag",
+                                    "discontinued"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Identity",
+                    "columns": [
+                        {
+                            "name": "Name",
+                            "data": {
+                                "keys": [
+                                    "identity",
+                                    "name"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Alternate Name",
+                            "data": {
+                                "keys": [
+                                    "identity",
+                                    "alternate_name"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Manufacturer SKU",
+                            "data": {
+                                "keys": [
+                                    "identity",
+                                    "manufacturer_sku"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Source URL",
+                            "data": {
+                                "keys": [
+                                    "identity",
+                                    "source_url"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Category",
+                    "columns": [
+                        {
+                            "name": "Category",
+                            "data": {
+                                "keys": [
+                                    "category",
+                                    "primary"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Primary Sub-Category",
+                            "data": {
+                                "keys": [
+                                    "category",
+                                    "secondary"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Secondary Sub-Category",
+                            "data": {
+                                "keys": [
+                                    "category",
+                                    "tertiary"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Description",
+                    "columns": [
+                        {
+                            "name": "Description",
+                            "data": {
+                                "keys": [
+                                    "description",
+                                    "primary"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Alternate Description",
+                            "data": {
+                                "keys": [
+                                    "description",
+                                    "alternate"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Features",
+                            "data": {
+                                "list_keys": [
+                                    "description",
+                                    "feature_list"
+                                ],
+                                "keys": ["description"]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Overall Dimensions",
+                    "columns": [
+                        {
+                            "name": "Width (in)",
+                            "data": {
+                                "keys": [
+                                    "overall_dimension",
+                                    "width"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Height (in)",
+                            "data": {
+                                "keys": [
+                                    "overall_dimension",
+                                    "height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Depth (in)",
+                            "data": {
+                                "keys": [
+                                    "overall_dimension",
+                                    "depth"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Diameter (in)",
+                            "data": {
+                                "keys": [
+                                    "overall_dimension",
+                                    "diameter"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Weight",
+                    "columns": [
+                        {
+                            "name": "Weight (lb)",
+                            "data": {
+                                "keys": [
+                                    "weight",
+                                    "weight"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Instructions",
+                    "columns": [
+                        {
+                            "name": "Cleaning Directions",
+                            "data": {
+                                "keys": [
+                                    "instruction",
+                                    "cleaning_directions"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Installation Directions",
+                            "data": {
+                                "keys": [
+                                    "instruction",
+                                    "installation_directions"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Assembly Required",
+                            "data": {
+                                "keys": [
+                                    "construction_information",
+                                    "assembly_required"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Ordering Information",
+                    "columns": [
+                        {
+                            "name": "Unit",
+                            "data": {
+                                "keys": [
+                                    "ordering_information",
+                                    "unit"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Lead Time",
+                            "data": {
+                                "keys": [
+                                    "ordering_information",
+                                    "lead_time"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Quick Ship",
+                            "data": {
+                                "keys": [
+                                    "ordering_information",
+                                    "quick_ship"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Minimum Quantity",
+                            "data": {
+                                "keys": [
+                                    "ordering_information",
+                                    "minimum_quantity"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Force Multiples",
+                            "data": {
+                                "keys": [
+                                    "ordering_information",
+                                    "force_multiples"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Stock",
+                            "data": {
+                                "keys": [
+                                    "ordering_information",
+                                    "stock"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Warranty",
+                            "data": {
+                                "keys": [
+                                    "ordering_information",
+                                    "warranty"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Return Information",
+                    "columns": [
+                        {
+                            "name": "Returnable",
+                            "data": {
+                                "keys": [
+                                    "manufacturer",
+                                    "manufacturer",
+                                    "returnable"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Return Fee (%)",
+                            "data": {
+                                "keys": [
+                                    "manufacturer",
+                                    "manufacturer",
+                                    "restock_fee"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Return Period (days)",
+                            "data": {
+                                "keys": [
+                                    "manufacturer",
+                                    "manufacturer",
+                                    "return_period"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Policy Terms",
+                            "data": {
+                                "keys": [
+                                    "manufacturer",
+                                    "manufacturer",
+                                    "legal"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Shipping Information",
+                    "columns": [
+                        {
+                            "name": "Ships From / FOB",
+                            "data": {
+                                "keys": [
+                                    "shipping_information",
+                                    "ships_from"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Shipping Notes",
+                            "data": {
+                                "keys": [
+                                    "shipping_information",
+                                    "notes"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Drop Ship",
+                            "data": {
+                                "keys": [
+                                    "shipping_information",
+                                    "drop_ship"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Freight",
+                            "data": {
+                                "keys": [
+                                    "shipping_information",
+                                    "freight"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Standard",
+                            "data": {
+                                "keys": [
+                                    "shipping_information",
+                                    "standard"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "White Glove",
+                            "data": {
+                                "keys": [
+                                    "shipping_information",
+                                    "white_glove"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Country of Origin",
+                            "data": {
+                                "keys": [
+                                    "shipping_information",
+                                    "country_of_origin"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Pricing",
+                    "data": {
+                        "handler": "price_format",
+                        "price_unit": "$"
+                    },
+                    "columns": [
+                        {
+                            "name": "Wholesale Price (USD)",
+                            "data": {
+                                "keys": [
+                                    "pricing",
+                                    "wholesale"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Dealer Price (USD)",
+                            "data": {
+                                "keys": [
+                                    "pricing",
+                                    "dealer_price"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Trade Price (USD)",
+                            "data": {
+                                "keys": [
+                                    "pricing",
+                                    "trade_price"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Minimum Internet Price (USD)",
+                            "data": {
+                                "keys": [
+                                    "pricing",
+                                    "minimum_internet_price"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "MSRP (USD)",
+                            "data": {
+                                "keys": [
+                                    "pricing",
+                                    "msrp"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Construction Information",
+                    "columns": [
+                        {
+                            "name": "Material",
+                            "data": {
+                                "keys": [
+                                    "construction_information",
+                                    "material"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Finish",
+                            "data": {
+                                "keys": [
+                                    "construction_information",
+                                    "finish"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                    {
+                  "name": "COM / COL",
+                  "columns": [
+                    {
+                      "name": "COM",
+                      "data": {
+                        "keys": [
+                          "com_col",
+                          "com"
+                        ]
+                      }
+                    },
+                    {
+                      "name": "COL",
+                      "data": {
+                        "keys": [
+                          "com_col",
+                          "col"
+                        ]
+                      }
+                    }
+                  ]
+                },
+        {      
+                    "name": "Footrest",
+                    "columns": [
+                        {
+                            "name": "Footrest Height (in)",
+                            "data": {
+                                "keys": [
+                                    "footrest",
+                                    "height"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Arm",
+                    "columns": [
+                        {
+                            "name": "Arm Height (in)",
+                            "data": {
+                                "keys": [
+                                    "arm",
+                                    "height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Arm Style",
+                            "data": {
+                                "keys": [
+                                    "arm",
+                                    "style"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Seat",
+                    "columns": [
+                        {
+                            "name": "Seat Height (in)",
+                            "data": {
+                                "keys": [
+                                    "seat",
+                                    "height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Seat Depth (in)",
+                            "data": {
+                                "keys": [
+                                    "seat",
+                                    "height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Seat Width (in)",
+                            "data": {
+                                "keys": [
+                                    "seat",
+                                    "width"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Seat Construction",
+                            "data": {
+                                "keys": [
+                                    "seat",
+                                    "construction"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Footboard",
+                    "columns": [
+                        {
+                            "name": "Footboard Height (in)",
+                            "data": {
+                                "keys": [
+                                    "footboard",
+                                    "height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Footboard Width (in)",
+                            "data": {
+                                "keys": [
+                                    "footboard",
+                                    "width"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Footboard Depth (in)",
+                            "data": {
+                                "keys": [
+                                    "footboard",
+                                    "depth"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Floor Clearance (in)",
+                            "data": {
+                                "keys": [
+                                    "footboard",
+                                    "floor_clearance"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Headboard",
+                    "columns": [
+                        {
+                            "name": "Headboard Height (in)",
+                            "data": {
+                                "keys": [
+                                    "headboard",
+                                    "height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Headboard Width (in)",
+                            "data": {
+                                "keys": [
+                                    "headboard",
+                                    "width"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Headboard Depth (in)",
+                            "data": {
+                                "keys": [
+                                    "headboard",
+                                    "depth"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Floor Clearance (in)",
+                            "data": {
+                                "keys": [
+                                    "headboard",
+                                    "floor_clearance"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Side Rail",
+                    "columns": [
+                        {
+                            "name": "Side Rail Length (in)",
+                            "data": {
+                                "keys": [
+                                    "side_rail",
+                                    "length"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Floor Clearance (in)",
+                            "data": {
+                                "keys": [
+                                    "side_rail",
+                                    "floor_clearance"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Frame",
+                    "columns": [
+                        {
+                            "name": "Frame Height (in)",
+                            "data": {
+                                "keys": [
+                                    "frame",
+                                    "height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Back Rail Height (in)",
+                            "data": {
+                                "keys": [
+                                    "frame",
+                                    "back_rail_height"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Shelf",
+                    "columns": [
+                        {
+                            "name": "Quantity",
+                            "data": {
+                                "keys": [
+                                    "quantity"
+                                ],
+                                "list_keys": [
+                                    "shelves",
+                                    "shelf_list"
+                                ],
+                                "handler": "field_sum"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Door",
+                    "columns": [
+                        {
+                            "name": "Quantity",
+                            "data": {
+                                "keys": [
+                                    "quantity"
+                                ],
+                                "list_keys": [
+                                    "doors",
+                                    "door_list"
+                                ],
+                                "handler": "field_sum"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Drawer",
+                    "columns": [
+                        {
+                            "name": "Quantity",
+                            "data": {
+                                "keys": [
+                                    "quantity"
+                                ],
+                                "list_keys": [
+                                    "drawers",
+                                    "drawer_list"
+                                ],
+                                "handler": "field_sum"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Table Leaf",
+                    "columns": [
+                        {
+                            "name": "Quantity",
+                            "data": {
+                                "keys": [
+                                    "table_leaves",
+                                    "table_leaf_list"
+                                ],
+                                "handler": "get_list_length"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Pillow",
+                    "columns": [
+                        {
+                            "name": "Quantity",
+                            "data": {
+                                "keys": [
+                                    "quantity"
+                                ],
+                                "list_keys": [
+                                    "pillows",
+                                    "pillow_list"
+                                ],
+                                "handler": "field_sum"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Cushion",
+                    "columns": [
+                        {
+                            "name": "Quantity",
+                            "data": {
+                                "keys": [
+                                    "cushion_quantity"
+                                ],
+                                "list_keys": [
+                                    "cushions",
+                                    "cushion_list"
+                                ],
+                                "handler": "field_sum"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Pedestal",
+                    "columns": [
+                        {
+                            "name": "Height (in)",
+                            "data": {
+                                "keys": [
+                                    "pedestal",
+                                    "height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Diameter (in)",
+                            "data": {
+                                "keys": [
+                                    "pedestal",
+                                    "diameter"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Depth (in)",
+                            "data": {
+                                "keys": [
+                                    "pedestal",
+                                    "pedestal_depth"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Width (in)",
+                            "data": {
+                                "keys": [
+                                    "pedestal",
+                                    "width"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Base",
+                    "columns": [
+                        {
+                            "name": "Height (in)",
+                            "data": {
+                                "keys": [
+                                    "base",
+                                    "height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Diameter (in)",
+                            "data": {
+                                "keys": [
+                                    "base",
+                                    "diameter"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Depth (in)",
+                            "data": {
+                                "keys": [
+                                    "base",
+                                    "depth"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Width (in)",
+                            "data": {
+                                "keys": [
+                                    "base",
+                                    "width"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Flame",
+                    "columns": [
+                        {
+                            "name": "Fuel Type",
+                            "data": {
+                                "keys": [
+                                    "flame",
+                                    "fuel_type"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Burner Capacity",
+                            "data": {
+                                "keys": [
+                                    "flame",
+                                    "burner_capacity"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Burning Time",
+                            "data": {
+                                "keys": [
+                                    "flame",
+                                    "burning_time"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Heat Output",
+                            "data": {
+                                "keys": [
+                                    "flame",
+                                    "heat_output"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Minimum Room Size",
+                            "data": {
+                                "keys": [
+                                    "flame",
+                                    "minimum_room_size"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Glass",
+                    "columns": [
+                        {
+                            "name": "Glass Type",
+                            "data": {
+                                "keys": [
+                                    "glass",
+                                    "kind"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Suspension Point",
+                    "columns": [
+                        {
+                            "name": "Support Type",
+                            "data": {
+                                "keys": [
+                                    "suspension_point",
+                                    "support_type"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Canopy Diameter (in)",
+                            "data": {
+                                "keys": [
+                                    "suspension_point",
+                                    "canopy_diameter"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Canopy Depth (in)",
+                            "data": {
+                                "keys": [
+                                    "suspension_point",
+                                    "canopy_depth"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Canopy Height (in)",
+                            "data": {
+                                "keys": [
+                                    "suspension_point",
+                                    "canopy_height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Canopy Width (in)",
+                            "data": {
+                                "keys": [
+                                    "suspension_point",
+                                    "canopy_width"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Minimum Hanging Length (in)",
+                            "data": {
+                                "keys": [
+                                    "suspension_point",
+                                    "minimum_hanging_length"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Maximum Hanging Length (in)",
+                            "data": {
+                                "keys": [
+                                    "suspension_point",
+                                    "maximum_hanging_length"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Chain Length (in)",
+                            "data": {
+                                "keys": [
+                                    "suspension_point",
+                                    "chain_length"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Wire Length (in)",
+                            "data": {
+                                "keys": [
+                                    "suspension_point",
+                                    "wire_length"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Shade",
+                    "columns": [
+                        {
+                            "name": "Type",
+                            "data": {
+                                "keys": [
+                                    "shade",
+                                    "kind"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Height (in)",
+                            "data": {
+                                "keys": [
+                                    "shade",
+                                    "height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Width (in)",
+                            "data": {
+                                "keys": [
+                                    "shade",
+                                    "width"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Depth (in)",
+                            "data": {
+                                "keys": [
+                                    "shade",
+                                    "depth"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Diameter (in)",
+                            "data": {
+                                "keys": [
+                                    "shade",
+                                    "diameter"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Material",
+                            "data": {
+                                "keys": [
+                                    "shade",
+                                    "material"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Quantity",
+                            "data": {
+                                "keys": [
+                                    "shade",
+                                    "quantity"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Bulb",
+                    "columns": [
+                        {
+                            "name": "Type",
+                            "data": {
+                                "keys": [
+                                    "bulb",
+                                    "kind"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Base",
+                            "data": {
+                                "keys": [
+                                    "bulb",
+                                    "base"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Quantity",
+                            "data": {
+                                "keys": [
+                                    "bulb",
+                                    "quantity"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Wattage",
+                            "data": {
+                                "keys": [
+                                    "bulb",
+                                    "wattage"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Electrical",
+                    "columns": [
+                        {
+                            "name": "Switch Type",
+                            "data": {
+                                "keys": [
+                                    "electrical",
+                                    "switch_type"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Voltage",
+                            "data": {
+                                "keys": [
+                                    "electrical",
+                                    "voltage"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Exterior Use",
+                            "data": {
+                                "keys": [
+                                    "electrical",
+                                    "exterior_use"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Pattern",
+                    "columns": [
+                        {
+                            "name": "Pattern Number",
+                            "data": {
+                                "keys": [
+                                    "pattern",
+                                    "pattern_number"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Vertical Repeat (in)",
+                            "data": {
+                                "keys": [
+                                    "pattern",
+                                    "vertical_repeat"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Horizontal Repeat (in)",
+                            "data": {
+                                "keys": [
+                                    "pattern",
+                                    "horizontal_repeat"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Direction",
+                            "data": {
+                                "keys": [
+                                    "pattern",
+                                    "direction"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Color",
+                            "data": {
+                                "keys": [
+                                    [
+                                        "pattern",
+                                        "color"
+                                    ]
+                                ],
+                                "handler": "multi_value_list"
+                            }
+                        },
+                        {
+                            "name": "Scale",
+                            "data": {
+                                "keys": [
+                                    "pattern",
+                                    "scale"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Design Type",
+                            "data": {
+                                "keys": [
+                                    [
+                                        "pattern",
+                                        "design_type"
+                                    ]
+                                ],
+                                "handler": "multi_value_list"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Textile",
+                    "columns": [
+                        {
+                            "name": "Content",
+                            "data": {
+                                "keys": [
+                                    "textile",
+                                    "content"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Weave Type",
+                            "data": {
+                                "keys": [
+                                    [
+                                        "textile",
+                                        "weave_type"
+                                    ]
+                                ],
+                                "handler": "multi_value_list"
+                            }
+                        },
+                        {
+                            "name": "Width (in)",
+                            "data": {
+                                "keys": [
+                                    "textile",
+                                    "width"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Treatment",
+                            "data": {
+                                "keys": [
+                                    "textile",
+                                    "treatment"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Usage",
+                            "data": {
+                                "keys": [
+                                    [
+                                        "textile",
+                                        "usage"
+                                    ]
+                                ],
+                                "handler": "multi_value_list"
+                            }
+                        },
+                        {
+                            "name": "Grade",
+                            "data": {
+                                "keys": [
+                                    "textile",
+                                    "grade"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Leather",
+                    "columns": [
+                        {
+                            "name": "Leather Type",
+                            "data": {
+                                "keys": [
+                                    "leather",
+                                    "leather_type"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Pattern Number",
+                            "data": {
+                                "keys": [
+                                    "leather",
+                                    "pattern_number"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Hide Size",
+                            "data": {
+                                "keys": [
+                                    "leather",
+                                    "hide_size"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Finish",
+                            "data": {
+                                "keys": [
+                                    "leather",
+                                    "finish"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Fiber",
+                    "columns": [
+                        {
+                            "name": "Pile",
+                            "data": {
+                                "keys": [
+                                    "fiber",
+                                    "pile"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Construction",
+                            "data": {
+                                "keys": [
+                                    "fiber",
+                                    "construction"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Durability",
+                    "columns": [
+                        {
+                            "name": "Martindale",
+                            "data": {
+                                "keys": [
+                                    "durability",
+                                    "martindale"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Wyzenbeek",
+                            "data": {
+                                "keys": [
+                                    "durability",
+                                    "wyzenbeek"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Flammability",
+                            "data": {
+                                "keys": [
+                                    "durability",
+                                    "flammability"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Interior Dimension",
+                    "columns": [
+                        {
+                            "name": "Depth (in)",
+                            "data": {
+                                "keys": [
+                                    "interior_dimension",
+                                    "depth"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Height (in)",
+                            "data": {
+                                "keys": [
+                                    "interior_dimension",
+                                    "height"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Width (in)",
+                            "data": {
+                                "keys": [
+                                    "interior_dimension",
+                                    "width"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Images",
+            "data": {
+                "list_keys": [
+                    "images",
+                    "image_list"
+                ]
+            },
+            "columns": [
+                {
+                    "name": "Product ID",
+                    "data": {
+                        "keys": ["product_id"]
+                    }
+                },
+                {
+                    "name": "Default",
+                    "data": {
+                        "keys": ["default"]
+                    }
+                },
+                {
+                    "name": "Category",
+                    "data": {
+                        "keys": ["category"]
+                    }
+                },
+                {
+                    "name": "Caption",
+                    "data": {
+                        "keys": ["description"]
+                    }
+                },
+                {
+                    "name": "Full Size",
+                    "data": {
+                        "keys": ["full_size"]
+                    }
+                },
+                {
+                    "name": "Thumbnail",
+                    "data": {
+                        "keys": ["thumbnail_size"]
+                    }
+                },
+                {
+                    "name": "Medium",
+                    "data": {
+                        "keys": ["medium_size"]
+                    }
+                },
+                {
+                    "name": "Large",
+                    "data": {
+                        "keys": ["large_size"]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Shipping Boxes",
+            "data": {
+                "list_keys": [
+                    "shipping_information",
+                    "box_list"
+                ]
+            },
+            "columns": [
+                {
+                    "name": "Product ID",
+                    "data": {
+                        "keys": ["id"],
+                        "handler": "list_length_repeat"
+                    }
+                },
+                {
+                    "name": "Packaged Weight (lb)",
+                    "data": {
+                        "keys": ["weight"]
+                    }
+                },
+                {
+                    "name": "Packaged Width (in)",
+                    "data": {
+                        "keys": ["width"]
+                    }
+                },
+                {
+                    "name": "Packaged Depth (in)",
+                    "data": {
+                        "keys": ["depth"]
+                    }
+                },
+                {
+                    "name": "Packaged Height (in)",
+                    "data": {
+                        "keys": ["height"]
+                    }
+                },
+                {
+                    "name": "Packaged Volume (cft)",
+                    "data": {
+                        "keys": ["volume"]
+                    }
+                },
+                {
+                    "name": "Package Quantity",
+                    "data": {
+                        "keys": ["quantity"]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Options",
+            "data": {
+                "list_keys": [
+                    "option_sets",
+                    "option_set_lists"
+                ],
+                "handler": "get_option_attrs"
+            },
+            "columns": [
+                {
+                    "name": "Product ID",
+                    "data": {
+                        "keys": ["product_id"],
+                        "handler": "default_format",
+                        "list_keys": [
+                            "option_sets",
+                            "option_set_list"
+                        ]
+                    }
+                },
+                {
+                    "name": "Option Set Name",
+                    "data": {
+                        "keys": ["name"],
+                        "list_keys": null
+                    }
+                },
+                {
+                    "name": "Option Set Type",
+                    "data": {
+                        "keys": ["kind"],
+                        "list_keys": null
+                    }
+                },
+                {
+                    "name": "Option Number",
+                    "data": {
+                        "keys": ["number"]
+                    }
+                },
+                {
+                    "name": "Option Name",
+                    "data": {
+                        "keys": ["name"]
+                    }
+                },
+                {
+                    "name": "Image URL",
+                    "data": {
+                        "keys": ["image"]
+                    }
+                },
+                {
+                    "name": "Notes",
+                    "data": {
+                        "keys": ["description"]
+                    }
+                },
+                {
+                    "name": "Surcharge (USD)",
+                    "data": {
+                        "keys": ["surcharge"]
+                    }
+                },
+                {
+                    "name": "Default",
+                    "data": {
+                        "keys": ["default"]
+                    }
+                },
+                {
+                    "name": "Content",
+                    "data": {
+                        "keys": ["content"]
+                    }
+                },
+                {
+                    "name": "Height",
+                    "data": {
+                        "keys": ["height"]
+                    }
+                },
+                {
+                    "name": "Width",
+                    "data": {
+                        "keys": ["width"]
+                    }
+                },
+                {
+                    "name": "Depth",
+                    "data": {
+                        "keys": ["depth"]
+                    }
+                },
+                {
+                    "name": "Diameter",
+                    "data": {
+                        "keys": ["diameter"]
+                    }
+                },
+                {
+                    "name": "Finish",
+                    "data": {
+                        "keys": ["finish"]
+                    }
+                },
+                {
+                    "name": "Weave Type",
+                    "data": {
+                        "keys": ["weave_type"]
+                    }
+                },
+                {
+                    "name": "Treatment",
+                    "data": {
+                        "keys": ["treatement"]
+                    }
+                },
+                {
+                    "name": "Usage",
+                    "data": {
+                        "keys": ["usage"]
+                    }
+                },
+                {
+                    "name": "Grade",
+                    "data": {
+                        "keys": ["grade"]
+                    }
+                },
+                {
+                    "name": "Pattern Number",
+                    "data": {
+                        "keys": ["pattern_number"]
+                    }
+                },
+                {
+                    "name": "Vertical Repeat",
+                    "data": {
+                        "keys": ["vertical_repeat"]
+                    }
+                },
+                {
+                    "name": "Horizontal Repeat",
+                    "data": {
+                        "keys": ["horizontal_repeat"]
+                    }
+                },
+                {
+                    "name": "Direction",
+                    "data": {
+                        "keys": ["direction"]
+                    }
+                },
+                {
+                    "name": "Color",
+                    "data": {
+                        "keys": ["color"]
+                    }
+                },
+                {
+                    "name": "Scale",
+                    "data": {
+                        "keys": ["scale"]
+                    }
+                },
+                {
+                    "name": "Design Type",
+                    "data": {
+                        "keys": ["design_type"]
+                    }
+                },
+                {
+                    "name": "Martindale",
+                    "data": {
+                        "keys": ["martindale"]
+                    }
+                },
+                {
+                    "name": "Wyzenbeek",
+                    "data": {
+                        "keys": ["wyzenbeek"]
+                    }
+                },
+                {
+                    "name": "Flammability",
+                    "data": {
+                        "keys": ["flammability"]
+                    }
+                },
+                {
+                    "name": "Cleaning Instructions",
+                    "data": {
+                        "keys": ["cleaning_instructions"]
+                    }
+                },
+                {
+                    "name": "Leather Type",
+                    "data": {
+                        "keys": ["leather_type"]
+                    }
+                },
+                {
+                    "name": "Hide Size",
+                    "data": {
+                        "keys": ["hide_size"]
+                    }
+                },
+                {
+                    "name": "Average Thickness",
+                    "data": {
+                        "keys": ["average_thickness"]
+                    }
+                },
+                {
+                    "name": "Performance",
+                    "data": {
+                        "keys": ["performance"]
+                    }
+                },
+                {
+                    "name": "Trim Type",
+                    "data": {
+                        "keys": ["trim_type"]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Shelves",
+            "data": {
+                "list_keys": [
+                    "shelves",
+                    "shelf_list"
+                ]
+            },
+            "columns": [
+                {
+                    "name": "Product ID",
+                    "data": {
+                        "keys": ["id"],
+                        "handler": "list_length_repeat"
+                    }
+                },
+                {
+                    "name": "Width (in)",
+                    "data": {
+                        "keys": ["width"]
+                    }
+                },
+                {
+                    "name": "Height (in)",
+                    "data": {
+                        "keys": ["thickness"]
+                    }
+                },
+                {
+                    "name": "Depth (in)",
+                    "data": {
+                        "keys": ["depth"]
+                    }
+                },
+                {
+                    "name": "Quantity",
+                    "data": {
+                        "keys": ["quantity"]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Drawers",
+            "data": {
+                "list_keys": [
+                    "drawers",
+                    "drawer_list"
+                ]
+            },
+            "columns": [
+                {
+                    "name": "Product ID",
+                    "data": {
+                        "keys": ["id"],
+                        "handler": "list_length_repeat"
+                    }
+                },
+                {
+                    "name": "Width (in)",
+                    "data": {
+                        "keys": ["width"]
+                    }
+                },
+                {
+                    "name": "Height (in)",
+                    "data": {
+                        "keys": ["height"]
+                    }
+                },
+                {
+                    "name": "Depth (in)",
+                    "data": {
+                        "keys": ["depth"]
+                    }
+                },
+                {
+                    "name": "Quantity",
+                    "data": {
+                        "keys": ["quantity"]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Table Leaves",
+            "data": {
+                "list_keys": [
+                    "table_leaves",
+                    "table_leaf_list"
+                ]
+            },
+            "columns": [
+                {
+                    "name": "Product ID",
+                    "data": {
+                        "keys": ["id"],
+                        "handler": "list_length_repeat"
+                    }
+                },
+                {
+                    "name": "Width (in)",
+                    "data": {
+                        "keys": ["width"]
+                    }
+                },
+                {
+                    "name": "Depth (in)",
+                    "data": {
+                        "keys": ["depth"]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Pillows",
+            "data": {
+                "list_keys": [
+                    "pillows",
+                    "pillow_list"
+                ]
+            },
+            "columns": [
+                {
+                    "name": "Product ID",
+                    "data": {
+                        "keys": ["id"],
+                        "handler": "list_length_repeat"
+                    }
+                },
+                {
+                    "name": "Width (in)",
+                    "data": {
+                        "keys": ["width"]
+                    }
+                },
+                {
+                    "name": "Height (in)",
+                    "data": {
+                        "keys": ["height"]
+                    }
+                },
+                {
+                    "name": "Depth (in)",
+                    "data": {
+                        "keys": ["thickness"]
+                    }
+                },
+                {
+                    "name": "Quantity",
+                    "data": {
+                        "keys": ["quantity"]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Cushions",
+            "data": {
+                "list_keys": [
+                    "cushions",
+                    "cushion_list"
+                ]
+            },
+            "columns": [
+                {
+                    "name": "Product ID",
+                    "data": {
+                        "keys": ["id"],
+                        "handler": "list_length_repeat"
+                    }
+                },
+                {
+                    "name": "Fill",
+                    "data": {
+                        "keys": ["fill"]
+                    }
+                },
+                {
+                    "name": "Style",
+                    "data": {
+                        "keys": ["style"]
+                    }
+                },
+                {
+                    "name": "Width (in)",
+                    "data": {
+                        "keys": ["width"]
+                    }
+                },
+                {
+                    "name": "Height (in)",
+                    "data": {
+                        "keys": ["height"]
+                    }
+                },
+                {
+                    "name": "Depth (in)",
+                    "data": {
+                        "keys": ["depth"]
+                    }
+                },
+                {
+                    "name": "Quantity",
+                    "data": {
+                        "keys": ["quantity"]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Doors",
+            "data": {
+                "list_keys": [
+                    "doors",
+                    "door_list"
+                ]
+            },
+            "columns": [
+                {
+                    "name": "Product ID",
+                    "data": {
+                        "keys": ["id"],
+                        "handler": "list_length_repeat"
+                    }
+                },
+                {
+                    "name": "Width (in)",
+                    "data": {
+                        "keys": ["width"]
+                    }
+                },
+                {
+                    "name": "Depth (in)",
+                    "data": {
+                        "keys": ["thickness"]
+                    }
+                },
+                {
+                    "name": "Height (in)",
+                    "data": {
+                        "keys": ["height"]
+                    }
+                },
+                {
+                    "name": "Opening (in)",
+                    "data": {
+                        "keys": ["opening"]
+                    }
+                },
+                {
+                    "name": "Quantity",
+                    "data": {
+                        "keys": ["quantity"]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Collection",
+            "data": {
+                "handler": "all_collections",
+                "run_once": true
+            },
+            "columns": [
+                {
+                    "name": "Collection ID",
+                    "data": {
+                        "keys": ["id"]
+                    }
+                },
+                {
+                    "name": "Name",
+                    "data": {
+                        "keys": ["name"]
+                    }
+                },
+                {
+                    "name": "Description",
+                    "data": {
+                        "keys": ["description"]
+                    }
+                },
+                {
+                    "name": "Designed By",
+                    "data": {
+                        "keys": ["designed_by"]
+                    }
+                }
+            ]
+        }
+    ]
+}

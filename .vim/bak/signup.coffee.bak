@@ -1,0 +1,133 @@
+# signup functions
+
+$(document).ready ->
+
+  # unfold an assistance request section during a registration process
+  toggleAssistanceInfo = (e) ->
+    e.preventDefault()
+    $('.unfold').slideToggle()
+    $('.down-btn').html( (i, t)->
+      return if t == '<span class="icon-downarrow"></span>' then '<span class="icon-uparrow"></span>' else '<span class="icon-downarrow"></span>'
+    )
+
+  # do not allow users to click on registration-nav links
+  doNotLoad = (e) ->
+    e.preventDefault()
+
+  # upload for representational images
+  manuFileUpload = (e) ->
+    files = e.currentTarget.files
+    data = new FormData
+    data.append 'img', files[0]
+
+    upload data, newImage
+
+  # upload for logos
+  fileUpload = (e) ->
+    files = e.currentTarget.files
+    data = new FormData
+    data.append 'img', files[0]
+
+    upload data, updateLogo
+
+  # updates the logo image with the newly uploaded image
+  updateLogo = (result) ->
+    $('#logo_url').val result.image_url
+    $('.logo').css 'background-image', "url('#{result.image_url}')"
+
+  # uploads a file (data), then fires the callback when successful
+  upload = (data, callback) ->
+    $.ajax
+      url: '/signup/upload'
+      type: 'POST'
+      data: data
+      cache: false
+      contentType: false
+      processData: false
+      success: (result) ->
+        if result.success
+          callback(result)
+
+  # generates a new image div and adds new image tag
+  # sets the input urls
+  newImage = (result) ->
+    $('#js_new_image').before "<div class=\"manu-image new\" data-image=\"#{result.image_url}\" style=\"background-image:url(#{result.image_url})\">
+                                <a href=\"#\" class=\"js-manu-image-delete btn btn-info delete\"><span class=\"icon-trash light\"></span></a>
+                               </div>"
+    images = $('.new')
+    urls = ($(image).data('image') for image in images)
+    $('#js_new_image_list').val urls.join ','
+
+  # fades out image dom and builds a new set of urls
+  deleteImage = (e) ->
+    e.preventDefault()
+    $image = $(@).parent '.manu-image'
+    $image.removeClass('new').addClass 'delete'
+    $image.fadeOut()
+    $image.remove()
+
+    new_urls = ($(image).data('image') for image in $('.manu-image[data-image]'))
+    console.log new_urls
+
+    $('#js_new_image_list').val new_urls.join ','
+
+  # triggers a hidden file input
+  inputTrigger = (e) ->
+    e.preventDefault()
+    input = $(e.currentTarget).data 'target'
+    $(input).click()
+
+  animateProgress = ->
+    $('.progress-bar').animate {width: '100%'}, 2000
+
+  triggerForm = (e) ->
+    e.preventDefault()
+    $('form').trigger 'submit'
+
+  selectPlan = (e) ->
+    e.preventDefault()
+    $('.plan').removeClass 'selected'
+    $(@).addClass 'selected'
+
+    plan_id = $(@).attr 'id'
+    $('#plan').val plan_id
+
+  applyCoupon = (e) ->
+    e.preventDefault()
+    coupon_id = $('#coupon').val().toUpperCase()
+    $('#coupon').val coupon_id
+
+    $.ajax "/signup/coupon/#{coupon_id}",
+      type: 'GET'
+      success: (result) ->
+        $('.coupon').remove()
+        $('.promo-code').append result
+
+  $('.js-unfold-section').on 'click', toggleAssistanceInfo
+  $('.js-trigger-form').on 'click', triggerForm
+  $('.registration-nav a').on 'click', doNotLoad
+  $('body').on 'click', '.js-manu-image-delete', deleteImage
+  $('body').on 'change', '.js-manu-file-input', manuFileUpload
+  $('body').on 'click', '.js-file-trigger', inputTrigger
+  $('body').on 'change', '.js-file-input', fileUpload
+  $('.plan').on 'click', selectPlan
+  $('.js-apply-coupon').on 'click', applyCoupon
+
+  # don't make popovers on mobile
+  if $(document).width() > 991
+    if !$('#register-password').parent().hasClass 'has-error'
+      $('#register-password').popover
+        trigger: 'focus',
+        placement: 'right',
+        content: 'Password must contain a minimum of eight characters with at least one number.',
+        container: 'body'
+
+    if !$('#password').parent().hasClass 'has-error'
+      $('#password').popover
+        trigger: 'focus',
+        placement: 'right',
+        content: 'Password must contain a minimum of eight characters with at least one number.',
+        container: 'body'
+
+  if $('.progress').length > 0
+    animateProgress()

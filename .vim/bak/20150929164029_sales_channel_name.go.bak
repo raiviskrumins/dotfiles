@@ -1,0 +1,15 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20150929164029(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE sales_channel RENAME COLUMN channel_name TO sales_channel_name")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20150929164029(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE sales_channel RENAME COLUMN sales_channel_name TO channel_name")
+}

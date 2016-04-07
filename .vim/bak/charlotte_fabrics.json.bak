@@ -1,0 +1,85 @@
+{
+    "category": {
+        "category": "0:D",
+        "primary_sub_category": "0:E",
+        "secondary_sub_category": ""
+    },
+    "collection": {
+        "collection_id": ""
+    },
+    "construction_information": {
+        "joinery_type": "",
+        "material": ""
+    },
+    "description": {
+        "alternate_description": "",
+        "description": "",
+        "description_of_features": "",
+        "designer_description": "",
+        "retail_description": ""
+    },
+    "id": "0:C,
+    "identity": {
+        "alternate_name": "",
+        "manufacturer_sk": "0:C",
+        "name": "0:B",
+        "source_url": ""
+    },
+    "instructions": {
+        "cleaning_directions": "0:F",
+        "installation_directions": ""
+    },
+    "option": {
+        "option_sets": [],
+    },
+    "ordering_information": {
+        "discontinued": "",
+        "lead_time": "0:H",
+        "minimum_quanti1ty": "0:J",
+        "quick_ship": "0:I",
+        "stock": "",
+        "unit": "0:G"
+    },
+    "overall_dimensions": {
+        "depth": "",
+        "diameter": "",
+        "height": "",
+        "width": ""
+    },
+    "pricing": {
+        "dealer_price": "None",
+        "minimum_internet_price": "None",
+        "msrp": "None",
+        "trade_price": "None",
+        "wholesale": "None"
+    },
+    "promotional_tags": {
+        "best_seller": 0,
+        "discontinued": 0,
+        "limited_stock": 0,
+        "new": 0
+    },
+    "shipping_information": {
+        "boxes": [],
+        "drop_ship": 0,
+        "freight": 0,
+        "shipping_notes": "",
+        "ships_from": "",
+        "standard": 0,
+        "volume": "None",
+        "white_glove": 0
+    },
+    "tag": {
+        "component_data_id": 31733,
+        "product_id": 36499,
+        "tags": []
+    },
+    "version_start_date": "None",
+    "visibility": {
+        "active": 0,
+        "meets_posting_requirements": 0
+    },
+    "weight": {
+        "weight": "None"
+    }
+}

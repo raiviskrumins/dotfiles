@@ -1,0 +1,25 @@
+{% from 'macros.jinja2' import with_errors %}
+
+{% extends "index.jinja2" %}
+    {% block title %}Channel Manager{% endblock title %}
+{%block tagline %}{% endblock tagline %}
+
+{% block header %}{% endblock header %}
+
+{% block content_main %}
+
+    <div class="page-content image">
+        {% if new: %}
+            <h1>Add image Testests</h1>
+        {% else: %}
+            <h1>Edit image  Testse</h1>
+        {% endif %}
+        <form class="image" method="POST" action="">
+            <p>{{ basic_field(form.caption, size=40) }}</p>
+            <p>{{ basic_field(form.url, size=80) }}</p>
+            <p>{{ basic_field(form.default) }}</p>
+            <input type="submit" value="Save">
+            <a href="{{ url_for('product_view.product_images_get', prod_id=prod_id) }}">Cancel</a>
+        </form>
+    </div>
+{% endblock content_main %}

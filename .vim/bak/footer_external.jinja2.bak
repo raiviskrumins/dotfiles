@@ -1,0 +1,15 @@
+{% from 'macros.jinja2' import current_year %}
+<footer class="text-center">
+    <p itemscope itemtype="http://schema.org/Organization">
+        <span itemprop="address" itemscope itemptype="http://schema.org/PostalAddress">
+            <span itemprop="streetAddress">711 Griswold</span>
+            <span class="hidden-sm hidden-xs">|</span>
+            <br class="hidden-md hidden-lg">
+            <span itemprop="addressLocality">Detroit</span>,
+            <span itemprop="addressRegion">MI</span>
+            <span itemprop="postalCode">48226</span>
+        </span>
+        <span class="hidden-sm hidden-xs">|</span> <a href="mailto:info@amberengine.com" itemprop="email">info@amberengine.com</a> <span class="hidden-sm hidden-xs">|</span> <a href="tel:+18776152121" itemprop="telephone">877.615.2121</a>
+        <span class="hidden-sm hidden-xs">|</span> © 2014-{{ current_year() }} Amber Engine LLC.
+    </p>
+</footer>

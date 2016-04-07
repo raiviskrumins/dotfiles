@@ -1,0 +1,205 @@
+{
+    "instance": {
+        "id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            }
+        },
+        "public": {
+            "type": "string",
+            "len": 64
+        },
+        "private": {
+            "type": "string",
+            "len": 64
+        },
+        "type": {
+            "type": "string",
+            "regex": "(user_key|client_key)"
+        },
+        "manufacturer_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "sales_channel_id": {
+            "type": "int",
+            "range": {
+                "min": 1
+            },
+            "nullable": true
+        },
+        "name": {
+            "type": "string",
+            "regex": ".+"
+        },
+        "_links": {
+            "type": "object",
+            "template": "hal.json:_links"
+        }
+    },
+    "collection": {
+        "total": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "count": {
+            "type": "int",
+            "range": {
+                "min": 0
+            }
+        },
+        "_embedded": {
+            "type": "object",
+            "object": {
+                "api-keys": {
+                    "type": "list",
+                    "element": {
+                        "type": "object",
+                        "template": "api_key.json:instance"
+                    }
+                }
+            },
+            "required": false
+        },
+        "_links": {
+            "type": "object",
+            "object": {
+                "self": {
+                    "type": "string",
+                    "regex": ".+"
+                }
+            }
+        }
+    },
+    "create-api-key": [
+        {
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661",
+                "data": {
+                    "id": 0,
+                    "name": "leslie.kachel@gmail.com",
+                    "public": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661",
+                    "private": "82bdbf7a848edd40d99c18038b5025ba68755ca030e5ffc67f15c84a758577f2",
+                    "type": "user_key",
+                    "manufacturer_id": 639,
+                    "sales_channel_id": null
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "api_key.json:instance"
+            }
+        }
+    ],
+    "retrieve-api-key": [
+        {
+            "id": 42,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "template",
+                "template": "api_key.json:instance"
+            }
+        },
+        {
+            "id": -13,
+            "payload": {
+                "public_key": "e348bf19ecc928d0c0c55c2c21a52a9d23ee92ec72354e3b221e5095c0065ad0"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "update-api-key": [
+        {
+            "id": 10,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661",
+                "data": {
+                    "id": 10,
+                    "name": "I_AM_DALEK",
+                    "public": "30c52de5832a9fd78ffb64056ce69bcc14b3027748168bcf43e84f2f7e8fa1b1",
+                    "private": "f415aa66478fd740c92c65ece869d67ae16b82c7244fc844fd3b240de1320ca2",
+                    "type": "client_key",
+                    "manufacturer_id": 620,
+                    "sales_channel_id": 8
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "api_key.json:instance"
+            }
+        },
+        {
+            "id": -13,
+            "payload": {
+                "public_key": "e348bf19ecc928d0c0c55c2c21a52a9d23ee92ec72354e3b221e5095c0065ad0",
+                "data": {
+                    "id": -13,
+                    "name": "1337@yahoo.com",
+                    "public": "b88aa52ddaedc4c392b727fe9a52130818be2a7d15988102a3ab80f221a1f356",
+                    "private": "da92286578a826c250721483aa307e5fc888b54e71e23af52f5a6ae2ca5db409",
+                    "type": "user_key",
+                    "manufacturer_id": 620,
+                    "sales_channel_id": 8
+                }
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "list-api-keys": [
+        {
+            "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661",
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661"
+            },
+            "response": {
+                "type": "object",
+                "template": "api_key.json:collection"
+            }
+        },
+        {
+            "public_key": "e348bf19ecc928d0c0c55c2c21a52a9d23ee92ec72354e3b221e5095c0065ad0",
+            "payload": {
+                "public_key": "e348bf19ecc928d0c0c55c2c21a52a9d23ee92ec72354e3b221e5095c0065ad0"
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:404"
+            }
+        }
+    ],
+    "delete-api-key": [
+        {
+            "id": 36,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661",
+                "data": {}
+            },
+            "response": {}
+        },
+        {
+            "id": -1,
+            "payload": {
+                "public_key": "73d795a66e881306ae911e3695050cf135c0cc6099b4e2a5e51c42c51693b661",
+                "data": {}
+            },
+            "response": {
+                "type": "object",
+                "template": "errors.json:400"
+            }
+        }
+    ]
+}

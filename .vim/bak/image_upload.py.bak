@@ -1,0 +1,222 @@
+import csv
+import hashlib
+import mimetypes
+import os
+import shutil
+import warnings
+import zipfile
+
+import argparse
+from boto.s3.connection import S3Connection
+from boto.s3.key import Key
+import xlrd
+import xlwt
+import xlutils.copy
+
+# Setup Argument Parser for the application. Must provide the input, output
+# and zip-file flags. All other flags are optional. Use -h for help.
+parser = argparse.ArgumentParser(
+    description="Migration image URL locations for Charlotte Fabric's product data into a new Excel workbook."
+)
+
+parser.add_argument(
+    "-i",
+    "--input",
+    action="store",
+    dest="input_path",
+    help="Path to input Excel workbook.",
+    required=True
+)
+
+parser.add_argument(
+    "-o",
+    "--output",
+    action="store",
+    dest="output_path",
+    help="Path to save the output Excel workbook. An existing file will be deleted.",
+    required=True
+)
+
+parser.add_argument(
+    "-z",
+    "--zip-file",
+    action="store",
+    dest="zip_path",
+    help="Path to ziipfile containing all images (on the top-level directory).",
+    required=True
+)
+
+parser.add_argument(
+    "-n",
+    "--dry-run",
+    action="store_true", 
+    default=False,
+    dest="dry_run",
+    help="Perform a dry-run by not saving results into the provided output file."
+)
+
+parser.add_argument(
+    "-v",
+    "--verbrose",
+    action="store_true", 
+    default=False,
+    dest="verbrose",
+    help="Provide verbrose messaging as the program runs."
+)
+
+args = parser.parse_args()
+
+# The input path and zip file must exist in order to continue.
+if not os.path.isfile(args.input_path):
+    raise IOError("Input file (e.g.: %s) was not found!" % args.input_path)
+
+if not os.path.isfile(args.zip_path):
+    raise IOError("Zip file (e.g.: %s) was not found!" % args.zip_path)
+
+# If the output file already exists, delete it.
+if os.path.isfile(args.output_path):
+    try:
+        os.remove(args.output_path)
+    except OSError:
+        raise Exception("Unable to delete output file: %s" % args.output_path)
+
+
+if args.verbrose:
+    print("Initializing program.")
+    print("Input: %s\nOutput: %s\nZip file: %s" % (args.input_path, args.output_path, args.zip_path))
+    print("**" + "=" * 50 + "**")
+
+
+# Open the Charlotte Fabric's workbook. Select the first sheet, as this is
+# where the product and image data exist.
+input_workbook = xlrd.open_workbook(args.input_path)
+input_sheet = input_workbook.sheet_by_index(0)
+
+
+# The output workbook is simply a copy of the input workbook. This file
+# wont be created on the file-system until the instance's .save() method is called.
+output_workbook = xlutils.copy.copy(input_workbook)
+img_sheet = output_workbook.add_sheet("Images")
+
+
+# Open the zipfile and get a list of all available images within it.
+images_zipfile = zipfile.ZipFile(args.zip_path, "r")
+images_in_zip = images_zipfile.namelist()
+
+def get_image_urls(path):
+    """Return a list of S3 URLs contructed from a md5 hash of the contents
+    of the image from the path provided.
+    """
+
+    if path not in images_in_zip:
+        raise Exception("Image path %s not in zipfile!" % path)
+
+    mime_type = mimetypes.MimeTypes().guess_type(path)[0]
+    extension = mime_type.rsplit("/", 1)[1]
+
+    contents = images_zipfile.read(path)
+    
+    md_hash = hashlib.md5()
+    md_hash.update(contents)
+
+    hexdigest = md_hash.hexdigest()[:16]
+
+    base = "http://amber-cm.s3.amazonaws.com/images/%s" % hexdigest
+
+    urls = [
+        base + ".jpg",
+        base + "_150.jpg",
+        base + "_300.jpg",
+        base + "_640.jpg"
+    ]
+    return urls
+
+
+def write_image(sku, default, urls):
+    """Write a new row into the output workbook containing the imagery data.
+    The product unique ident, the default-boolean, the image type "other",
+    and then the four URLs (fullsize, small, med & large). 
+    """
+
+    # Counter for the current row in the sheet.
+    counter = write_image.counter
+    write_image.counter += 1
+    
+    if args.dry_run:
+        return
+
+    img_sheet.write(counter, 0, sku)
+    img_sheet.write(counter, 1, default)
+    img_sheet.write(counter, 2, "other")
+
+    img_sheet.write(counter, 4, urls[0])
+    img_sheet.write(counter, 5, urls[1])
+    img_sheet.write(counter, 6, urls[2])
+    img_sheet.write(counter, 7, urls[3])
+
+write_image.counter = 0
+
+
+list_of_images = []
+
+
+for row in range(input_sheet.nrows):
+    if args.verbrose:
+        percent = float(row + 1) / input_sheet.nrows * 100
+        print("Row: %i of %i (%i%%)" % (row + 1, input_sheet.nrows, percent))
+
+    # For each row, extract the data from the various columns.
+    sku = input_sheet.cell(row, 2).value
+    thumbnail = input_sheet.cell(row, 92).value
+    ruler = input_sheet.cell(row, 93).value
+    large = input_sheet.cell(row, 94).value
+    couch = input_sheet.cell(row, 95).value
+
+    if thumbnail: 
+        list_of_images.append(thumbnail)
+    if ruler:
+        list_of_images.append(ruler)
+    if large:
+        list_of_images.append(large)
+    if couch:
+        list_of_images.append(couch)
+    
+
+    # A thumbnail must exist, as it is used as the default image.
+    if len(thumbnail) <0 or thumbnail not in images_in_zip:
+        raise Exception("Thumbnail %s could not be processed." % thumbnail)
+
+    write_image(sku, True, get_image_urls(thumbnail))
+    
+    for image in [ruler, large, couch]:
+        if not image:
+            continue
+        write_image(sku, False, get_image_urls(image))
+
+
+if args.verbrose:
+    print("**" + "=" * 50 + "**")
+    print("Saving Excel workbook: %s" % args.output_path)
+
+if not args.dry_run:
+    output_workbook.save(args.output_path)
+
+images_zipfile.close()
+
+# Check to see if the number of unique images in the zip file matches 
+# the number of unique images related to products. Warn the user if the
+# counts don't match.
+zipped_imgs_set = set(sorted(images_in_zip))
+saved_imgs_set = set(sorted(list_of_images))
+diff_num = len(list(zipped_imgs_set - saved_imgs_set))
+
+if diff_num > 0:
+    warnings.warn("There are %i images from the zipfile not used!" % diff_num)
+
+if args.verbrose:
+    print("Input: %s\nOutput: %s\nZip file: %s" % (args.input_path, args.output_path, args.zip_path))
+    print("Total images: %i" % write_image.counter)
+
+
+    print("Program finished.")
+

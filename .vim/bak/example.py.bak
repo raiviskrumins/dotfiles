@@ -1,0 +1,74 @@
+
+
+def main():
+   client = amberlib.Client(...)
+
+    client.products(id).update(json_data)
+    client.products().create(json_data)
+
+    client.products(id).retrieve(uri_params, json_data)
+    client.products().retrieve()
+    client.products(1).relate(client.Openset(1))
+
+    /prod-optionset
+    client.relations().create()
+    client.relations().delete()
+    client.relations().update()
+
+
+    ######################################################
+    host, port, public, private
+    lib.init(host, port)
+
+    wtih lib.client(public, privaye) as c:
+        # public, private == stuff
+        product.save()
+        mfr.create()
+
+    lib.with(public, rpivate).product(...).save()
+
+    ctx = lib.Context(p, p)
+    ctx.product.save()
+
+    data = "{}"
+    prod = ctx.products()
+    prod.create(data)
+    prod.descript.tezxt = "tests"
+    prod.save()
+
+
+
+    product.save()
+    product.delete()
+
+
+    prod = client.products(5).retrieve()
+
+    prod.relate(client.sales_channel(3))
+    prod.unrelate(client.sales_channel(45))
+
+
+    product.relate(sales_channel(1))
+
+
+    collection.relate()
+    collection.unrelate()
+
+
+
+
+    // print out IDs for Prods
+    collection = client.products().retrieve(offset=500)
+    for collection.next():
+        products = collection.
+        for prod in products:
+            print(products)
+
+
+    client.product(id).delete()
+    client.product_search()
+
+
+
+
+

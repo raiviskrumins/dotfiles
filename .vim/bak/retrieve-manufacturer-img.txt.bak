@@ -1,0 +1,1 @@
+--public 6ea099d988c30cc28a8d50ea7b6ad0b24dc45d93d27781f872c7a06441da28c0 --private 315d46d57269ceeb21259c628b1745e106c15e026593644652927bb220843f42 --url http://localhost:8080/manufacturer_images/14 --golang --curl GET

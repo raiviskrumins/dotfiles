@@ -1,0 +1,16 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20151028162502(txn *sql.Tx) {
+	txn.Exec("UPDATE category_component SET secondary_category = NULL WHERE secondary_category = 'none';")
+	txn.Exec("UPDATE category_component SET tertiary_category = NULL WHERE tertiary_category = 'none';")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20151028162502(txn *sql.Tx) {
+
+}

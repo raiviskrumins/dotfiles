@@ -1,0 +1,269 @@
+package models
+
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"io"
+	"reflect"
+	"strconv"
+
+	"github.com/AmberEngine/api/app"
+	"github.com/AmberEngine/api/form"
+	"github.com/AmberEngine/api/lib"
+	"github.com/AmberEngine/api/oops"
+	"github.com/AmberEngine/api/permissions"
+	"github.com/AmberEngine/api/pqdb"
+)
+
+type Collection struct {
+	ID             lib.IntField    `json:"id" primary:"true"`
+	ManufacturerID lib.IntField    `json:"manufacturer_id"`
+	Name           lib.StringField `json:"name" db:"collection_name"`
+	Description    lib.StringField `json:"description"`
+	DesignedBy     lib.StringField `json:"designed_by"`
+}
+
+func (c Collection) FormSchema() *form.Schema {
+	return form.NewSchema(
+		form.NewField("name", form.ClassStr, form.Render("Name", form.ElementText)),
+		form.NewField("description", form.ClassStr, form.Render("Description", form.ElementText)),
+		form.NewField("designed_by", form.ClassStr, form.Render("Designed By", "string")),
+	)
+}
+
+// NewIterator constructs a new lib.Iterator object using the calling Collection object's value and type.
+func (comp *Collection) NewIterator() *lib.Iterator {
+	return &lib.Iterator{DataElem: reflect.ValueOf(comp).Elem(), DataType: reflect.TypeOf(*comp), Current: -1}
+}
+
+// ColumnNames returns the names of the columns in the calling Collection object as a slice of strings.
+func (comp *Collection) ColumnNames() []string {
+	return lib.ColumnNames(comp.NewIterator())
+}
+
+// Map returns the calling Collection object as a map of strings to lib.IteratorItem objects.
+func (comp *Collection) Map() map[string]lib.IteratorItem {
+	return lib.Map(comp.NewIterator())
+}
+
+// SetValue takes in an interface and sets the fields of the calling Collections object with the values in the
+// provided interface.
+func (comp *Collection) SetValue(newComp interface{}) {
+	lib.SetFields(comp, newComp)
+}
+
+// TableName returns the name of the table that Collection objects are stored in in the database, which is "collection".
+func (col Collection) TableName() string {
+	return "collection"
+}
+
+// FetchRelation acts as a wrapper for RetriveCollection and returns a Collection that corresponds to the ID provided.
+func (col Collection) FetchRelation(ctx *app.Context, primaryID driver.Value) (interface{}, oops.Error) {
+	return RetrieveCollection(ctx, int(primaryID.(int64)))
+}
+
+// MarshalJSON returns a JSON representation of the models current state.
+func (col Collection) MarshalJSON() ([]byte, error) {
+	colMap := make(map[string]interface{})
+	colMap["_links"] = lib.HALLink{&lib.HALHref{Endpoint: "collections/" + strconv.Itoa(int(col.ID.Int64))}, nil, nil, nil, nil}
+	colMap["id"] = col.ID.Int64
+	colMap["manufacturer_id"] = col.ManufacturerID.Int64
+	colMap["name"] = col.Name.String
+	colMap["description"] = col.Description.String
+	colMap["designed_by"] = col.DesignedBy.String
+
+	slice, err := json.Marshal(colMap)
+	if err != nil {
+		return nil, oops.ServerError("", "Could not marshal JSON for colMap.", err, colMap)
+	}
+
+	return slice, nil
+}
+
+// RetrieveCollection takes a database.AppContext object and an ID (as an integer) for
+// the collection you want to retrieve from the database. It returns the output as a pointer to
+// a Collection object
+func RetrieveCollection(ctx *app.Context, collectionID int) (*Collection, oops.Error) {
+	ptr, e := Factory("collection")
+	if e != nil {
+		return nil, e
+	}
+	collection := ptr.(*Collection)
+	table := pqdb.NewTable(collection.TableName())
+
+	var wheres []pqdb.WhereItem
+	if ctx.Role["Collection"]&permissions.CollectionRetrieveOwn != 0 {
+		pred := pqdb.Predicate{table.Column("manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+
+	pred := pqdb.Predicate{table.Column("id"), "=", collectionID}
+	wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+
+	e = pqdb.RetrieveModel(ctx, collection, wheres)
+	if e != nil {
+		return nil, e
+	}
+
+	return collection, nil
+}
+
+// CreateCollection is currently a stub. It will create a Collection object and store it in the database and return the
+// created Collection object.
+func CreateCollection(ctx *app.Context, body io.Reader) (*Collection, oops.Error) {
+	ptr, e := Factory("collection")
+	if e != nil {
+		return nil, e
+	}
+	col := ptr.(*Collection)
+
+	e = lib.DecodeJSON(body, col)
+	if e != nil {
+		return nil, e
+	}
+
+	if ctx.Role != nil && ctx.Role["Collection"]&permissions.CollectionCreateAll == 0 {
+		if col.ManufacturerID.Valid != true {
+			return nil, oops.BadRequest("Collection must contain a valid manufacturer id", "")
+		}
+
+		if col.ManufacturerID.Int64 != ctx.APIKey.(*APIKey).ManufacturerID.Int64 {
+			return nil, oops.Forbidden("User does not have access to create Collection for this manufacturer", "")
+		}
+	}
+
+	pkID, e := pqdb.CreateModel(ctx, col)
+	if e != nil {
+		return nil, e
+	}
+
+	col.ID.Set(pkID.(int64))
+
+	return col, nil
+}
+
+// RetrieveCollections returns a slice of Collection pointers, based on
+// the provided limit, offset and clauses.
+func RetrieveCollections(ctx *app.Context, limit int, offset int, apiKey *APIKey, filtering map[string]interface{}) ([]*Collection, int, oops.Error) {
+	ptr, e := Factory("collection")
+	if e != nil {
+		return nil, 0, e
+	}
+
+	query, e := pqdb.NewSelectQuery(ctx)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	var wheres []pqdb.WhereItem
+	table := pqdb.NewTable(ptr.TableName())
+	query.AddTable(table)
+	for _, col := range ptr.ColumnNames() {
+		query.AddColumn(table.Column(col))
+	}
+
+	if ctx.Role != nil && ctx.Role["Collection"]&permissions.CollectionRetrieveOwn != 0 {
+		where := pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("manufacturer_id"), "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64})
+		wheres = append(wheres, where)
+	} else if apiKey != nil && apiKey.ManufacturerID.Int64 > 0 {
+		where := pqdb.MakeWhereItem("", pqdb.Predicate{table.Column("manufacturer_id"), "=", apiKey.ManufacturerID.Int64})
+		wheres = append(wheres, where)
+	}
+
+	query.OrderBy.Add(*table.Column("id"), true, false)
+	joins := make(map[string]pqdb.Table)
+	where, e := UnravelNestedFilter(ctx, ptr, query, table, joins, filtering)
+	if e != nil {
+		return nil, 0, e
+	}
+
+	if len(where.Items) > 0 {
+		wheres = append(wheres, where)
+	} else if where.Pred != (pqdb.Predicate{}) {
+		wheres = append(wheres, where)
+	}
+
+	for index, whereItem := range wheres {
+		if index > 0 {
+			whereItem.Operand = "AND"
+		}
+		query.Where.Items = append(query.Where.Items, whereItem)
+	}
+
+	if limit > 0 || offset > 0 {
+		query.Limit = pqdb.LimitClause{Limit: limit, Offset: offset}
+	}
+
+	rows, e := query.Run()
+	if e != nil {
+		return nil, 0, e
+	}
+	defer rows.Close()
+
+	total, e := query.Count()
+	if e != nil {
+		return nil, 0, e
+	}
+	var collectionSlice []*Collection
+
+	for rows.Next() {
+		ptr, e = Factory("collection")
+		if e != nil {
+			return nil, 0, e
+		}
+		collection := ptr.(*Collection)
+
+		e = pqdb.Scan(collection, rows)
+		if e != nil {
+			return nil, 0, e
+		}
+		collectionSlice = append(collectionSlice, collection)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, oops.ServerError("", "Rows has an internal error.", err)
+	}
+	return collectionSlice, total, nil
+}
+
+// UpdateCollection updates the database entry with the provided JSON
+// Collection data.
+func UpdateCollection(ctx *app.Context, id int, body io.ReadCloser) (*Collection, oops.Error) {
+	col, e := RetrieveCollection(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+
+	e = lib.DecodeJSON(body, col)
+	if e != nil {
+		return nil, e
+	}
+
+	var wheres []pqdb.WhereItem
+	wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{"id", "=", id}))
+
+	if ctx.Role != nil && ctx.Role["Collection"]&permissions.CollectionUpdateAll == 0 {
+		pred := pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+
+	e = pqdb.UpdateModel(ctx, col, wheres)
+	return col, e
+}
+
+// DeleteCollection deletes the collection with the specified ID or returns an error if no such collection exists.
+func DeleteCollection(ctx *app.Context, collectionID int) oops.Error {
+	ptr, e := Factory("collection")
+	if e != nil {
+		return e
+	}
+	col := ptr.(*Collection)
+
+	var wheres []pqdb.WhereItem
+	wheres = append(wheres, pqdb.MakeWhereItem("", pqdb.Predicate{"id", "=", collectionID}))
+	if ctx.Role != nil && ctx.Role["Collection"]&permissions.CollectionDeleteAll == 0 {
+		pred := pqdb.Predicate{"manufacturer_id", "=", ctx.APIKey.(*APIKey).ManufacturerID.Int64}
+		wheres = append(wheres, pqdb.MakeWhereItem("", pred))
+	}
+
+	return pqdb.DeleteModel(ctx, col, wheres)
+}

@@ -1,0 +1,153 @@
+{
+    "assemblage_id": 97,
+    "audit": {
+        "component_data_id": 31426,
+        "date_added": "2015-07-13 22:27:06.514810",
+        "date_updated": "2015-07-14 15:23:17.335132",
+        "product_id": 36497,
+        "updated_by_api_key": "36536e9c1f22ed39f648afc6a3e6406100bd2436fd9bc138da34efff089bf2b4"
+    },
+    "category": {
+        "category": "textiles",
+        "primary_sub_category": "textiles_fabric",
+        "secondary_sub_category": "none"
+    },
+    "collection": {
+        "collection_id": null
+    },
+    "construction_information": {
+        "joinery_type": "",
+        "material": ""
+    },
+    "description": {
+        "alternate_description": "",
+        "description": "",
+        "description_of_features": "",
+        "designer_description": "",
+        "retail_description": ""
+    },
+    "durability": {
+        "flammability": "",
+        "martindale": "",
+        "wyzenbeek": ""
+    },
+    "id": 36497,
+    "identity": {
+        "alternate_name": "",
+        "manufacturer_sku": "number",
+        "name": "name",
+        "source_url": ""
+    },
+    "instructions": {
+        "cleaning_directions": "",
+        "installation_directions": ""
+    },
+    "manufacturer": {
+        "component_data_id": 31426,
+        "manufacturer": {
+            "active": true,
+            "bio": "Akke Functional Art is a cutting-edge modern furniture design company. We are dedicated to exploring the dynamic between natural and industrial elements by incorporating both finished and live edge slabs of wood with metal, glass, and stone. Each one-of-a-kind piece is built to serve a practical purpose and add a unique element of modern design to both residential and commercial spaces. These are signature pieces designed to inspire and provoke.\r\n\r\nAkke 780 is inspired by my work at Akke Functional Art. While those pieces are one-of-a-kind, this line is available in small-lots, at a more affordable price. In some instances, an actual Akke Functional Art piece acts as a prototype for the small-lot 780 piece. The number 780 comes from an experience I had taking the SATs in high school.\r\n\r\nAfter the test, I was 100% positive that I aced the math section and got a perfect 800 -- absolutely positive. Well, I didn't; I got one wrong and scored a 780. From that experience, I learned a very valuable lesson: no matter how well I think that I have done at something, how \"perfect\" I think something is, the truth is that I can always do better. I continually remind myself of this. It helps me to push myself to improve upon my ideas.\r\n",
+            "city": null,
+            "date_added": "2014-10-05 10:07:57.539019",
+            "date_profile_complete": null,
+            "date_updated": "2014-08-20 21:10:41.724886",
+            "email": null,
+            "extension": null,
+            "facebook_url": null,
+            "featured": null,
+            "google_plus_url": null,
+            "id": 1,
+            "legal": null,
+            "linkedin_url": null,
+            "logo_url": "https://d10tvxxsvg1qy.cloudfront.net/akke_/logos/web.jpg",
+            "name": "Akke",
+            "phone": null,
+            "pinterest_url": null,
+            "restock_fee": null,
+            "return_period": null,
+            "returnable": null,
+            "state": null,
+            "street_address_1": null,
+            "street_address_2": null,
+            "twitter_url": null,
+            "updated_by_api_key": "18defb6d77091cc3c639efa29d693c8e19ee02c6d4d5aa0683a40e200ef7c3e2",
+            "url": "http://www.akkefunctionalart.com/",
+            "zipcode": null
+        },
+        "manufacturer_id": 1,
+        "product_id": 36497
+    },
+    "option": {
+        "component_data_id": 31425,
+        "option_sets": [],
+        "product_id": 36497
+    },
+    "ordering_information": {
+        "discontinued": false,
+        "lead_time": "",
+        "minimum_quantity": null,
+        "quick_ship": false,
+        "stock": null,
+        "unit": "none"
+    },
+    "overall_dimensions": {
+        "depth": null,
+        "diameter": null,
+        "height": null,
+        "width": null
+    },
+    "pattern": {
+        "color": "",
+        "design_type": "",
+        "direction": "",
+        "horizontal_repeat": null,
+        "pattern_number": "",
+        "scale": "",
+        "vertical_repeat": null
+    },
+    "pricing": {
+        "dealer_price": null,
+        "minimum_internet_price": null,
+        "msrp": null,
+        "trade_price": null,
+        "wholesale": null
+    },
+    "promotional_tags": {
+        "best_seller": false,
+        "discontinued": false,
+        "limited_stock": false,
+        "new": false
+    },
+    "shipping_information": {
+        "boxes": [],
+        "drop_ship": false,
+        "freight": false,
+        "shipping_notes": "",
+        "ships_from": "",
+        "standard": false,
+        "volume": null,
+        "white_glove": false
+    },
+    "tag": {
+        "component_data_id": 31731,
+        "product_id": 36497,
+        "tags": []
+    },
+    "textile": {
+        "com_requirement": 23.0,
+        "content": "Pattern",
+        "grade": "A+",
+        "treatment": "Hard finish",
+        "usage": "Sofas",
+        "weave_type": "Some weavetyp here",
+        "width": 123.0
+    },
+    "version_start_date": null,
+    "visibility": {
+        "active": false,
+        "meets_posting_requirements": false
+    },
+    "weight": {
+        "weight": null
+    }
+}

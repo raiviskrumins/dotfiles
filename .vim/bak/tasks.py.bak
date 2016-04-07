@@ -1,0 +1,56 @@
+import os
+import shutil
+from subprocess import call, check_output
+import tempfile
+
+from github import GitHub
+
+import status
+
+
+def checkout(url):
+    dir_name = tempfile.mkdtemp()
+    cmd = ['git', 'clone', url, dir_name]
+    return (call(cmd), dir_name)
+
+
+def is_rebased(head, base, path):
+    cwd = os.getcwd()
+    os.chdir(path)
+
+    call(['git', 'checkout', head])
+    common_sha = check_output(['git', 'merge-base', head, base])
+    base_sha = check_output(['git', 'rev-parse', base])
+
+    os.chdir(cwd)
+    shutil.rmtree(path)
+
+    if common_sha == base_sha:
+        return True
+    return False
+
+
+def task(token, pr):
+    import time
+    time.sleep(5)
+
+    client = GitHub(access_token=token)
+
+    clone_url = pr['base']['repo']['clone_url']
+    head = pr['head']['ref']
+    base = pr['base']['ref']
+
+    ret, path = checkout(clone_url)
+
+    passes_rebase = is_rebased(head, base, path)
+
+    owner_name = pr['base']['repo']['owner']['login']
+    repo_name = pr['base']['repo']['name']
+    pr_sha = pr['head']['sha']
+
+    if passes_rebase:
+        status.success(owner_name, repo_name, token, pr_sha)
+    else:
+        status.error(owner_name, repo_name, token, pr_sha)
+
+

@@ -1,0 +1,63 @@
+package form
+
+// #### Classifications ####
+// Primatives
+
+// Boolean classification
+const ClassBool = "boolean"
+
+// Integer classification
+const ClassInt = "integer"
+
+// Float classification
+const ClassFloat = "float"
+
+// String classification
+const ClassStr = "string"
+
+// Form classification
+const ClassForm = "form"
+
+// Form List classification
+const ClassFormList = "form_list"
+
+// Non-primatives
+// Currency classification
+const ClassCurr = "currency"
+
+// URL classification
+const ClassURL = "url"
+
+// Email classification
+const ClassEmail = "email"
+
+// Phone classification
+const ClassPhone = "phone"
+
+// Date classification
+const ClassDate = "date"
+
+// Datetime classification
+const ClassDateTime = "datetime"
+
+// #### Element Types ####
+// Form elememt
+const ElementForm = "form"
+
+// Text elememt
+const ElementText = "text"
+
+// Checkbox elememt
+const ElementCheckbox = "checkbox"
+
+// Radio elememt
+const ElementRadio = "radio"
+
+// Text Area elememt
+const ElementTextArea = "textarea"
+
+// Hidden elememt
+const ElementHidden = "hidden"
+
+// Select elememt
+const ElementSelect = "select"

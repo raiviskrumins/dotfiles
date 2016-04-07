@@ -1,0 +1,66 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20151203130153(txn *sql.Tx) {
+	txn.Exec("ALTER TABLE cushion_component RENAME TO cushions_component")
+	txn.Exec("ALTER TABLE cushion_sub_component RENAME TO cushion_component")
+
+	txn.Exec("ALTER TABLE door_component RENAME TO doors_component")
+	txn.Exec("ALTER TABLE door_sub_component RENAME TO door_component")
+
+	txn.Exec("ALTER TABLE drawer_component RENAME TO drawers_component")
+	txn.Exec("ALTER TABLE drawer_sub_component RENAME TO drawer_component")
+
+	txn.Exec("ALTER TABLE image_component RENAME TO images_component")
+	txn.Exec("ALTER TABLE image_sub_component RENAME TO image_component")
+
+	txn.Exec("ALTER TABLE option_component RENAME TO option_sets_component")
+	txn.Exec("ALTER TABLE option_set_sub_component RENAME TO option_set_component")
+
+	txn.Exec("ALTER TABLE pillow_component RENAME TO pillows_component")
+	txn.Exec("ALTER TABLE pillow_sub_component RENAME TO pillow_component")
+
+	txn.Exec("ALTER TABLE shelf_component RENAME TO shelves_component")
+	txn.Exec("ALTER TABLE shelf_sub_component RENAME TO shelf_component")
+
+	txn.Exec("ALTER TABLE table_leaf_component RENAME TO table_leaves_component")
+	txn.Exec("ALTER TABLE table_leaf_sub_component RENAME TO table_leaf_component")
+
+	txn.Exec("ALTER TABLE shipping_information_sub_component RENAME TO box_component")
+
+	// Update component table
+	txn.Exec("UPDATE component SET component_name = 'cushions', table_name = 'cushions_component', class_name = 'CushionsComponent' WHERE id = 13")
+	txn.Exec("UPDATE component SET component_name = 'cushion', table_name = 'cushion_component', class_name = 'CushionComponent', parent_name = 'cushions' WHERE id = 19")
+
+	txn.Exec("UPDATE component SET component_name = 'doors', table_name = 'doors_component', class_name = 'DoorsComponent' WHERE id = 5")
+	txn.Exec("UPDATE component SET component_name = 'door', table_name = 'door_component', class_name = 'DoorComponent', parent_name = 'doors' WHERE id = 21")
+
+	txn.Exec("UPDATE component SET component_name = 'drawers', table_name = 'drawers_component', class_name = 'DrawersComponent' WHERE id = 42")
+	txn.Exec("UPDATE component SET component_name = 'drawer', table_name = 'drawer_component', class_name = 'DrawerComponent', parent_name = 'drawers' WHERE id = 23")
+
+	txn.Exec("UPDATE component SET component_name = 'images', table_name = 'images_component', class_name = 'ImagesComponent' WHERE id = 20")
+	txn.Exec("UPDATE component SET component_name = 'image', table_name = 'image_component', class_name = 'ImageComponent', parent_name = 'images' WHERE id = 37")
+
+	txn.Exec("UPDATE component SET component_name = 'option_sets', table_name = 'option_sets_component', class_name = 'OptionSetsComponent' WHERE id = 8")
+	txn.Exec("UPDATE component SET component_name = 'option_set', table_name = 'option_set_component', class_name = 'OptionSetComponent', parent_name = 'option_sets' WHERE id = 41")
+
+	txn.Exec("UPDATE component SET component_name = 'pillows', table_name = 'pillows_component', class_name = 'PillowsComponent' WHERE id = 14")
+	txn.Exec("UPDATE component SET component_name = 'pillow', table_name = 'pillow_component', class_name = 'PillowComponent', parent_name = 'pillows' WHERE id = 47")
+
+	txn.Exec("UPDATE component SET component_name = 'shelves', table_name = 'shelves_component', class_name = 'ShelvesComponent' where ID = 6")
+	txn.Exec("UPDATE component SET component_name = 'shelf', table_name = 'shelf_component', class_name = 'ShelfComponent', parent_name = 'shelves' WHERE id = 3")
+
+	txn.Exec("UPDATE component SET component_name = 'box', table_name = 'box_component', class_name = 'BoxComponent' WHERE id = 57")
+
+	txn.Exec("UPDATE component SET component_name = 'table_leaves', table_name = 'table_leaves_component', class_name = 'TableLeavesComponent' where ID = 39")
+	txn.Exec("UPDATE component SET component_name = 'table_leaf', table_name = 'table_leaf_component', class_name = 'TableLeafComponent', parent_name = 'table_leaves'  where ID = 51")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20151203130153(txn *sql.Tx) {
+
+}

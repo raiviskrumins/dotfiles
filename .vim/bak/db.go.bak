@@ -1,0 +1,143 @@
+package database
+
+import (
+	"database/sql"
+
+	"github.com/AmberEngine/api/oops"
+
+	"gopkg.in/mgo.v2"
+)
+
+// AppContext is a struct stored a SQL database, SQL transaction, Mongo Session
+// and current DBConnection instance.
+type AppContext struct {
+	db      *DB
+	tx      *TX
+	MongoDB *MongoSession
+	DBConn  DBConnection
+}
+
+// NewAppContext creates and returns a new instance of the AppContext struct.
+func NewAppContext(db *DB, mongoDB *MongoSession) (*AppContext, oops.Error) {
+	if db == nil && mongoDB == nil {
+		return nil, oops.ServerError("Database connection error occurred", "Both db && mongoDB cannot be nil")
+	}
+
+	ctx := AppContext{
+		db,
+		nil,
+		mongoDB,
+		db}
+
+	return &ctx, nil
+}
+
+// BeginTransaction will switch the AppContext's current DBConn to point to a
+// temporary sql.Tx instance for running a SQL transaction.
+func (ctx *AppContext) BeginTransaction() oops.Error {
+	if ctx.db == nil {
+		return oops.ServerError("Database failed to begin transaction", "A connection must be established before beginning a transaction")
+	}
+
+	if ctx.tx != nil {
+		return oops.ServerError("Database failed to begin transaction", "The previous transaction must be committed or rolledback before beginning a new transaction")
+	}
+
+	tx, err := ctx.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	ctx.tx = tx
+	ctx.DBConn = ctx.tx
+	return nil
+}
+
+// CommitTransaction will commit the current SQL transaction, (if applicable).
+func (ctx *AppContext) CommitTransaction() oops.Error {
+	if ctx.db == nil {
+		return oops.ServerError("Database unavailable", "ctx.db must not be nil")
+	}
+
+	if ctx.tx == nil || ctx.DBConn != ctx.tx {
+		return oops.ServerError("Database failed to commit transaction", "A transaction must be started before it can be committed")
+	}
+
+	err := ctx.tx.Commit()
+	if err != nil {
+		return oops.ServerError("Database failed to commit transaction", err)
+	}
+
+	ctx.DBConn = ctx.db
+	ctx.tx = nil
+
+	return nil
+}
+
+// RollbackTransaction will rollback the current SQL transaction, (if applicable).
+func (ctx *AppContext) RollbackTransaction() oops.Error {
+	if ctx.db == nil {
+		return oops.ServerError("Database unavailable", "ctx.db must not be nil")
+	}
+
+	if ctx.tx == nil || ctx.DBConn != ctx.tx {
+		return oops.ServerError("Database failed to rollback transaction", "A transaciton must be started before it can be rolledback")
+	}
+
+	err := ctx.tx.Rollback()
+	if err != nil {
+		return oops.ServerError("Database failed to rollback transaction", err)
+	}
+
+	ctx.DBConn = ctx.db
+	ctx.tx = nil
+
+	return nil
+}
+
+type DB struct {
+	*sql.DB
+}
+
+type TX struct {
+	*sql.Tx
+}
+
+type DBConnection interface {
+	Exec(string, ...interface{}) (sql.Result, error)
+	Prepare(string) (*sql.Stmt, error)
+	Query(string, ...interface{}) (*sql.Rows, error)
+	QueryRow(string, ...interface{}) *sql.Row
+}
+
+// Open returns a DB reference for a data source.
+func Open(dbType string, dataSourceName string) (*DB, oops.Error) {
+	db, err := sql.Open(dbType, dataSourceName)
+	if err != nil {
+		return nil, oops.ServerError("Database failed to open", "Received an error when opening the database.", err, dbType, dataSourceName)
+	}
+	return &DB{db}, nil
+}
+
+// Begin starts an returns a new transaction.
+func (db *DB) Begin() (*TX, oops.Error) {
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return nil, oops.ServerError("Database failed to begin transaction", err)
+	}
+	return &TX{tx}, nil
+}
+
+type MongoSession struct {
+	URI string
+}
+
+// Open returns a DB reference for a data source.
+func (m MongoSession) Open() (*mgo.Session, oops.Error) {
+	//"mongodb://amber:amber123@127.0.0.1:27017/api"
+	session, err := mgo.Dial(m.URI)
+	if err != nil {
+		return nil, oops.ServerError("MongoDB failed to open", "Received an error when connecting to Mongo.", err, m.URI)
+	}
+	return session, nil
+}

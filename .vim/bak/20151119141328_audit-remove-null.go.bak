@@ -1,0 +1,21 @@
+package main
+
+import (
+	"database/sql"
+)
+
+// Up is executed when this migration is applied
+func Up_20151119141328(txn *sql.Tx) {
+	txn.Exec("UPDATE audit_component SET updated_by_api_key = '4714c2d467200e03b9aa8ae865894a9ea89afcb154ae08026109f3a9282214a4' WHERE updated_by_api_key IS NULL")
+	txn.Exec("UPDATE audit_component SET date_added = NOW() WHERE date_added IS NULL")
+	txn.Exec("UPDATE audit_component SET date_updated = NOW() WHERE date_updated IS NULL")
+
+	txn.Exec("ALTER TABLE audit_component ALTER COLUMN updated_by_api_key DROP NOT NULL")
+	txn.Exec("ALTER TABLE audit_component ALTER COLUMN date_added DROP NOT NULL")
+	txn.Exec("ALTER TABLE audit_component ALTER COLUMN date_updated DROP NOT NULL")
+}
+
+// Down is executed when this migration is rolled back
+func Down_20151119141328(txn *sql.Tx) {
+	// no downgrade needed
+}

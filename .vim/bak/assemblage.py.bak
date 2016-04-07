@@ -1,0 +1,420 @@
+import json
+import re
+from redis import Redis
+from sqlalchemy import text
+
+from amber_api.lib.model_utilities import get_data_for_component
+from amber_api.lib.redis_util import flush_product_search_cache
+from amber_api.models import db, component_types, DecimalEncoder
+from amber_api.models.product import ProductEntity
+
+
+def get_assemblage(assemblage_id):
+    """Helper function for searching for an assemblage
+    """
+
+    print(
+        'select assemblage.id, assemblage.name, component.id, component.name, '
+        'component.table_name, component.class_name, component.parent_name '
+        'from assemblage_components left join assemblage on assemblage.id = '
+        'assemblage_id left join component on component.id = component_id '
+        'where assemblage.id = :assemblage_id'
+        )
+    assemblage_components = db.session.connection().execute(text(
+        'select assemblage.id, assemblage.name, component.id, component.name, '
+        'component.table_name, component.class_name, component.parent_name '
+        'from assemblage_components left join assemblage on assemblage.id = '
+        'assemblage_id left join component on component.id = component_id '
+        'where assemblage.id = :assemblage_id'
+    ), assemblage_id=assemblage_id).fetchall()
+    assemblages = build_assemblage(assemblage_components)
+    return assemblages[assemblage_id]
+
+
+def build_assemblage(assemblage_components):
+    field_names = [
+        'assemblage_id',
+        'assemblage_name',
+        'component_id',
+        'component_name',
+        'component_table_name',
+        'component_class_name',
+        'component_parent_name'
+    ]
+    components = {
+        d: v for d, v in component_types.__dict__.iteritems()
+        if 'Component' in d
+    }
+
+    category_names = db.session.execute(
+        'select name from assemblage;'
+    ).fetchall()
+
+    categories = get_categories([c[0] for c in category_names])
+    components[
+        'CategoryComponent'
+    ].category.__field_metadata__[
+        'choices'
+    ] = [('none', 'None')] + categories['categories']
+
+    components[
+        'CategoryComponent'
+    ].primary_sub_category.__field_metadata__[
+        'choices'
+    ] = [('none', 'None')] + categories['primary_sub_categories']
+
+    categories = get_categories([c[0] for c in category_names])
+    components[
+        'CategoryComponent'
+    ].secondary_sub_category.__field_metadata__[
+        'choices'
+    ] = [('none', 'None')] + categories['secondary_sub_categories']
+
+    sub_components = db.session.connection().execute(
+        'select component.id, component.name, component.table_name, '
+        'component.class_name, component.parent_name from component where '
+        'parent_name is not null'
+    ).fetchall()
+    sub_field_names = [
+        'component_id',
+        'component_name',
+        'component_table_name',
+        'component_class_name',
+        'component_parent_name'
+    ]
+    sub_assemblages = {}
+    for sc in sub_components:
+        sc = dict(zip(sub_field_names, sc))
+        class_name = sc['component_class_name']
+        component_metadata = components[class_name].__component_metadata__
+        sub_fields = {}
+        for field_name, _ in component_metadata.get('fields').iteritems():
+            component_field = getattr(components[class_name], field_name)
+            if hasattr(component_field, '__field_metadata__'):
+                sub_fields[field_name] = component_field.__field_metadata__
+
+        sub_fields['sub_component_data_id'] = {
+            'label': 'Sub Component ID',
+            'type': 'hidden',
+            'required': False
+        }
+
+        sub_assemblage = {}
+        sub_assemblage['id'] = sc['component_id']
+        sub_assemblage['name'] = sc['component_name']
+        sub_assemblage['table_name'] = sc['component_table_name']
+        sub_assemblage['class_name'] = sc['component_class_name']
+        sub_assemblage['fields'] = sub_fields
+        parent_name = sc['component_parent_name']
+        sub_assemblages[parent_name] = sub_assemblage
+    assemblages = {}
+    for component in assemblage_components:
+        assemblage_component = dict(zip(field_names, component))
+        assemblage_id = assemblage_component['assemblage_id']
+        if assemblage_id not in assemblages:
+            assemblages[assemblage_id] = {}
+            assemblage = assemblages[assemblage_id]
+            assemblage['id'] = assemblage_component['assemblage_id']
+            assemblage['name'] = assemblage_component['assemblage_name']
+            assemblage['components'] = []
+        class_name = assemblage_component['component_class_name']
+        component_metadata = components[class_name].__component_metadata__
+        fields = {}
+        for field_name, _ in component_metadata.get('fields').iteritems():
+            component_field = getattr(components[class_name], field_name)
+            if hasattr(component_field, '__field_metadata__'):
+                fields[field_name] = component_field.__field_metadata__
+
+        comp = {
+            'id': assemblage_component['component_id'],
+            'name': assemblage_component['component_name'],
+            'table_name': assemblage_component['component_table_name'],
+            'class_name': class_name,
+            'fields': fields
+        }
+        if comp['name'] in sub_assemblages:
+            comp['sub_component'] = sub_assemblages[comp['name']]
+        assemblages[assemblage_id]['components'].append(comp)
+    return assemblages
+
+
+def get_categories(category_names):
+    """Helper function for returning a list of categories
+    """
+    categories = []
+    cats = []
+    primary_sub_cats = []
+    pri_cats = []
+    secondary_sub_cats = []
+    sec_cats = []
+
+    for cat_name in category_names:
+        if '_' not in cat_name:
+            cats.append(cat_name)
+            categories.append((cat_name, cat_name.title()))
+
+    for cat_name in category_names:
+        if '_' in cat_name:
+            remain, frag = cat_name.rsplit('_', 1)
+            while remain not in category_names:
+                if '_' not in remain:
+                    break
+                remain, new_frag = remain.rsplit('_', 1)
+                frag = '_'.join([new_frag, frag])
+            for pri_cat in cats:
+                if pri_cat == remain:
+                    if cat_name not in pri_cats:
+                        pri_cats.append(cat_name)
+                        primary_sub_cats.append(
+                            (cat_name, frag.title().replace('_', ' '))
+                        )
+                else:
+                    if remain.startswith(pri_cat):
+                        sec_cats.append(cat_name)
+                        secondary_sub_cats.append(
+                            (cat_name, frag.title().replace('_', ' '))
+                        )
+
+    return {
+        'categories': sorted(categories, key=lambda tup: tup[1]),
+        'primary_sub_categories': sorted(
+            primary_sub_cats, key=lambda tup: tup[1]
+        ),
+        'secondary_sub_categories': sorted(
+            secondary_sub_cats, key=lambda tup: tup[1]
+        )
+    }
+
+
+def get_assemblages():
+    """Helper function for getting a list of a all assemblages
+    """
+    assemblage_components = db.session.connection().execute(
+        'select assemblage.id, assemblage.name, component.id, component.name, '
+        'component.table_name, component.class_name, component.parent_name '
+        'from assemblage_components left join assemblage on assemblage.id = '
+        'assemblage_id left join component on component.id = component_id '
+    ).fetchall()
+    assemblages = build_assemblage(assemblage_components)
+    return assemblages
+
+
+def assemble_products(product_entities):
+    """ Take in a list of ProductEntity and return a list of dict
+        representations of a full product
+    """
+    assemblages = get_assemblages()
+    assemblage_ids = [p.assemblage_id for p in product_entities]
+    assemblages = {
+        k: v for k, v in assemblages.iteritems() if v['id'] in assemblage_ids
+    }
+    components = {}
+    component_data = {}
+    sub_component_data = {}
+    for assemblage_id, assemblage in assemblages.iteritems():
+        for component in assemblage['components']:
+            if component['class_name'] not in components:
+                components[component['class_name']] = component
+    for component in components.values():
+        component_class = getattr(
+            component_types,
+            component['class_name']
+        )
+        component_data[component['name']] = get_data_for_component(
+            component_class,
+            'product_id'
+        )
+        component_data[component['name']] = {
+            data['product_id']: data
+            for data in component_data[component['name']]
+        }
+        component_fields = component_class.__component_metadata__.get(
+            'fields'
+        )
+        for field_name, field_type in component_fields.iteritems():
+            if field_type == 'object':
+                object_field = getattr(component_class, field_name)
+                object_class = object_field.related_object_class
+                object_data = get_data_for_component(
+                    object_class,
+                    object_field.foreign_key,
+                )
+                sub_component_data[field_name] = {
+                    data['id']: data
+                    for data in object_data
+                }
+            elif field_type == 'list':
+                object_field = getattr(component_class, field_name)
+                object_class = object_field.related_object_class
+                object_data = get_data_for_component(
+                    object_class,
+                    object_field.foreign_key,
+                    object_type=field_type
+                )
+                if field_name not in sub_component_data:
+                    sub_component_data[field_name] = {}
+                for data in object_data:
+                    prod_id = data['product_id']
+                    if prod_id not in sub_component_data[field_name]:
+                        sub_component_data[field_name][prod_id] = []
+                    sub_component_data[field_name][prod_id].append(data)
+            elif field_type == 'associated_list':
+                object_field = getattr(component_class, field_name)
+                object_class = object_field.related_object_class
+                object_data = get_data_for_component(
+                    object_class,
+                    object_field.foreign_key,
+                    object_type=field_type
+                )
+                if field_name not in sub_component_data:
+                    sub_component_data[field_name] = {}
+                for data in object_data:
+                    prod_id = data['product_id']
+                    if prod_id not in sub_component_data[field_name]:
+                        sub_component_data[field_name][prod_id] = []
+                    sub_component_data[field_name][prod_id].append(data)
+
+    product_dicts = []
+    for product in product_entities:
+        product_data = product.to_dict()
+        assemblage = assemblages[product.assemblage_id]
+        product_data['assemblage'] = assemblages[product.assemblage_id]
+        product_data.pop('json_cache')
+        for comp in assemblage['components']:
+            cd = component_data.get(comp['name'])
+            data = cd.get(product_data['id'])
+            if data is not None:
+                product_data[comp['name']] = data
+                object_fields = [
+                    field_name for field_name, field in
+                    comp['fields'].iteritems()
+                    if field.get('type') == 'object'
+                ]
+                if 'sub_component' in comp:
+                    sub_fields = [
+                        field_name for field_name, field in
+                        comp['fields'].iteritems()
+                        if field.get('type') in
+                        ['list', 'object', 'associated_list']
+                    ]
+                    for sub_field in sub_fields:
+                        scd = sub_component_data.get(sub_field)
+                        s_data = scd.get(product_data['id'], [])
+                        if s_data is not None:
+                            product_data[comp['name']][sub_field] = s_data
+                elif object_fields:
+                    for obj_field in object_fields:
+                        scd = sub_component_data.get(obj_field)
+                        id_field = '_'.join([comp['name'], 'id'])
+                        s_data = scd.get(data[id_field])
+                        if s_data is not None:
+                            product_data[comp['name']][obj_field] = s_data
+
+        if 'description' in product_data:
+            if product_data['description']['description']:
+                product_data['description']['description'] = re.sub(
+                    r':\b(?! )',
+                    '&#58;',
+                    product_data['description']['description'].replace(
+                        "'",
+                        "&#39;"
+                    )
+                )
+        if 'identity' in product_data and product_data['identity']['name']:
+            product_data['identity']['name'] = re.sub(
+                r':\b(?! )',
+                '&#58;',
+                product_data['identity']['name'].replace(
+                    "'",
+                    "&#39;"
+                )
+            )
+        product_dicts.append(product_data)
+    return product_dicts
+
+
+def fetch_products(product_ids=None, reload_cache=False):
+    if product_ids:
+        product_ids = [pid for pid in product_ids if isinstance(pid, int)]
+        products = ProductEntity.query.filter(
+            ProductEntity.id.in_(product_ids)
+        ).all()
+    else:
+        products = ProductEntity.query.all()
+    return assemble_products(products)
+
+
+def update_product_cache(product_ids=None):
+    products = fetch_products(product_ids, reload_cache=True)
+    product_caches = {
+        str(product['id']): json.dumps(product, cls=DecimalEncoder)
+        for product in products if 'id' in product
+    }
+    product_redis = Redis(db=0)
+
+    cache_chunks = chunk_dict(product_caches, 50)
+    for cache_chunk in cache_chunks:
+        query = ' '.join([
+            "UPDATE product_entity AS p SET json_cache = c.json_cache",
+            "FROM (VALUES",
+            ', '.join([
+                ''.join([
+                    '(',
+                    ':product_id_',
+                    pid,
+                    ", ",
+                    ':product_data_',
+                    pid,
+                    ")"
+                ]) for pid, p in cache_chunk.iteritems()
+            ]),
+            ") AS c(product_id, json_cache)",
+            "WHERE c.product_id = p.id;"
+        ])
+        product_ids = {
+            ''.join(['product_id_', product_id]): int(product_id)
+            for product_id in cache_chunk.keys()
+        }
+        chunk_caches = {
+            ''.join(
+                ['product_data_', pid]
+            ): product
+            for pid, product in cache_chunk.iteritems()
+        }
+        product_redis.mset(cache_chunk)
+        chunk_caches.update(product_ids)
+        db.session.execute(text(query), chunk_caches)
+    db.session.commit()
+    flush_product_search_cache()
+
+
+def chunk_list(seq, num):
+    avg = len(seq) / float(num)
+    out = []
+    last = 0.0
+
+    while last < len(seq):
+        out.append(seq[int(last):int(last + avg)])
+        last += avg
+
+    return out
+
+
+def chunk_dict(seq, num):
+    out = []
+    last = 0
+
+    keys = seq.keys()
+    while last < len(seq):
+        chunk = {}
+        for key in keys[int(last):int(last + num)]:
+            chunk[key] = seq[key]
+        out.append(chunk)
+        if last + num < len(seq):
+            last += num
+        elif last == len(seq) - 1:
+            break
+        else:
+            last = len(seq) - 1
+
+    return out
