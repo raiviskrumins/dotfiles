@@ -1,5 +1,5 @@
 # Path to your oh-my-zsh installation.
-export ZSH=/Users/curtislagraff/.oh-my-zsh
+export ZSH=/Users/clagraff/.oh-my-zsh
 
 # Set name of the theme to load.
 # Look in ~/.oh-my-zsh/themes/
@@ -45,7 +45,7 @@ COMPLETION_WAITING_DOTS="true"
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(aws dircycle encode64 fabric jsontools npm sudo urltools vagrant web-search zsh-syntax-highlighting zsh-history-substring-search)
+plugins=(aws dircycle encode64 fabric jsontools npm sudo urltools vagrant web-search zsh-autosuggestions zsh-syntax-highlighting zsh-history-substring-search)
 
 # User configuration
 
@@ -84,14 +84,12 @@ export LANG=en_US.UTF-8
 # Node Version Manager
 NVM_DIR=~/.nvm
 NVM_ENV_DIR=$(brew --prefix nvm)
-
-if [ -s $NVM_ENV_DIR/nvm.sh ]
-then
-  source $NVM_ENV_DIR/nvm.sh
-fi
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" # This loads nvm
 
 # bind UP and DOWN arrow keys
 zmodload zsh/terminfo
+source $ZSH/plugins/history-substring-search/history-substring-search.zsh
 bindkey "$terminfo[kcuu1]" history-substring-search-up
 bindkey "$terminfo[kcud1]" history-substring-search-down
 
@@ -100,7 +98,11 @@ bindkey "$terminfo[kcud1]" history-substring-search-down
 bindkey '^[[A' history-substring-search-up
 bindkey '^[[B' history-substring-search-down
 
-#source $ZSH/custom/plugins/zsh-autosuggestions/autosuggestions.zsh
+# Bind opt-arrow keys for fixing mac osx stuff
+#bindkey -e
+#bindkey '[C' forward-word
+#bindkey '[D' backward-word
+
 # Enable autosuggestions automatically.
 #zle-line-init() {
 #    zle autosuggest-start
@@ -118,12 +120,13 @@ alias c="clear"
 alias cdv="cdvirtualenv"
 alias ?="ag"
 alias !="echo"
-alias gitlog="git log --graph --decorate --oneline"
 
 alias fetch="git fetch -p"
 alias get="fetch && git checkout"
 alias pull="git pull origin"
 alias use="git checkout"
+
+alias lola="git log --graph --decorate --oneline"
 
 alias dowork="workon $1"
 
@@ -134,9 +137,7 @@ alias args="python ~/args.py"
 alias fib="echo '0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144'"
 alias py="python"
 
-alias fuckmongo="mongo api --eval \"db.product_cache.remove({})\""
-
-eval "$(thefuck --alias)"
+alias fuckmongo="mongo api --eval \"db.getCollectionNames().forEach(function(c) { db[c].drop(); })\""
 
 function notes() {
     if [ $# -eq 0 ]
@@ -171,14 +172,9 @@ export PATH=$PATH:$GOROOT/bin
 export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
 export PATH="~/.bin/gcc-arm-none-eabi-4_9-2015q3/bin:$PATH"
 
-source /usr/local/bin/virtualenvwrapper.sh
-
-
 export VISUAL=vim
 export EDITOR="$VISUAL"
 export CERT="delve-cert"
-
-. ~/.fabrc.zsh
 
 function initialize {
     clear
@@ -231,3 +227,16 @@ fancy-ctrl-z () {
 }
 zle -N fancy-ctrl-z
 bindkey '^Z' fancy-ctrl-z
+
+export PATH=$PATH:/Applications/Postgres.app/Contents/Versions/latest/bin
+
+source ~/.virtualenvwrapperrc
+
+alias vim=nvim
+
+# Add local python to path
+export PATH=$PATH:/Users/clagraff/Library/Python/2.7/bin
+export PATH=$PATH:/usr/local/Cellar
+
+export GOPATH=$HOME/golang
+export PATH=$PATH:/Users/clagraff/golang/bin

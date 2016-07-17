@@ -1,5 +1,43 @@
-execute pathogen#infect()
+if &compatible
+  set nocompatible               " Be iMproved
+endif
+
+" Required:
+set runtimepath^=/Users/clagraff/.config/dein/repos/github.com/Shougo/dein.vim
+
+" Required:
+call dein#begin(expand('/Users/clagraff/.config/dein'))
+
+" Let dein manage dein
+" Required:
+call dein#add('Shougo/dein.vim')
+
+" Add or remove your plugins here:
+call dein#add('Shougo/neosnippet.vim')
+call dein#add('Shougo/neosnippet-snippets')
+call dein#add('morhetz/gruvbox')
+call dein#add('vim-airline/vim-airline')
+call dein#add('vim-airline/vim-airline-themes')
+call dein#add('scrooloose/syntastic')
+call dein#add('Shougo/deoplete.nvim')
+call dein#add('fatih/vim-go')
+
+" You can specify revision/branch/tag.
+call dein#add('Shougo/vimshell', { 'rev': '3787e5' })
+
+" Required:
+call dein#end()
+
+" Required:
 filetype plugin indent on
+
+" If you want to install not installed plugins on startup.
+if dein#check_install()
+  call dein#install()
+endif
+
+filetype plugin indent on
+set omnifunc=syntaxcomplete#Complete
 
 autocmd filetype python set expandtab
 autocmd filetype coffee :setlocal sw=2 ts=2 sts=2
@@ -15,15 +53,15 @@ set nocompatible
 set t_Co=256
 
 " Set the desired colorscheme.
-" Colorschemes are located in ./vim/colors
-" colorscheme Benokai 
-colorscheme simple_dark
+colorscheme gruvbox
+set background=dark    " Setting dark mode
 
 set scroll=5
 set encoding=utf-8 " Set character encoding for vim.
 
 " Show line number, and cursor position.
 set number
+set relativenumber
 set ruler
 
 set wildmenu " Show menu for tab-completion
@@ -83,7 +121,7 @@ if exists("+colorcolumn")
 endif
 
 " Set the file backup directory and backup file extension.
-set backupdir=~/.vim/bak
+set backupdir=~/.local/share/nvim/backup
 set backupext=.bak
 "set nobackup  " Disable built-in backup functionality
 
@@ -286,3 +324,34 @@ cnoremap %s/ %smagic/
 cnoremap \>s/ \>smagic/
 nnoremap :g/ :g/\v
 nnoremap :g// :g//
+
+
+" Syntastic config options
+set statusline+=%#warningmsg#
+set statusline+=%{SyntasticStatuslineFlag()}
+set statusline+=%*
+
+let g:syntastic_always_populate_loc_list = 1
+let g:syntastic_auto_loc_list = 1
+let g:syntastic_check_on_open = 1
+let g:syntastic_check_on_wq = 0
+
+
+" Configure python3 path
+let g:python_host_prog = '/usr/local/bin/python'
+let g:python3_host_prog = '/usr/local/bin/python3'
+
+" Enable deoplete
+let g:deoplete#enable_at_startup = 1
+if !exists('g:deoplete#omni#input_patterns')
+  let g:deoplete#omni#input_patterns = {}
+endif
+" let g:deoplete#disable_auto_complete = 1
+autocmd InsertLeave,CompleteDone * if pumvisible() == 0 | pclose | endif
+
+
+" go-vim options
+let g:go_fmt_command = "goimports"
+let g:syntastic_go_checkers = ['golint', 'govet', 'errcheck']
+let g:syntastic_mode_map = { 'mode': 'active', 'passive_filetypes': ['go'] }
+let g:go_term_enabled = 1
